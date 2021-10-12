@@ -86,7 +86,7 @@ version = "0.8.5"
 
 [[DoubleFloats]]
 deps = ["GenericLinearAlgebra", "LinearAlgebra", "Polynomials", "Printf", "Quadmath", "Random", "Requires", "SpecialFunctions"]
-path = "dev/DoubleFloats"
+git-tree-sha1 = "1c962cf7e75c09a5f1fbf504df7d6a06447a1129"
 uuid = "497a8b3b-efae-58df-a0af-a86822472b78"
 version = "1.1.23"
 
