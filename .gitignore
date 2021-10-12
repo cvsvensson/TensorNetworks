@@ -5,3 +5,6 @@
 /docs/Manifest.toml
 todo.txt
 local_testing.jl
+test/debug_a_matrix.jl
+.vscode/launch.json
+.vscode/settings.json
