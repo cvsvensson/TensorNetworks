@@ -11,7 +11,7 @@ function local_ham_eigs(ham_gate::AbstractArray{T}, N; nev=2) where {T}
 	d = size(ham_gate, 1)
 	block = reshape(ham_gate, d^Nd, d^Nd)
 	indices = 1:N
-	tensify(x) = reshape(x,repeat([d],N)...)
+	tensify(x) = reshape(x,fill(d,N)...)
 	blockify(x) = reshape(x, d^Nd, d^(N-Nd))
 	function apply_ham(invec)
 		tens0 = tensify(invec)

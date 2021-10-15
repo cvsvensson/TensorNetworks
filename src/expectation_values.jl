@@ -15,11 +15,11 @@ function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical=fals
         for k in length(mps):-1:site + n
             R = transfer_matrix(mps[k], :left) * R
         end
-        Tc = transfer_matrix_bond(mps',mps,site, :left)
+        Tc = transfer_matrix_bond(mps,mps,site, :left)
         T = transfer_matrix(mps[site:site+n-1], op, :left)
         return transpose(Tc*( T* R)) * L
     else 
-        return expectation_value(mps[site:site + n - 1], op)
+        return expectation_value(view(mps,site:site + n - 1), op)
     end
 end
 
@@ -28,7 +28,7 @@ function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     K = numtype(mps)
     L = vec(boundary(mps,mpo,:left))
     R::Vector{K} = vec(boundary(mps,mpo,:right))
-    Ts::Vector{LinearMap{K}} = transfer_matrices(mps,mpo,:left)
+    Ts = transfer_matrices(mps,mpo,:left)
     Tc = transfer_matrix_bond(mps, 1, :right)
     for k in length(mps):-1:1
         R = Ts[k]*R
@@ -36,7 +36,7 @@ function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     return transpose(R)*(Tc*L)
 end
 
-function matrix_element(mps1::BraOrKet, op, mps2::BraOrKet, site::Integer; string=IdentityMPOsite)
+function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string=IdentityMPOsite)
     n = length(op)
     K = numtype(mps1,mps2)
     L::Vector{K} = boundary(mps1, mps2, :left)
@@ -47,7 +47,7 @@ function matrix_element(mps1::BraOrKet, op, mps2::BraOrKet, site::Integer; strin
     for k in length(mps1):-1:site + n
         R = transfer_matrix(mps1[k], mps2[k], :left) * R
     end
-    T::LinearMap{K} = transfer_matrix(mps1[site:site+n-1], op,mps2[site:site+n-1], :left)
+    T = transfer_matrix(view(mps1,site:site+n-1), op,view(mps2,site:site+n-1), :left)
     Tc = transfer_matrix_bond(mps1, mps2, site, :left)
     return (transpose(Tc*(T* R))*L)::K
 end
@@ -62,26 +62,18 @@ function expectation_value(mps::MPSSum, op, site::Integer; string=IdentityMPOsit
     isherm = ishermitian(op) && ishermitian(string) #Save some computational time?
     for n in 1:N
         for k in n:N
-            m = conj(states[n][1])*states[k][1]*matrix_element(states[n][2]', op, states[k][2], site; string=string)
+            m = conj(states[n][1])*states[k][1]*matrix_element(states[n][2], op, states[k][2], site; string=string)
             if k==n
                 res += m
             elseif isherm
                 res += 2*real(m)
             else
-                res += m + conj(states[k][1])*states[n][1]*matrix_element(states[k][2]', op, states[n][2], site; string=string)
+                res += m + conj(states[k][1])*states[n][1]*matrix_element(states[k][2], op, states[n][2], site; string=string)
             end
         end
     end
     return res
 end
-
-# expectation_value(sites::AbstractMPS, ::IdentityGate) = expectation_value(mps[site:site+opLength-1], Ide)
-
-# function expectation_value(sites::Vector{GenericSite}, gate::AbstractSquareGate{T,N}) where {T,N}
-#     @assert length(sites) == N "Error in 'expectation value': length(sites) != length(gate)"
-#     transfer_matrix(sites,gate,:left)
-# end
-
 
 function expectation_value(sites::Vector{OrthogonalLinkSite{T}}, gate::AbstractSquareGate) where {T}
     @assert length(sites) == length(gate)

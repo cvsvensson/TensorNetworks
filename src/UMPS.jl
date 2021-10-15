@@ -43,17 +43,17 @@ function UMPS(sites::Vector{OrthogonalLinkSite{T}}; truncation, error = 0.0) whe
     UMPS(Γ,Λ[1:end-1], truncation=truncation, error = error)
 end
 
-"""
-	convert(Type{UMPS{T}}, mps::UMPS)
+# """
+# 	convert(Type{UMPS{T}}, mps::UMPS)
 
-Convert `mps` to an UMPS{T} and return the result
-"""
-function Base.convert(::Type{UMPS{T}}, mps::UMPS) where {T}
-	return UMPS(map(g-> convert.(T,g),mps.Γ), map(λ-> Base.convert.(T,λ), mps.Λ), mps)
-end
-function Base.convert(::Type{UMPS{T}}, mps::UMPS{T}) where {T}
-	return mps
-end
+# Convert `mps` to an UMPS{T} and return the result
+# """
+# function Base.convert(::Type{UMPS{T}}, mps::UMPS) where {T}
+# 	return UMPS(map(g-> convert.(T,g),mps.Γ), map(λ-> Base.convert.(T,λ), mps.Λ), mps)
+# end
+# function Base.convert(::Type{UMPS{T}}, mps::UMPS{T}) where {T}
+# 	return mps
+# end
 
 """
 	randomUMPS(T::DataType, N, d, D; purification=false, truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION)
@@ -104,16 +104,16 @@ end
 
 Base.copy(mps::UMPS{T}) where {T} = UMPS{T}([copy(getfield(mps, k)) for k = 1:length(fieldnames(UMPS))]...) 
 
-"""
-	reverse_direction(mps::UMPS)
+# """
+# 	reverse_direction(mps::UMPS)
 
-Flip the spatial direction
-"""
-function reverse_direction(mps::UMPS)
-	Γ = reverse(map(Γ->permutedims(Γ,[3,2,1]),mps.Γ))
-	Λ = reverse(mps.Λ)
-	return UMPS(Γ,Λ, mps)
-end
+# Flip the spatial direction
+# """
+# function reverse_direction(mps::UMPS)
+# 	Γ = reverse(map(Γ->permutedims(Γ,[3,2,1]),mps.Γ))
+# 	Λ = reverse(mps.Λ)
+# 	return UMPS(Γ,Λ, mps)
+# end
 
 """
 	rotate(mps::UMPS,n::Integer)
@@ -154,7 +154,7 @@ function transfer_spectrum(mps::UMPS{K}, direction::Symbol=:left; nev=1) where {
     else
 		x0 = vec(Matrix{K}(I,D,D))
         vals, vecsvec = eigsolve(T,x0,nev, :LM)#eigs(T,nev=nev)
-		vecs = hcat(vecsvec...)
+		vecs = reduce(hcat,vecsvec)
     end
 	# if K == ComplexDF64
 	# 	vals = ComplexDF64.(vals)
@@ -168,7 +168,7 @@ function transfer_spectrum(mps::UMPS{K}, direction::Symbol=:left; nev=1) where {
 	tensors =  [reshape(vecs[:,k],D,D) for k in 1:nev]
     return vals[1:nev], canonicalize_eigenoperator.(tensors) #canonicalize_eigenoperator.(tensors)
 end
-function transfer_spectrum(mps1::BraOrKetLike(UMPS), mps2::BraOrKetLike(UMPS), direction::Symbol=:left; nev=1)
+function transfer_spectrum(mps1::UMPS, mps2::UMPS, direction::Symbol=:left; nev=1)
     T = transfer_matrix(mps1,mps2,direction)
 	D1 = size(mps1[end],3)
 	D2 = size(mps2[end],3)
@@ -180,7 +180,7 @@ function transfer_spectrum(mps1::BraOrKetLike(UMPS), mps2::BraOrKetLike(UMPS), d
     else
 		x0 = vec(Matrix{eltype(mps1[end])}(I,D1,D2))
         vals, vecsvec = eigsolve(T,x0,nev, :LM)#eigs(T,nev=nev)
-		vecs = hcat(vecsvec...)
+		vecs = hreduce(hcat,vecsvec)
     end
 	nev = min(length(vals),nev)
 	tensors =  [reshape(vecs[:,k],D1,D2) for k in 1:nev]
@@ -191,7 +191,7 @@ end
 
 Return the spectrum of the transfer matrix of the UMPS, with mpo sandwiched
 """
-function transfer_spectrum(mps::BraOrKetLike(UMPS), mpo::AbstractMPO, mps2::BraOrKetLike(UMPS), direction::Symbol=:left; nev=1)
+function transfer_spectrum(mps::UMPS, mpo::AbstractMPO, mps2::UMPS, direction::Symbol=:left; nev=1)
     T = transfer_matrix(mps, mpo, mps2, direction)
 	DdD = size(T,1)
 	d = size(mpo[1],1)
@@ -201,14 +201,14 @@ function transfer_spectrum(mps::BraOrKetLike(UMPS), mpo::AbstractMPO, mps2::BraO
     if N<10
         vals, vecs = eigen(Matrix(T))
         vals = vals[end:-1:end-nev+1]
-        vecs = vecs[:,end:-1:end-nev+1]
+        vecs = @view vecs[:,end:-1:end-nev+1]
     else
 		x0id = Matrix{K}(I,D,D)
 		x0v = rand(K,size(mpo[1],1))
 		@tensor x0tens[:] := x0id[-1,-3]*x0v[-2]
 		x0 = vec(x0tens)
         vals, vecsvec = eigsolve(T,x0,nev)#eigs(T,nev=nev)
-		vecs = hcat(vecsvec...)
+		vecs = reduce(hcat,vecsvec)
     end
 	tensors =  [reshape(vecs[:,k],D,d,D) for k in 1:nev]
     return vals, tensors #canonicalize_eigenoperator.(tensors)

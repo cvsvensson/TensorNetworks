@@ -11,7 +11,7 @@ function Base.setindex!(mps::LCROpenMPS, v, i::Integer)
     mps.Γ[i] = v
 end
 Base.copy(mps::LCROpenMPS) = LCROpenMPS(copy(mps.Γ), truncation = copy(mps.truncation), error = copy(mps.error)) 
-center(mps::LCROpenMPS) = mps.center
+center(mps::LCROpenMPS) = mps.center::Int
 
 #TODO Iterative compression as in https://arxiv.org/abs/1008.3477 
 
@@ -36,14 +36,16 @@ function LCROpenMPS(
 end
 
 function LCROpenMPS(
-    M::BraOrKetWith(OrthogonalLinkSite);
+    M::AbstractVector{<:OrthogonalLinkSite};
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
     center=1, error=0.0,
 )
     N = length(M)
     Γ = Vector{GenericSite{eltype(M[1])}}(undef, N)
     for k in 1:N
-        k<N && @assert data(M[k].Λ2) ≈ data(M[k+1].Λ1) "Error in constructing LCROpenMPS: Sites do not share links"
+        if k<N 
+             @assert data(M[k].Λ2) ≈ data(M[k+1].Λ1) "Error in constructing LCROpenMPS: Sites do not share links"
+        end
         if k<center
             Γ[k] = GenericSite(M[k],:left)
         end

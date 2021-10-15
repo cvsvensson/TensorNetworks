@@ -1,9 +1,9 @@
 # transfer_matrix_bond(mps::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = (s =Diagonal(data(mps.Λ[site])); kron(s,s))
 # transfer_matrix_bond(mps1::AbstractMPS{_braket(OrthogonalLinkSite)}, mps2::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = kron(Diagonal(data(mps1.Λ[site])),Diagonal(data(mps2.Λ[site])))
 
-transfer_matrix_bond(mps::BraOrKetWith(OrthogonalLinkSite), site::Integer,dir::Symbol) = data(link(mps[site],:left))
-transfer_matrix_bond(mps::BraOrKetWith(GenericSite), site::Integer,dir::Symbol) = I#Diagonal(I,size(mps[site],1))
-transfer_matrix_bond(mps1::BraOrKet,mps2::BraOrKet, site::Integer,dir::Symbol) = kron(transfer_matrix_bond(mps1,site,dir), transfer_matrix_bond(mps2,site,dir))
+transfer_matrix_bond(mps::AbstractVector{<:OrthogonalLinkSite}, site::Integer,dir::Symbol) = data(link(mps[site],:left))
+transfer_matrix_bond(mps::AbstractVector{<:GenericSite}, site::Integer,dir::Symbol) = I#Diagonal(I,size(mps[site],1))
+transfer_matrix_bond(mps1::AbstractMPS,mps2::AbstractMPS, site::Integer,dir::Symbol) = kron(transfer_matrix_bond(mps1,site,dir), transfer_matrix_bond(mps2,site,dir))
 Base.kron(a::UniformScaling,b::UniformScaling) = a*b
 Base.kron(a::UniformScaling,b::AbstractMatrix) = Diagonal(a,size(b,1))*b
 Base.kron(a::AbstractMatrix,b::UniformScaling) = Diagonal(b,size(a,1))*a
@@ -29,62 +29,95 @@ See also: [`transfer_right`](@ref)
 # 	end
 #     return LinearMap{T}(func,func_adjoint, dims[1]^2,dims[3]^2)
 # end
-_transfer_left_mpo(Γ1::MPOsite, Γ2::MPOsite) = _transfer_left_mpo(data(Γ1), data(Γ2))
-function _transfer_left_mpo_tensoroperations(Γ1, Γ2)
+# _transfer_left_mpo(Γ1::MPOsite, Γ2::MPOsite) = _transfer_left_mpo(data(Γ1), data(Γ2))
+_transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite, s2:: OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1,:right), op, GenericSite(s2,:right))
+_transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite) = _transfer_left_mpo(GenericSite(s1,:right), op, GenericSite(s1,:right))
+_transfer_left_mpo(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1,:right), GenericSite(s2,:right))
+_transfer_left_mpo(s::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s,:right))
+function _transfer_left_mpo(Γ1::GenericSite, Γ2::GenericSite)
     dims1 = size(Γ1)
 	dims2 = size(Γ2)
     function func(Rvec)
-        Rtens = reshape(Rvec,dims1[4],dims2[4])
-        @tensoropt (t1,b1,-1,-2) temp[:] := Rtens[t1,b1]*Γ1[-1,up, c1, t1]*Γ2[-2, c1, up, b1]
+        Rtens = reshape(Rvec,dims1[3],dims2[3])
+        @tensoropt (t1,b1,-1,-2) temp[:] := Rtens[t1,b1]*conj(data(Γ1)[-1,c1, t1])*data(Γ2)[-2, c1, b1]
         return vec(temp)
     end
 	function func_adjoint(Lvec)
 		Ltens = reshape(Lvec,dims1[1],dims2[1])
-		@tensoropt (t1,b1,-1,-2) temp[:] := Ltens[t1,b1]*conj(Γ1[t1, around, c1, -1])*conj(Γ2[b1, c1, around, -2])
+		@tensoropt (t1,b1,-1,-2) temp[:] := Ltens[t1,b1]*data(Γ1)[t1, c1, -1]*conj(data(Γ2)[b1, c1, -2])
 		return vec(temp)
 	end
-    return LinearMap{eltype(Γ1)}(func,func_adjoint, dims1[1]*dims2[1],dims1[4]*dims2[4])
+    return LinearMap{eltype(Γ1)}(func,func_adjoint, dims1[1]*dims2[1],dims1[3]*dims2[3])
+end
+function _transfer_left_mpo(Γ1::GenericSite)
+    dims = size(Γ1)
+	Γ = data(Γ1)
+    function func(Rvec)
+        Rtens = reshape(Rvec,dims[3],dims[3])
+        @tensoropt (t1,b1,-1,-2) temp[:] := Rtens[t1,b1]*conj(Γ[-1, c1, t1])*Γ[-2, c1, b1]
+        return vec(temp)
+    end
+	function func_adjoint(Lvec)
+		Ltens = reshape(Lvec,dims[1],dims[1])
+		@tensoropt (t1,b1,-1,-2) temp[:] := Ltens[t1,b1]*Γ[t1, c1, -1]*conj(Γ[b1, c1, -2])
+		return vec(temp)
+	end
+    return LinearMap{eltype(Γ1)}(func,func_adjoint, dims[1]^2,dims[3]^2)
 end
 
-function __transfer_left_mpo(Rvec,g1,g2,s1,s2)
-	Rtens = reshape(Rvec,s1[4],s2[4])
-	R2 = reshape(g1*Rtens, s1[1], s1[2]*s1[3]*s2[4])
-	return vec(R2*g2)
-end
-function __transfer_left_adjoint_mpo(Lvec,g1l,g2l,s1,s2)
-	Ltens = transpose(reshape(Lvec,s1[1],s2[1]))
-	L2 = reshape(Ltens*g1l, s2[1]*s1[2]*s1[3],s1[4])
-	return vec(transpose(g2l*L2))
-end
-function _transfer_left_mpo(Γ1, Γ2)
-    s1 = size(Γ1)
-	s2 = size(Γ2)
-	g1 = reshape(Γ1, s1[1]*s1[2]*s1[3],s1[4])
-	g2 = reshape(permutedims(Γ2,[3,2,4,1]),s2[2]*s2[3]*s2[4],s2[1])
+# function __transfer_left_mpo(Rvec,g1,g2,s1,s2)
+# 	Rtens = reshape(Rvec,s1[3],s2[3])
+# 	R2 = reshape(g1*Rtens, s1[1], s1[2]*s1[3])
+# 	return vec(R2*g2)
+# end
+# function __transfer_left_adjoint_mpo(Lvec,g1l,g2l,s1,s2)
+# 	Ltens = transpose(reshape(Lvec,s1[1],s2[1]))
+# 	L2 = reshape(Ltens*g1l, s2[1]*s1[2],s1[3])
+# 	return vec(transpose(g2l*L2))
+# end
+# function _transfer_left_mpo(Γ1::GenericSite, Γ2::GenericSite)
+#     s1 = size(Γ1)
+# 	s2 = size(Γ2)
+# 	g1 = reshape(data(Γ1), s1[1]*s1[2],s1[3])
+# 	g2 = reshape(permutedims(data(Γ2),[2,3,1]),s2[2]*s2[3],s2[1])
 
-	g1l = reshape(conj(Γ1), s1[1],s1[2]*s1[3]*s1[4])
-	g2l = reshape(permutedims(conj(Γ2),[4,1,3,2]),s2[4],s2[3]*s2[2]*s2[1])
-	func(R) = __transfer_left_mpo(R,g1,g2,s1,s2)
-	func_adjoint(L) = __transfer_left_adjoint_mpo(L,g1l,g2l,s1,s2)
-    return LinearMap{eltype(Γ1)}(func,func_adjoint, s1[1]*s2[1],s1[4]*s2[4])
-end
+# 	g1l = reshape(conj(data(Γ1)), s1[1],s1[2]*s1[3])
+# 	g2l = reshape(permutedims(conj(data(Γ2)),[3,1,2]),s2[3],s2[2]*s2[1])
+# 	func(R) = __transfer_left_mpo(R,g1,g2,s1,s2)
+# 	func_adjoint(L) = __transfer_left_adjoint_mpo(L,g1l,g2l,s1,s2)
+#     return LinearMap{eltype(Γ1)}(func,func_adjoint, s1[1]*s2[1],s1[3]*s2[3])
+# end
+# function _transfer_left_mpo(Γ1::GenericSite)
+#     s1 = size(Γ1)
+# 	s2 = size(Γ1)
+# 	g1 = reshape(data(Γ1), s1[1]*s1[2],s1[3])
+# 	g2 = reshape(permutedims(data(Γ1),[2,3,1]),s2[2]*s2[3],s2[1])
 
-function _transfer_left_mpo(mposites::Vararg{MPOsite,3})
-	Γ1, mpo, Γ2 = data.(mposites)
+# 	g1l = reshape(conj(data(Γ1)), s1[1],s1[2]*s1[3])
+# 	g2l = reshape(permutedims(conj(data(Γ1)),[3,1,2]),s2[3],s2[2]*s2[1])
+# 	func(R) = __transfer_left_mpo(R,g1,g2,s1,s2)
+# 	func_adjoint(L) = __transfer_left_adjoint_mpo(L,g1l,g2l,s1,s2)
+#     return LinearMap{eltype(Γ1)}(func,func_adjoint, s1[1]*s2[1],s1[3]*s2[3])
+# end
+_transfer_left_mpo(Γ1::GenericSite, mpo::MPOsite) = _transfer_left_mpo(Γ1,mpo,Γ1)
+_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo)*_transfer_left_mpo(Γ1,Γ2)
+_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo)*_transfer_left_mpo(Γ1)
+function _transfer_left_mpo(Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite)
     dims1 = size(Γ1)
 	dims2 = size(Γ2)
 	smpo = size(mpo)
+	T = promote_type(eltype(Γ1),eltype(mpo),eltype(Γ2))
     function func(Rvec)
-        Rtens = reshape(Rvec,dims1[4],smpo[4],dims2[4])
-        @tensoropt (tr,br,-1,-2,-3) temp[:] := Γ1[-1,around, u, tr]*mpo[-2,u,d,cr]*Γ2[-3, d, around, br]*Rtens[tr,cr,br]
+        Rtens = reshape(Rvec,dims1[3],smpo[4],dims2[3])
+        @tensoropt (tr,br,-1,-2,-3) temp[:] := conj(data(Γ1)[-1, u, tr])*data(mpo)[-2,u,d,cr]*data(Γ2)[-3, d, br]*Rtens[tr,cr,br]
         return vec(temp)
     end
 	function func_adjoint(Lvec)
 		Ltens = reshape(Lvec,dims1[1],smpo[1],dims2[1])
-		@tensoropt (bl,tl,-1,-2,-3) temp[:] := Ltens[tl,cl,bl]*conj(Γ1[tl, u, -1])*conj(mpo[cl,u,d,-2])*conj(Γ2[bl, d, -3])
+		@tensoropt (bl,tl,-1,-2,-3) temp[:] := Ltens[tl,cl,bl]*data(Γ1)[tl, u, -1]*conj(data(mpo)[cl,u,d,-2])*conj(data(Γ2)[bl, d, -3])
 		return vec(temp)
 	end
-    return LinearMap{promote_type(eltype.(mposites)...)}(func,func_adjoint, smpo[1]*dims1[1]*dims2[1],smpo[4]*dims1[4]*dims2[4])
+    return LinearMap{T}(func,func_adjoint, smpo[1]*dims1[1]*dims2[1],smpo[4]*dims1[3]*dims2[3])
 end
 
 
@@ -188,35 +221,39 @@ function _transfer_left_mpo_ncon(mposites::Vararg{MPOsite,N}) where {N}
     return map
 end
 
-_transfer_right_mpo(mposites::Vararg{MPOsite}) = _transfer_left_mpo(reverse_direction.(mposites)...)
+_transfer_right_mpo(sites::Vararg{Union{AbstractMPOsite,AbstractSite},N}) where N = _transfer_left_mpo(reverse_direction.(sites)...)
 reverse_direction(Γ::Array{<:Number,3}) = permutedims(Γ,[3,2,1])
-
+reverse_direction(Γs::AbstractVector{<:Union{AbstractMPOsite,AbstractSite}}) = reverse(reverse_direction.(Γs))
 function _transfer_left_gate(Γ1, gate::AbstractSquareGate, Γ2) 
-	oplength = length(gate)
-	Γnew1 = copy(reverse([Γ1...]))
-	Γnew2 = copy(reverse([Γ2...]))
-	for k = 1:oplength
-		Γnew1[oplength+1-k] = reverse_direction(Γnew1[oplength+1-k])
-		Γnew2[oplength+1-k] = reverse_direction(Γnew2[oplength+1-k])
-		gate = permutedims(gate,[oplength:-1:1..., 2*oplength:-1:oplength+1...])
-	end
-	return _transfer_right_gate(Γnew1, gate, Γnew2)
+	# oplength = length(gate)
+	# Γnew1 = copy(reverse([Γ1...]))
+	# Γnew2 = copy(reverse([Γ2...]))
+	# for k = 1:oplength
+	# 	Γnew1[oplength+1-k] = reverse_direction(Γnew1[oplength+1-k])
+	# 	Γnew2[oplength+1-k] = reverse_direction(Γnew2[oplength+1-k])
+	# 	gate = permutedims(gate,[oplength:-1:1..., 2*oplength:-1:oplength+1...])
+	# end
+	Γnew1 = reverse_direction(Γ1)
+	Γnew2 = reverse_direction(Γ2)
+	return _transfer_right_gate(Γnew1, reverse_direction(gate), Γnew2)
 end 
 
 function _transfer_left_gate(Γ, gate::AbstractSquareGate)
-	oplength = length(gate)
-	Γnew = copy(reverse([Γ...]))
-	for k = 1:oplength
-		Γnew[oplength+1-k] = reverse_direction(Γnew[oplength+1-k])
-		gate = permutedims(gate,[oplength:-1:1..., 2*oplength:-1:oplength+1...])
-	end
-	return _transfer_right_gate(Γnew, gate)
+	# oplength = length(gate)
+	# Γnew = copy(reverse([Γ...]))
+	Γnew = reverse_direction(Γ)
+	# for k = 1:oplength
+	# 	# Γnew[oplength+1-k] = reverse_direction(Γnew[oplength+1-k])
+	# 	gate = permutedims(gate,[oplength:-1:1..., 2*oplength:-1:oplength+1...])
+	# end
+	return _transfer_right_gate(Γnew, reverse_direction(gate))
 end 
-
-function _transfer_right_gate(Γ1, gate::GenericSquareGate, Γ2)
+_transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate) = _transfer_right_gate([GenericSite(Γ,:left) for Γ in Γ1],gate)
+_transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:OrthogonalLinkSite}) = _transfer_right_gate([GenericSite(Γ,:left) for Γ in Γ1],gate, [GenericSite(Γ,:left) for Γ in Γ2])
+function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::GenericSquareGate, Γ2::AbstractVector{GenericSite{T}}) where {T} 
 	op = data(gate)
     oplength = length(gate)
-	@assert length(Γ1) == oplength == length(Γ2) "Error in transfer_right_gate: number of sites does not match gate length"
+	@assert length(Γ1) == length(Γ2) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
 	@assert size(gate,1) == size(Γ1[1],2) == size(Γ2[1],2) "Error in transfer_right_gate: physical dimension of gate and site do not match"
 	perm = [Int(floor((k+1)/2))+ oplength*iseven(k) for k in 1:2*oplength]
 	opvec = vec(permutedims(op,perm))
@@ -224,22 +261,22 @@ function _transfer_right_gate(Γ1, gate::GenericSquareGate, Γ2)
 	s_start2 = size(Γ2[1])[1]
 	s_final1 = size(Γ1[oplength])[3]
 	s_final2 = size(Γ2[oplength])[3]
-	function T_on_vec(invec)
+	function T_on_vec(invec) #FIXME Compare performance to a version where the gate is applied between the top and bottom layer of sites
 		v = reshape(invec,1,s_start1,s_start2)
 		for k in 1:oplength
-			@tensoropt (1,2) v[:] := Γ1[k][1,-2,-4]* v[-1,1,2]* Γ2[k][2,-3,-5]
+			@tensoropt (1,2) v[:] := conj(data(Γ1[k]))[1,-2,-4]* v[-1,1,2]* data(Γ2[k])[2,-3,-5]
 			sv = size(v)
 			v = reshape(v,prod(sv[1:3]),sv[4],sv[5])
 		end
 		#return transpose(opvec)*reshape(v,size(v,1),size(v,2)*size(v,3))
-		# @tensor v[:] := v[1,-1,-2] * opvec[1]
-		@tullio vout[a,b] := v[c,a,b] * opvec[c]
+		@tensor vout[:] := v[1,-1,-2] * opvec[1]
+		# @tullio vout[a,b] := v[c,a,b] * opvec[c]
 		return vec(vout)
 	end
 	#TODO Define adjoint
-	return LinearMap{eltype(Γ1[1])}(T_on_vec,s_final1*s_final2,s_start1*s_start2)
+	return LinearMap{T}(T_on_vec,s_final1*s_final2,s_start1*s_start2)
 end
-function _transfer_right_gate(Γ, gate::GenericSquareGate)
+function _transfer_right_gate(Γ::AbstractVector{GenericSite{T}}, gate::GenericSquareGate)  where T
 	op = data(gate)
     oplength = length(gate)
 	@assert length(Γ) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
@@ -251,7 +288,7 @@ function _transfer_right_gate(Γ, gate::GenericSquareGate)
 	function T_on_vec(invec)
 		v = reshape(invec,1,s_start,s_start)
 		for k in 1:oplength
-			@tensoropt (1,2) v[:] := conj(Γ[k][1,-2,-4])* v[-1,1,2]* Γ[k][2,-3,-5]
+			@tensoropt (1,2) v[:] := conj(data(Γ[k])[1,-2,-4])* v[-1,1,2]* data(Γ[k])[2,-3,-5]
 			sv = size(v)
 			v = reshape(v,prod(sv[1:3]),sv[4],sv[5])
 		end
@@ -259,40 +296,30 @@ function _transfer_right_gate(Γ, gate::GenericSquareGate)
 		return vec(v)
 	end
 	#TODO Define adjoint
-	return LinearMap{eltype(Γ[1])}(T_on_vec,s_final^2,s_start^2)
+	return LinearMap{T}(T_on_vec,s_final^2,s_start^2)
 end
 
 #Sites 
-transfer_matrix(site::AbstractSite,dir::Symbol =:left) = _local_transfer_matrix((site',site),dir)
+transfer_matrix(site::AbstractSite,dir::Symbol =:left) = _local_transfer_matrix(tuple(site),dir)
 transfer_matrix(site1::AbstractSite,site2::AbstractSite,dir::Symbol =:left) = _local_transfer_matrix((site1,site2),dir)
-transfer_matrix(site::AbstractSite,op::AbstractMPOsite, dir::Symbol =:left) = _local_transfer_matrix((site',op,site),dir)
+transfer_matrix(site::AbstractSite,op::AbstractMPOsite, dir::Symbol =:left) = _local_transfer_matrix((site,op),dir)
 transfer_matrix(site1::AbstractSite,op::AbstractMPOsite,site2::AbstractSite, dir::Symbol =:left) = _local_transfer_matrix((site1,op,site2),dir)
-transfer_matrix(site::AbstractSite,op::ScaledIdentityGate, dir::Symbol =:left) = data(op)*_local_transfer_matrix((site',site),dir)
-transfer_matrix(site1::AbstractSite,op::ScaledIdentityGate,site2::AbstractSite, dir::Symbol =:left) = data(op)*_local_transfer_matrix((site1',site2),dir)
+transfer_matrix(site::AbstractSite,op::ScaledIdentityGate, dir::Symbol =:left) = data(op)*transfer_matrix(site,dir)
+transfer_matrix(site1::AbstractSite,op::ScaledIdentityGate,site2::AbstractSite, dir::Symbol =:left) = data(op)*_local_transfer_matrix((site1,site2),dir)
 
-function _local_transfer_matrix(sites,direction)
-	K = promote_type(eltype.(sites)...)
-	newsites = Tuple([MPOsite{K}(site,reverse_direction(direction)) for site in sites if !(site isa ScaledIdentityMPOsite)])
-	scaling::K = prod([K(data(site)) for site in sites if site isa ScaledIdentityMPOsite], init=one(K))
-	return (scaling*__local_transfer_matrix(newsites,direction))::LinearMap{K}
+_purify_site(site::AbstractMPOsite,purify::Bool) = purify ? auxillerate(site) : site
+_purify_site(site, purify::Bool) = site
+function _local_transfer_matrix(sites::Tuple, direction::Symbol)
+	# K = promote_type(eltype.(sites)...)
+	# purify::Bool = any(([ispurification(site) for site in sites if site isa AbstractSite]))
+	# newsites::NTuple{<:Any, <:} = Tuple([_purify_site(site,purify) for site in sites if !(site isa ScaledIdentityMPOsite)])
+	# scaling::K = prod([K(data(site)) for site in sites if site isa ScaledIdentityMPOsite], init=one(K))
+	# return (scaling*__local_transfer_matrix(newsites,direction))::LinearMap{K}
+	purify::Bool = any(([ispurification(site) for site in sites if site isa AbstractSite]))
+	newsites= _purify_site.(sites,purify)
+	return __local_transfer_matrix(newsites,direction)
 end
-function __local_transfer_matrix(sites::NTuple{<:Any,N}, direction::Symbol=:left) where {N}
-	# sites = [sitestuple...]
-	#K=promote_type(eltype.(sites)...)
-	#purify = ispurification(sites[1])
-	# for site in sites
-	# 	if site isa  ScaledIdentityMPOsite
-	# 		scaling *= data(site)
-	# 	elseif site isa AbstractSite
-	# 		push!(newsites, MPOsite(site, reverse_direction(direction)))
-	# 	else
-	# 		if purify 
-	# 			push!(newsites, auxillerate(site))
-	# 		else
-	# 			push!(newsites, site)
-	# 		end
-	# 	end
-	# end
+function __local_transfer_matrix(sites::Tuple, direction::Symbol=:left)
 	if direction == :left
 		return _transfer_left_mpo(sites...)
 	else
@@ -303,75 +330,143 @@ function __local_transfer_matrix(sites::NTuple{<:Any,N}, direction::Symbol=:left
 	end
 end
 
-_local_transfer_matrix(site1::BraOrKetOrVec, op::ScaledIdentityGate, site2::BraOrKetOrVec, direction::Symbol=:left) = data(op)*prod(transfer_matrices(site1,site2,direction))
-function _local_transfer_matrix(site1::BraOrKetOrVec, op::AbstractSquareGate, site2::BraOrKetOrVec, direction::Symbol=:left)
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol=:left) = data(op)*prod(transfer_matrices(site1,direction))
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = data(op)*prod(transfer_matrices(site1,site2,direction))
+function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
 	@assert length(site1) == length(site2) == length(op)
 	if ispurification(site1[1])
 		@assert ispurification(site2[1])
 		op = auxillerate(op)
 	end
-	s1 = data.(site1, reverse_direction(direction))
-	s2 = data.(site2, reverse_direction(direction))
 	if direction == :left
-		T = _transfer_left_gate(s1, op, s2)
+		T = _transfer_left_gate(site1, op, site2)
 	elseif direction == :right
-		T = _transfer_right_gate(s1, op, s2)
+		T = _transfer_right_gate(site1, op, site2)
+	else
+		error("Choose direction :left or :right")
+	end
+	return T
+end
+function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol=:left)
+	@assert length(site1) == length(op)
+	if ispurification(site1[1])
+		op = auxillerate(op)
+	end
+	if direction == :left
+		T = _transfer_left_gate(site1, op)
+	elseif direction == :right
+		T = _transfer_right_gate(site1, op)
 	else
 		error("Choose direction :left or :right")
 	end
 	return T
 end
 
-transfer_matrix(site::AbstractSite, op::AbstractSquareGate{<:Any,2}; direction::Symbol=:left) = transfer_matrix([site'],op,[site], direction)
+transfer_matrix(site::AbstractSite, op::Union{AbstractSquareGate{<:Any,2}, Matrix}; direction::Symbol=:left) = transfer_matrix((site,MPOsite(op)), direction)
 
-function transfer_matrices(sites1::BraOrKetOrVec, op::Union{AbstractMPOsite, AbstractSquareGate}, sites2::BraOrKetOrVec, direction::Symbol=:left) 
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) 
 	@assert length(sites1) == length(sites2)
 	n = length(op)
-	return [_local_transfer_matrix(sites1[k:k+n-1], op, sites2[k:k+n-1], direction) for k in 1:length(sites1)+1-n]
+	return [_local_transfer_matrix(view(sites1,k:k+n-1), op, view(sites2,k:k+n-1), direction) for k in 1:length(sites1)+1-n]
+end
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol=:left) 
+	n = length(op)
+	return [_local_transfer_matrix(view(sites1,k:k+n-1), op, direction) for k in 1:length(sites1)+1-n]
 end
 
-function transfer_matrices(sites1::BraOrKetOrVec, op::Vector{<:AbstractSquareGate}, sites2::BraOrKetOrVec, direction::Symbol=:left)
-	@assert length(sites1) == length(sites2) == length(op)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) 
+	@assert length(sites1) == length(sites2)
+	return [_local_transfer_matrix((sites1[k], op, sites2[k:k+n-1]), direction) for k in 1:length(sites1)]
+end
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, direction::Symbol=:left) 
+	return [_local_transfer_matrix((sites1[k], op, direction),direction) for k in 1:length(sites1)]
+end
+
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
+	@assert length(sites1) == length(sites2) == length(ops)
 	N = length(sites1)
-	Ts = LinearMap{numtype(sites1,sites2)}[]
-	for k in 1:N
-		n = length(op[k])
-		if k+n-1>N
-			break
-		end
-		Tm = _local_transfer_matrix(sites1[k:k+n-1], op[k], sites2[k:k+n-1], direction)
-		push!(Ts,Tm)
-	end
-	Ts
+	ns = length.(ops)
+	return [_local_transfer_matrix(sites1[k:k+ns[k]-1],op,sites2[k:k+ns[k]-1], direction) for (k,op) in enumerate(ops) if !(k+ns[k]-1>N)]
+	# Ts = LinearMap{numtype(sites1,sites2)}[]
+	# for k in 1:N
+	# 	n = length(op[k])
+	# 	if k+n-1>N
+	# 		break
+	# 	end
+	# 	Tm = _local_transfer_matrix(view(sites1,k:k+n-1), op[k], view(sites2,k:k+n-1), direction)
+	# 	push!(Ts,Tm)
+	# end
+	# Ts
 end
-function transfer_matrices(sites1::BraOrKetOrVec, op::Union{AbstractMPO,Vector{<:MPOsite}}, sites2::BraOrKetOrVec, direction::Symbol=:left)
-	@assert length(sites1) == length(sites2) == length(op)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, direction::Symbol=:left)
+	@assert length(sites1) == length(ops)
 	N = length(sites1)
-	return [_local_transfer_matrix((sites1[k], op[k], sites2[k]), direction) for k in 1:N]
+	# Ts = LinearMap{numtype(sites1)}[]
+	ns = length.(ops)
+	return [_local_transfer_matrix(sites1[k:k+ns[k]-1],op, direction) for (k,op) in enumerate(ops) if !(k+ns[k]-1>N)]
+	# for k in 1:N
+	# 	n = length(op[k])
+	# 	if k+n-1>N
+	# 		break
+	# 	end
+	# 	Tm = _local_transfer_matrix(view(sites1,k:k+n-1), op[k], direction)
+	# 	push!(Ts,Tm)
+	# end
+	# Ts
 end
-transfer_matrices(sites1::BraOrKetOrVec, op::Vector{<:Matrix}, sites2::BraOrKetOrVec, direction::Symbol=:left) = transfer_matrices(sites1, MPO(op), sites2, direction)
 
-transfer_matrices(sites1::BraOrKetOrVec, sites2::BraOrKetOrVec, direction::Symbol=:left) = transfer_matrices(sites1, IdentityMPO(length(sites1)), sites2, direction)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::Union{AbstractMPO,AbstractVector{<:MPOsite}}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
+	@assert length(sites1) == length(sites2) == length(op)
+	return [_local_transfer_matrix(sos,direction) for sos in zip(sites1,op,sites2)]
+end
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::Union{AbstractMPO,AbstractVector{<:MPOsite}}, direction::Symbol=:left)
+	@assert length(sites1) == length(op)
+	return [_local_transfer_matrix(so,direction) for so in zip(sites1,op)]
+end
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
+	@assert length(sites1) == length(sites2)
+	return [_local_transfer_matrix(ss,direction) for ss in zip(sites1,sites2)]
+end
+transfer_matrices(sites::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = [_local_transfer_matrix(tuple(site), direction) for site in sites]
 
-transfer_matrices(sites::BraOrKetOrVec,op, direction::Symbol=:left) = transfer_matrices(sites',op,sites,direction)
-transfer_matrices(sites::BraOrKetOrVec, direction::Symbol=:left) = transfer_matrices(sites',sites,direction)
 
-
-function transfer_matrix(sites1::BraOrKetOrVec, op, sites2::BraOrKetOrVec, direction::Symbol=:left)
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
 	Ts = transfer_matrices(sites1, op,sites2, direction)
 	N = length(Ts)
 	if N>20
 		@warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
 	end
 	if direction == :right
-		Ts = Ts[N:-1:1]
+		Ts = @view Ts[N:-1:1]
+	end
+	return prod(Ts) #Products of many linear operators cause long compile times!
+end
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
+	Ts = transfer_matrices(sites1, direction)
+	N = length(Ts)
+	if N>20
+		@warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
+	end
+	if direction == :right
+		Ts = @view Ts[N:-1:1]
+	end
+	return prod(Ts) #Products of many linear operators cause long compile times!
+end
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::Symbol=:left)
+	Ts = transfer_matrices(sites1, op, direction)
+	N = length(Ts)
+	if N>20
+		@warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
+	end
+	if direction == :right
+		Ts = @view Ts[N:-1:1]
 	end
 	return prod(Ts) #Products of many linear operators cause long compile times!
 end
 
-transfer_matrix(sites1::BraOrKetOrVec, sites2::BraOrKetOrVec, direction::Symbol=:left) = transfer_matrix(sites1, IdentityMPO(length(sites1)), sites2, direction)
-transfer_matrix(sites::BraOrKetOrVec,op, direction::Symbol=:left) = transfer_matrix(sites',op,sites,direction)
-transfer_matrix(sites::BraOrKetOrVec, direction::Symbol=:left) = transfer_matrix(sites',sites,direction)
+# transfer_matrix(sites1::AbstractVector{<:AbstractSite}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = transfer_matrix(sites1, IdentityMPO(length(sites1)), sites2, direction)
+# transfer_matrix(sites::AbstractVector{<:AbstractSite},op, direction::Symbol=:left) = transfer_matrix(sites,op,sites,direction)
+# transfer_matrix(sites::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = transfer_matrix(sites,IdentityMPO(length(sites1)),direction)
 
 
 # This function gives the transfer matrix for a single site which acts on the right.

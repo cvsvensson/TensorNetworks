@@ -120,7 +120,7 @@ function canonicalize(mps::OpenMPS)
     # M = centralize(mps, 1)
     # canonicalizeM!(M)
     # Γ, Λ, err = ΓΛ_from_M(M, mps.truncation)
-    Γ, Λ, err = to_orthogonal_link(RightOrthogonalSite.(mps[1:end]), mps.truncation)
+    Γ, Λ, err = to_orthogonal_link(RightOrthogonalSite.(mps), mps.truncation)
     return OpenMPS(Γ, Λ, truncation=mps.truncation, error = err)
 end
 
@@ -130,14 +130,12 @@ end
 Make the mps canonical
 """
 function canonicalize!(mps::OpenMPS) #TODO make consistent with LCROpenMPS
-    Γ, Λ, err = to_orthogonal_link(RightOrthogonalSite.(mps[1:end]), mps.truncation)
+    Γ, Λ, err = to_orthogonal_link(RightOrthogonalSite.(mps), mps.truncation)
     mps.Γ = Γ
     mps.Λ = Λ
     mps.error += err
     return
 end
-
-
 
 """
 to_orthogonal_link_from_right_orth(M::Vector{GenericSite{T}}; trunc::TruncationArgs)
@@ -180,110 +178,14 @@ function to_orthogonal_link(M::Vector{GenericSite{T}}, trunc::TruncationArgs) wh
     return to_orthogonal_link_from_right_orth(MR,trunc)
 end
 
-#%% Expectation values
-# """
-#     expectation_value(mps::OpenMPS, mpo::AbstractMPO, site::Integer)
-
-# Return the expectation value of the mpo starting at `site`
-
-# See also: [`expectation_values`](@ref), [`expectation_value_left`](@ref)
-# """
-# function expectation_value(mps::OpenMPS, mpo::AbstractMPO, site::Integer = 1)
-#     oplength = length(mpo)
-#     T = transfer_matrix(mps,mpo,site,:right)
-#     dl = size(mps.Γ[site],1)
-#     Λ2 = Diagonal(data(mps[site+oplength-1].Λ2).^2)
-#     dr = length(mps.Λ[site+oplength])
-#     L = T*vec(Matrix(1.0I,dl,dl))
-#     return tr(Λ2*reshape(L,dr,dr))
-# end
-
-# """
-#     expectation_value_left(mps::OpenMPS, mpo::AbstractMPO, site::Integer)
-
-# Return the expectation value of the mpo starting at `site`
-
-# See also: [`expectation_value`](@ref)
-# """
-# function expectation_value_left(mps::OpenMPS, mpo::AbstractMPO, site::Integer)
-#     oplength = length(mpo)
-#     T = transfer_matrix(mps,mpo,site,:left)
-#     dr = size(mps.Γ[site+oplength-1],3)
-#     Λ2 = Diagonal(mps.Λ[site].^2)
-#     R = T*vec(Matrix(1.0I,dr,dr))
-#     dl = length(mps.Λ[site])
-#     return tr(Λ2*reshape(R,dl,dl))
-# end
 
 function apply_layers_nonunitary(mps::OpenMPS, layers)
     sites, err = apply_layers_nonunitary(mps[1:end], layers, mps.truncation)
     return OpenMPS(sites,truncation=mps.truncation, error = mps.error + err)
 end
 
-
-# """
-#     norm(mps::OpenMPS)
-
-# Return the norm of the mps
-# """
-# function LinearAlgebra.norm(mps::OpenMPS)
-#     C = Array{T,2}(undef, 1, 1)
-#     T = eltype(data(mps[1]))
-#     C[1, 1] = one(T)
-#     N = length(mps.Γ)
-#     M = centralize(mps, N)
-#     for i = 1:N
-#         @tensor C[-1, -2] := M[i][2, 3, -2] * C[1, 2] * conj(M[i][1, 3, -1])
-#     end
-#     return C[1, 1]
-# end
-
-# """
-#     scalar_product(mps::OpenMPS, mps2::OpenMPS)
-
-# Return the scalar product of the two mps's
-# """
-# function scalar_product(mps::OpenMPS{T}, mps2::OpenMPS{T}) where {T}
-#     C = Array{T,2}(undef, 1, 1)
-#     C[1, 1] = one(T)
-#     N = length(mps.Γ)
-#     M = centralize(mps, N)
-#     M2 = centralize(mps2, N)
-#     for i = 1:N
-#         @tensor C[-1, -2] := M[i][2, 3, -2] * C[1, 2] * conj(M2[i][1, 3, -1])
-#     end
-#     return C[1, 1]
-# end
-
-# set_center!(mps::OpenMPS,::Integer) = mps
-# iscenter(mps::OpenMPS, ::Integer) = true
-set_center!(mps::BraOrKetWith(OrthogonalLinkSite), ::Integer) = mps
-iscenter(mps::BraOrKetWith(OrthogonalLinkSite), ::Integer) = true
-# """
-#     scalar_product(mps::OpenMPS, mps2::OpenMPS)
-
-# Return the scalar product of the two mps's
-# """
-# scalar_product(mps::OpenMPS, mps2::OpenMPS) = scalar_product(LCROpenMPS(mps), LCROpenMPS(mps2))
-# scalar_product(mps::LCROpenMPS, mps2::OpenMPS) = scalar_product(mps, LCROpenMPS(mps2))
-# scalar_product(mps::OpenMPS, mps2::LCROpenMPS) = scalar_product(LCROpenMPS(mps), mps2)
-
-# %% Transfer 
-
-# """
-#     transfer_matrix(mps::OpenMPS, op, site, direction = :left)
-
-# Return the transfer matrix at `site` with the operator sandwiched
-# """
-# function transfer_matrix(mps::OpenMPS, op::AbstractGate{T_op,N_op}, site::Integer, direction = :left) where {T_op, N_op}
-# 	oplength = Int(length(size(op))/2)
-# 	N = length(mps)
-#     if (site+oplength-1) >N
-#         error("Operator goes outside the chain.")
-#     end
-#     sites = mps[site:(site+oplength-1)]
-#     return transfer_matrix(sites,op,direction)
-# end
+set_center!(mps::AbstractVector{<:OrthogonalLinkSite}, ::Integer) = mps
+iscenter(mps::AbstractVector{<:OrthogonalLinkSite}, ::Integer) = true
 
 function saveOpenMPS(mps, filename)
     jldopen(filename, "w") do file

@@ -1,31 +1,13 @@
 using Test, TensorNetworks, TensorOperations, LinearAlgebra, KrylovKit
 
 @testset "Types" begin
-    mps = randomUMPS(ComplexF64,1,2,1)
+    mps = randomUMPS(ComplexF64,2,2,1)
     @test mps isa UMPS
     @test mps isa UMPS{ComplexF64}
-    @test mps' isa adjoint(UMPS)
-    @test mps' isa adjoint(UMPS{ComplexF64})
-    @test !(mps isa adjoint(UMPS))
-    @test mps isa TensorNetworks.BraOrKet
-    @test mps' isa TensorNetworks.BraOrKet
-
-    @test mps isa TensorNetworks.BraOrKetLike(UMPS)
-    @test mps' isa TensorNetworks.BraOrKetLike(UMPS)
-    @test mps isa TensorNetworks.BraOrKetLike(UMPS{ComplexF64})
-    @test mps' isa TensorNetworks.BraOrKetLike(UMPS{ComplexF64})
-    @test !(mps isa TensorNetworks.BraOrKetLike(UMPS{Float64}))
-    @test !(mps' isa TensorNetworks.BraOrKetLike(UMPS{Float64}))
-
-    @test mps isa TensorNetworks.BraOrKetWith(OrthogonalLinkSite)
-    @test mps' isa TensorNetworks.BraOrKetWith(OrthogonalLinkSite)
-    @test mps isa TensorNetworks.BraOrKetWith(OrthogonalLinkSite{ComplexF64})
-    @test mps' isa TensorNetworks.BraOrKetWith(OrthogonalLinkSite{ComplexF64})
-    @test !(mps isa TensorNetworks.BraOrKetWith(OrthogonalLinkSite{Float64}))
-    @test !(mps' isa TensorNetworks.BraOrKetWith(OrthogonalLinkSite{Float64}))
-
-    @test mps isa TensorNetworks.BraOrKetOrVec
-    @test mps' isa TensorNetworks.BraOrKetOrVec
+    
+    @test eltype(mps) == OrthogonalLinkSite{ComplexF64}
+    @test eltype(mps[1]) == ComplexF64
+    @test TensorNetworks.numtype(mps) == ComplexF64
 end
 
 @testset "Gate" begin
@@ -128,11 +110,11 @@ end
     DL1,DL2,DR1,DR2,d = rand(1:10,5)
     site1 = randomGenericSite(DL1,d,DR1);
     site2 = randomGenericSite(DL2,d,DR2);
-    T0 = Matrix(transfer_matrix(site1',site2));
-    Tid = Matrix(transfer_matrix(site1',id,site2));
+    T0 = Matrix(transfer_matrix(site1,site2));
+    Tid = Matrix(transfer_matrix(site1,id,site2));
     @test T0 == Tid
     @test Matrix(transfer_matrix(site1)) == Matrix(transfer_matrix(site1,id))
-    @test z*T0 == Matrix(transfer_matrix(site1',zid,site2))
+    @test z*T0 == Matrix(transfer_matrix(site1,zid,site2))
 end
 
 @testset "MPO" begin
@@ -168,7 +150,7 @@ end
     env = environment(mps);
     site = randomGenericSite(D,d,D)
     mid = floor(Int,N/2)
-    update_environment!(env,mid,site',site)
+    update_environment!(env,mid,site,site)
     TL = transfer_matrix(site,:left)
     TR = transfer_matrix(site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -176,22 +158,22 @@ end
 
     D2 = 10
     mps2 = randomOpenMPS(N,d,D2);
-    env = environment(mps2',mps);
+    env = environment(mps2,mps);
     @test length(env.R[mid]) == D2*D == length(env.L[mid])
     site2 = randomGenericSite(D2,d,D2);
-    update_environment!(env,mid,site2',site)
-    TL = transfer_matrix(site2',site,:left)
-    TR = transfer_matrix(site2',site,:right)
+    update_environment!(env,mid,site2,site)
+    TL = transfer_matrix(site2,site,:left)
+    TR = transfer_matrix(site2,site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
     @test vec(env.L[mid+1]) ≈ TR*vec(env.L[mid])
 
     mpo = IsingMPO(N,1,1,1);
     Dmpo = size(mpo[mid],4)
-    env = environment(mps2',mpo,mps);
+    env = environment(mps2,mpo,mps);
     @test length(env.R[mid]) == D2*D*Dmpo == length(env.L[mid])
-    update_environment!(env,mid,site2',mpo[mid],site)
-    TL = transfer_matrix(site2',mpo[mid],site,:left)
-    TR = transfer_matrix(site2',mpo[mid],site,:right)
+    update_environment!(env,mid,site2,mpo[mid],site)
+    TL = transfer_matrix(site2,mpo[mid],site,:left)
+    TR = transfer_matrix(site2,mpo[mid],site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
     @test vec(env.L[mid+1]) ≈ TR*vec(env.L[mid])
 end
@@ -312,8 +294,8 @@ end
     g3 = Gate(TensorNetworks.gate(kron(sz,sz,sz),3));
     T3 = prod(transfer_matrices([site,site,site], g3));
     @test Matrix(T3) ≈ Matrix(T1*T1*T1)
-    @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], [sz,sz,sz])))
-    @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site',site',site'], [sz,sz,sz], [site,site,site])))
+    @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]))))
+    @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]), [site,site,site])))
     @test transpose(Matrix(T3)) ≈ Matrix(prod(transfer_matrices([site,site,site], g3,:right)))
 
     g4 = Gate(TensorNetworks.gate(kron(sz,sz,sz,sz),4));
@@ -385,7 +367,7 @@ end
     hamMPO = IsingMPO(Nchain,1,1,0);
     mps = canonicalize(identityOpenMPS(Nchain, 2, truncation = TruncationArgs(Dmax, 1e-12, true)));
     states, betas = get_thermal_states(mps, ham, 30, .1, order=2);
-    energy = expectation_value(states[1], TensorNetworks.auxillerate(hamMPO));
+    energy = expectation_value(states[1], hamMPO);
     @test abs(energy/(Nchain-1) + 4/π) < 1/Nchain
 
     ham = isingHamGates(Nchain,1,1,0)[2:3];
@@ -454,8 +436,8 @@ end
     guess = canonicalize(randomLCROpenMPS(N,2,10));
     
     mps = TensorNetworks.iterative_compression(target, guess);
-    @test scalar_product(mps',target) ≈ 1
-    @test scalar_product(mps',guess) ≈ scalar_product(target',guess)
+    @test scalar_product(mps,target) ≈ 1
+    @test scalar_product(mps,guess) ≈ scalar_product(target,guess)
 end
 
 using DoubleFloats
@@ -483,8 +465,8 @@ using DoubleFloats
     guess = canonicalize(randomLCROpenMPS(N,2,10,T=T));
     mps = TensorNetworks.iterative_compression(target, guess);
     @test eltype(mps) == GenericSite{T}
-    @test scalar_product(mps',target) ≈ 1
-    @test scalar_product(mps',guess) ≈ scalar_product(target',guess)
+    @test scalar_product(mps,target) ≈ 1
+    @test scalar_product(mps,guess) ≈ scalar_product(target,guess)
 
     # UMPS
     theta = 2*pi*rand(real(T))

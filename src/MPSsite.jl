@@ -3,12 +3,9 @@ Base.copy(site::OrthogonalLinkSite) = OrthogonalLinkSite([copy(getfield(site, k)
 Base.copy(site::GenericSite) = GenericSite([copy(getfield(site, k)) for k = 1:length(fieldnames(GenericSite))]...) 
 
 Base.@propagate_inbounds Base.getindex(site::AbstractSite, I...) = getindex(data(site),I...)
-Base.@propagate_inbounds Base.getindex(site::AdjointSite, I...) = getindex(site.parent,I...)
 
 Base.size(site::AbstractSite, dim) = size(data(site), dim)
 Base.size(site::AbstractSite) = size(data(site))
-Base.size(site::AdjointSite) = size(site.parent)
-Base.size(site::AdjointSite, dim) = size(site.parent,dim)
 Base.size(site::OrthogonalLinkSite) = size(site.Γ)
 Base.size(site::OrthogonalLinkSite, dim) = size(site.Γ, dim)
 Base.size(site::VirtualSite, dim) = size(site.Λ, dim)
@@ -21,7 +18,6 @@ ispurification(site::GenericSite) = site.purification
 ispurification(site::OrthogonalLinkSite) = ispurification(site.Γ)
 
 link(site::GenericSite, dir) = I
-link(site::AdjointSite, dir) = link(site.parent, dir)'
 function link(site::OrthogonalLinkSite,dir)
 	if dir==:left
 		site.Λ1
@@ -34,35 +30,21 @@ end
 data(site::GenericSite) = site.Γ
 data(site::VirtualSite) = site.Λ
 data(site::LinkSite) = site.Λ
-data(site::AdjointSite) = conj(data(site.parent))
 data(site::GenericSite,dir) = site.Γ
 data(site::OrthogonalLinkSite, dir) = data(GenericSite(site,dir))
 data(site::VirtualSite, dir) = site.Λ
 data(site::LinkSite, dir) = site.Λ
-data(site::AdjointSite,dir) = conj(data(site.parent,dir))
 data(site::OrthogonalLinkSite) = data(site.Λ1*site.Γ*site.Λ2)
-# data(site::AdjointSite) = conj(data(site.site))
 
 MPOsite(site::GenericSite) = (s = size(site); MPOsite(reshape(data(site),s[1],s[2],1,s[3])))
 MPOsite(site::GenericSite, dir) = MPOsite(site)
-MPOsite(site::AdjointSite) = conj(permutedims(MPOsite(site.parent),[1,3,2,4]))
-MPOsite(site::AdjointSite, dir) =  conj(permutedims(MPOsite(site.parent,dir),[1,3,2,4]))
 MPOsite(site::OrthogonalLinkSite,dir) = MPOsite(GenericSite(site,dir),dir)
 
 MPOsite{K}(site::GenericSite) where {K} = (s = size(site); MPOsite{K}(reshape(data(site),s[1],s[2],1,s[3])))
 MPOsite{K}(site::GenericSite, dir) where {K} = MPOsite{K}(site)
-MPOsite{K}(site::AdjointSite) where {K} = conj(permutedims(MPOsite{K}(site.parent),[1,3,2,4]))
-MPOsite{K}(site::AdjointSite, dir) where {K} =  conj(permutedims(MPOsite{K}(site.parent,dir),[1,3,2,4]))
 MPOsite{K}(site::OrthogonalLinkSite,dir) where {K} = MPOsite{K}(GenericSite(site,dir),dir)
-# MPOsite(site::BraSite{<:OrthogonalLinkSite},dir) = MPOsite(GenericSite(site.site,dir)',dir)
-#MPOsite(site::AbstractSite, dir::Symbol) = MPOsite(GenericSite(site,dir))
-
-# Base.adjoint(site::AbstractSite) = BraSite(site)
-# Base.adjoint(site::BraSite) = site.site
 
 Base.sqrt(site::LinkSite) = LinkSite(sqrt(data(site)))
-
-ispurification(site::AdjointSite) = ispurification(site.parent)
 
 isleftcanonical(site::AbstractSite)  = isleftcanonical(data(site))
 isleftcanonical(site::OrthogonalLinkSite) = isleftcanonical(site.Λ1*site.Γ)
@@ -74,22 +56,14 @@ entanglement_entropy(Λ::LinkSite) = -sum(data(Λ) * log(data(Λ)))
 
 GenericSite(site::GenericSite) = site
 GenericSite(site::GenericSite,dir) = site
-GenericSite(site::AdjointSite) = GenericSite(conj(data(site.parent)), ispurification(site))
 
-Base.convert(::Type{LinkSite{T}}, Λ::LinkSite{K}) where {K,T} = LinkSite(convert.(T,Λ.Λ))
-Base.convert(::Type{GenericSite{T}}, site::GenericSite{K}) where {K,T} = GenericSite(convert.(T,data(site)),ispurification(site))
-
+Base.convert(::Type{LinkSite{T}}, Λ::LinkSite{K}) where {K,T} = LinkSite{T}(convert.(T,data(Λ)))
+# Base.convert(::Type{GenericSite{T}}, site::GenericSite{K}) where {K,T} = GenericSite(convert.(T,data(site)),ispurification(site))
 
 LinearAlgebra.norm(site::AbstractSite) = norm(data(site))
-# LinearAlgebra.norm(site::LinkSite) = norm(data(site))
-# LinearAlgebra.norm(site::VirtualSite) = norm(data(site))
 
-# Base.eltype(site::BraSite) = eltype(site.site)
 Base.eltype(::AbstractSite{T,N}) where {T,N} = T
-Base.eltype(::AdjointSite{T,N,S}) where {T,N,S} = T
-# Base.eltype(::LinkSite{T}) where {T} = T
-# Base.eltype(::OrthogonalLinkSite{T}) where {T} = T
-# Base.eltype(::VirtualSite{T}) where {T} = T
+
 
 function LinearAlgebra.ishermitian(site::MPOsite)
 	ss = size(site)
@@ -129,15 +103,16 @@ Return the left orthogonal form of the input site as well as the remainder.
 function to_left_orthogonal(site::GenericSite; full=false, method=:qr, truncation=DEFAULT_OPEN_TRUNCATION)
     D1,d,D2 = size(site)
     M = reshape(data(site),D1*d,D2)
-	if method ==:qr
-    	U,R = qr(M) 
-		A = full ? U * Matrix(I,D2,D2) : Matrix(U)
-	elseif method==:svd
-		U, S, Vt, Dm, err = split_truncate!(copy(M), truncation)
-		A = Matrix(U)
+	if method==:svd
+		Usvd, S, Vt, _, _ = split_truncate!(copy(M), truncation)
+		A = Matrix(Usvd)
 		R = Diagonal(S)*Vt
 	else
-		error("Choose :qr or :svd as method in 'to_left_orthogonal'")
+		if method !==:qr
+			@warn "Choose :qr or :svd as method in 'to_left_orthogonal', not $method. Defaulting to QR"
+		end
+    	Uqr,R = qr(M) 
+		A = full ? Uqr * Matrix(I,D2,D2) : Matrix(Uqr)
 	end
     Db = size(R,1) # intermediate bond dimension
 	orthSite = GenericSite(reshape(A,D1,d,Db), site.purification)
@@ -152,26 +127,27 @@ end
 
 function LinearAlgebra.svd(site::GenericSite, orth = :leftorthogonal)
 	s = size(site)
-	if orth == :leftorthogonal
-		m = reshape(data(site),s[1]*s[2],s[3])
-		F = svd(m)
-		U = GenericSite(reshape(F.U,s),site.purification)
-		S = LinkSite(F.S)
-		Vt = VirtualSite(F.Vt)
-	elseif orth == :rightorthogonal
+	if orth == :rightorthogonal
 		m = reshape(data(site),s[1],s[2]*s[3])
 		F = svd(m)
 		U = VirtualSite(F.U)
 		S = LinkSite(F.S)
 		Vt = GenericSite(reshape(F.Vt,s),site.purification)
 	else
-		error("Choose :leftorthogonal or :rightorthogonal")
+		if orth !== :leftorthogonal
+			@warn "Choose :leftorthogonal or :rightorthogonal, not $orth. Defaulting to :leftorthogonal"
+		end
+		m = reshape(data(site),s[1]*s[2],s[3])
+		F = svd(m)
+		U = GenericSite(reshape(F.U,s),site.purification)
+		S = LinkSite(F.S)
+		Vt = VirtualSite(F.Vt)
 	end
 	return U,S,Vt
 end
 
 reverse_direction(site::GenericSite) = GenericSite(permutedims(data(site),[3,2,1]), site.purification)
-reverse_direction(site::AdjointSite) = reverse_direction(site.parent)'
+reverse_direction(site::OrthogonalLinkSite) = OrthogonalLinkSite(link(site,:right), reverse_direction(site.Γ), link(site,:left))
 
 Base.transpose(G::VirtualSite) = VirtualSite(Matrix(transpose(G.Λ)))
 Base.transpose(Λ::LinkSite) = Λ
@@ -344,8 +320,8 @@ end
 
 function randomOrthogonalLinkSite(Dl,d,Dr, T = ComplexF64; purification = false)
 	Γ = randomGenericSite(Dl,d,Dr,T,purification=purification)
-	_, ΛL0,_ = svd(Γ, :leftorthogonal)
-	_,_,ΓR = svd(Γ, :rightorthogonal)
+	#_, ΛL0,_ = svd(Γ, :leftorthogonal)
+	_,ΛL0,ΓR = svd(Γ, :rightorthogonal)
 	ΛL = ΛL0/norm(ΛL0)
 	R = ΛL*ΓR
 	U, ΛR,_ = svd(R, :leftorthogonal)

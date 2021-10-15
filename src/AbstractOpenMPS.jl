@@ -1,8 +1,8 @@
-isinfinite(::T) where {T<:BraOrKet} = isinfinite(boundaryconditions(T))
+isinfinite(::T) where {T<:AbstractMPS} = isinfinite(boundaryconditions(T))
 isinfinite(::OpenBoundary) = false
 isinfinite(::InfiniteBoundary) = true
 
-function boundary(::OpenBoundary, mps::BraOrKetOrVec, side)
+function boundary(::OpenBoundary, mps::AbstractMPS, side)
     if side==:right
         return [one(eltype(mps[end]))]
     else 
@@ -12,21 +12,21 @@ function boundary(::OpenBoundary, mps::BraOrKetOrVec, side)
         return [one(eltype(mps[1]))]
     end
 end
-boundary(bc::OpenBoundary, mps1::BraOrKetOrVec, mps2::BraOrKetOrVec,side) = kron(boundary(bc,mps1,side), boundary(bc,mps2,side))
-boundary(bc::OpenBoundary, mps::BraOrKetOrVec, mpo::AbstractMPO,side) = boundary(bc,mps,side)
-boundary(bc::OpenBoundary, mps1::BraOrKetOrVec, mpo::AbstractMPO, mps2::AbstractMPS, side) = kron(boundary(bc,mps1,side), boundary(bc,mps2,side))
+boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS,side) = kron(boundary(bc,mps1,side), boundary(bc,mps2,side))
+boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO,side) = boundary(bc,mps,side)
+boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = kron(boundary(bc,mps1,side), boundary(bc,mps2,side))
 
-boundary(mps::BraOrKet, args::Vararg) = boundary(boundaryconditions(mps),mps,args...)
+boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps),mps,args...)
 
-function boundary(::InfiniteBoundary, mps::BraOrKet,g::ScaledIdentityMPO,mps2::BraOrKet, side::Symbol)
+function boundary(::InfiniteBoundary, mps::AbstractMPS,g::ScaledIdentityMPO,mps2::AbstractMPS, side::Symbol)
 	_, rhos = transfer_spectrum(mps, mps2, reverse_direction(side),nev=1)
 	return (data(g) ≈ 1 ? 1 : 0)*rhos[1]
 end
-function boundary(::InfiniteBoundary, mps::BraOrKet, side::Symbol)
+function boundary(::InfiniteBoundary, mps::AbstractMPS, side::Symbol)
 	_, rhos = transfer_spectrum(mps, reverse_direction(side),nev=1)
 	return canonicalize_eigenoperator(rhos[1])
 end
-function boundary(::InfiniteBoundary, mps::BraOrKet,mps2::BraOrKet, side::Symbol)
+function boundary(::InfiniteBoundary, mps::AbstractMPS,mps2::AbstractMPS, side::Symbol)
 	_, rhos = transfer_spectrum(mps, mps2, reverse_direction(side),nev=1)
 	return canonicalize_eigenoperator(rhos[1])
 end

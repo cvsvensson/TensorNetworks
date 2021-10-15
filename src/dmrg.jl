@@ -3,18 +3,18 @@
 
 Use DMRG to calculate the lowest energy eigenstate orthogonal to `orth`
 """
-function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LCROpenMPS{T}[];kwargs...) where {T}
+function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LCROpenMPS{T}[];kwargs...) where {T}
     ### input: canonical random mps
     ### output: ground state mps, ground state energy
     precision::Float64=get(kwargs,:precision, DEFAULT_DMRG_precision)
-    mps::LCROpenMPS{T} = canonicalize(deepcopy(mps_input))
+    mps = canonicalize(copy(mps_input))
     set_center!(mps,1)
     #canonicalize!(mps)
     L = length(mps_input)
     @assert (norm(mps_input) ≈ 1 && L == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
     direction = :right
     Henv = environment(mps,mpo)
-    orthenv = [environment(state',mps) for state in orth]
+    orthenv = [environment(state,mps) for state in orth]
     Hsquared = multiplyMPOs(mpo,mpo)
     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
     var = H2 - E^2
@@ -24,7 +24,7 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
     while count<50 #TODO make maxcount choosable
         Eprev = E
         mps = sweep(mps,mpo,Henv,orthenv,direction,orth; kwargs...)
-        mps = canonicalize(mps,center=mps.center)
+        mps = canonicalize(mps,center=center(mps))
         direction = reverse_direction(direction)
         E, H2 = real(expectation_value(mps,mpo)), real(expectation_value(mps,Hsquared))
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
@@ -41,16 +41,17 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
         end
     end
 
-    return mps, E
+    return mps::LCROpenMPS{T}, E
 end
 
 
 function effective_hamiltonian(mposite, hl,hr, orthvecs)
     szmps = (size(hl,3),size(mposite,3),size(hr,3))
+    overlap2(o,v) = 100*o*(o'*v) #TODO make weight choosable
     function f(v) 
         A = reshape(v, szmps)
         HA = local_mul(hl,hr,mposite,A)
-        overlap(o) = 100*o*(o'*v)
+        overlap(o) = overlap2(o,v)
         OA = sum(overlap, orthvecs; init = zero(v))
         return vec(HA) + OA
     end
@@ -64,15 +65,22 @@ function eigs(heff::LinearMap, x0, nev, prec)
     else
         evals,evecs = _eigs_large(heff, x0, nev, prec)
     end
-    return evals, evecs
+    T = eltype(heff)
+    return evals::Vector{eltype(heff)}, evecs::Matrix{eltype(heff)}
 end
-_eigs_small(heff) = eigen(heff)
+function _eigs_small(heff)
+    vals,vecs = eigen(heff)
+    return vals::Vector{eltype(heff)},vecs::Matrix{eltype(heff)}
+end
 function _eigs_large(heff::LinearMap, x0, nev, prec)
-    evals::Vector{Float64}, evecs::Vector{Vector{eltype(LinearMap)}} = eigsolve(heff, vec(data(x0)), nev, :SR, tol=prec, ishermitian=true, maxiter=1000)
-    evecsvec::Array{eltype(LinearMap),2} = hcat(evecs...)
+    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(data(x0)), nev, :SR, tol=prec, ishermitian=true, maxiter=1000)
+    evecsvec::Matrix{eltype(heff)} = reduce(hcat,evecs)
     return evals, evecsvec
 end
-_eigs_large(heff::LinearMap{<:BigNumber}, x0, nev, prec) = partialeigen(partialschur(heff,nev=nev, which =SR(), tol=prec)[1])
+function _eigs_large(heff::LinearMap{<:BigNumber}, x0, nev, prec) 
+    vals,vecs = partialeigen(partialschur(heff,nev=nev, which =SR(), tol=prec)[1])
+    return vals::Vector{eltype(heff)}, vecs::Matrix{eltype(heff)}
+end
 function eigensite(site::GenericSite, mposite, hl, hr, orthvecs, prec)
     szmps=size(site)
     heff = effective_hamiltonian(mposite, hl,hr, orthvecs)
@@ -82,63 +90,42 @@ function eigensite(site::GenericSite, mposite, hl, hr, orthvecs, prec)
     if !(e ≈ real(e))
         error("ERROR: complex eigenvalues")
     end
-    #evals = real(evals)
-    #eval_min::Float64, ind_min::Int = findmin(evals)
-    #evec_min = evecs[:,ind_min]
-    # println(size(evecs))
-    # println(size(heff))
-    # println(size(vec(data(site))))
-    # println(size(site))
-    # println(size(vecmin))
     return GenericSite(reshape(vecmin,szmps)/norm(vecmin), site.purification), real(e)
 end
 
 """ sweeps from left to right in the DMRG algorithm """
 function sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir, orth::Vector{LCROpenMPS{T}}=LCROpenMPS{T}[]; kwargs...) where {T}
     L::Int = length(mps)
-    N_orth = length(orth)
     shifter = get(kwargs, :shifter, ShiftCenter())
     precision=get(kwargs,:precision, DEFAULT_DMRG_precision) 
-    # eold=0.0 #TODO this was chosen arbitrarily
     if dir==:right 
-        itr = 1:L-1
+        itr = 1:1:L-1
         # dirval=1
-    elseif dir==:left
+    else
+        if dir!==:left
+            @error "In sweep: choose dir :left or :right"
+        end
         itr = L:-1:2
         # dirval=-1
-    else
-        @error "In sweep: choose dir :left or :right"
     end
     for j in itr
-        @assert (center(mps) == j) "The optimization step is not performed at the center of the mps: $(center(mps)) vs $j"
-        orthvecs = [vec(data(local_mul(orthenv[k].L[j]', orthenv[k].R[j]',orth[k][j]))) for k in 1:N_orth]
+        @assert iscenter(mps,j) "The optimization step is not performed at the center of the mps: $(center(mps)) vs $j"
+        orthvecs = [vec(data(local_mul(oe.L[j]', oe.R[j]',o[j]))) for (oe,o) in zip(orthenv,orth)]
+        # orthvecs = [vec(data(local_mul(orthenv[k].L[j]', orthenv[k].R[j]',orth[k][j]))) for k in 1:N_orth] #FIXME maybe conjugate orthenv from the start?
         # enew = transpose(transfer_matrix(mps[j]', mpo[j], mps[j]) * vec(Henv.R[j])) * vec(Henv.L[j])
         mps[j], e2 = eigensite(mps[j],mpo[j], Henv.L[j],Henv.R[j], orthvecs, precision)
         
-        shift_center!(mps,j,dir,shifter; mpo = mpo, env=Henv)
-        # if alpha > 0.0
-        #     if abs((enew-e2)/(eold-e2)) >.3 
-        #         alpha *= .8
-        #     else
-        #         alpha *= 1.2
-        #     end
-        #     A,B = subspace_expand(alpha,mps[j],mps[j+dirval],Henv[j, reverse_direction(dir)], mpo[j],mps.truncation, dir)
-        #     mps.center+=dirval
-        #     mps.Γ[j] = A
-        #     mps.Γ[j+dirval] = B
-        # elseif dir==:right 
-        #     shift_center_right!(mps)
-        # elseif dir==:left
-        #     shift_center_left!(mps)
-        # end
-        # eold = enew
+        shift_center!(mps,j,dir,shifter; mpo = mpo, env=Henv)  
         update! = dir==:right ? update_left_environment! : update_right_environment!
-        update!(Henv,j,mps[j]',mpo[j],mps[j])
-        for k in 1:N_orth
-            update!(orthenv[k],j, orth[k][j]', mps[j])
+        update!(Henv,j,mps[j],mpo[j],mps[j])
+        # for k in 1:N_orth
+        #     update!(orthenv[k],j, orth[k][j], mps[j])
+        # end
+        for (oe,o) in zip(orthenv,orth)
+            update!(oe,j,o[j],mps[j])
         end
     end
-    return mps#, alpha
+    return mps::LCROpenMPS{T}
 end
 
 """

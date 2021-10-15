@@ -22,7 +22,7 @@ function shift_center!(mps,j,dir,::ShiftCenter; kwargs...)
 end
 
 function shift_center!(mps,j,dir,SE::SubspaceExpand; mpo,env, kwargs...)
-    newmin = transpose(transfer_matrix(mps[j]', mpo[j], mps[j]) * vec(env.R[j])) * vec(env.L[j])
+    newmin = transpose(transfer_matrix(mps[j], mpo[j], mps[j]) * vec(env.R[j])) * vec(env.L[j])
     if dir==:right
         dirval=+1
         j1 = j
@@ -36,7 +36,7 @@ function shift_center!(mps,j,dir,SE::SubspaceExpand; mpo,env, kwargs...)
     mps.center+=dirval
     mps.Γ[j] = A
     mps.Γ[j+dirval] = B
-    T = prod(transfer_matrices(adjoint.(mps[j1:j2]), mpo[j1:j2],mps[j1:j2], :left))
+    T = prod(transfer_matrices(mps[j1:j2], mpo[j1:j2],mps[j1:j2], :left))
     truncmin = transpose( T*vec(env.R[j2])) * vec(env.L[j1])
     
   
@@ -51,7 +51,7 @@ function shift_center!(mps,j,dir,SE::SubspaceExpand; mpo,env, kwargs...)
 end
 
 function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec=1e-8; maxiter = 50, shifter=ShiftCenter)
-    env = environment(guess',target)
+    env = environment(guess,target)
     # mps = guess
 #    mps = iscanonical(guess) ? guess :  canonicalize(guess)
     mps = canonicalize(guess)
@@ -60,13 +60,13 @@ function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec=1e-
     #targetnorm = norm(target)
     # IL(site) = Array(vec(Diagonal{eltype(guess[1])}(I,size(site,1))))
     # IR(site) = Array(vec(Diagonal{eltype(guess[1])}(I,size(site,3))))
-    errorfunc(mps) = 1 - abs(scalar_product(target',mps)) #FIXME can save memory by using precomputed envuronments
+    errorfunc(mps) = 1 - abs(scalar_product(target,mps)) #FIXME can save memory by using precomputed envuronments
     
     #TODO Make it work for UMPS. The following errorfunction can be used
     #density_matrix(mps,k) = @tensor rho[:] := data(mps[k])[1,-1,2]*conj(data(mps[k])[1,-2,2])
     #errorfunc(mps) = real(1- sum([tr(density_matrix(target,k)*density_matrix(mps,k)) for k in 1:length(mps)]))
     
-    #real(targetnorm - sum([transpose(transfer_matrix(site) * IR(site))*IL(site) for site in mps[1:end]]))
+    #real(targetnorm - sum([transpose(transfer_matrix(site) * IR(site))*IL(site) for site in mps[1:end]])) #use @view
     #if isinfinite(target)
     count=1
     error = errorfunc(mps)
@@ -103,7 +103,7 @@ function sweep(target,mps,env,dir, prec;kwargs...)
         mps[j] = newsite/norm(newsite)
         shift_center!(mps,j,dir,shifter; error = error)
         update! = dir==:right ? update_left_environment! : update_right_environment!
-        update!(env,j,mps[j]',target[j])
+        update!(env,j,mps[j],target[j])
     end
     return mps, env
 end

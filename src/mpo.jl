@@ -35,6 +35,9 @@ abstract type AbstractMPO{T<:Number} <: AbstractVector{MPOsite{T}} end
 struct MPO{T<:Number} <: AbstractMPO{T}
     data::Vector{MPOsite{T}}
 end
+sites(mpo::MPO) = mpo.data
+Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
+Base.size(mpo::AbstractMPO) = size(sites(mpo))
 
 struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
     data::T 
@@ -55,8 +58,10 @@ function Base.size(::ScaledIdentityMPOsite, i::Integer)
         @error "Physical dimension of ScaledIdentityMPOsite is arbitrary"
     end
 end
+
+
 LinearAlgebra.ishermitian(mpo::ScaledIdentityMPOsite) = isreal(mpo.data)
-isunitary(mpo::ScaledIdentityMPOsite) = mpo.data'*mpo.data ≈ 1
+isunitary(mpo::ScaledIdentityMPOsite) = data(mpo)'*data(mpo) ≈ 1
 Base.:*(x::K, g::ScaledIdentityMPOsite) where {K<:Number} = ScaledIdentityMPOsite(x*data(g))
 Base.:*(g::ScaledIdentityMPOsite, x::K) where {K<:Number} = ScaledIdentityMPOsite(x*data(g))
 Base.:/(g::ScaledIdentityMPOsite, x::K) where {K<:Number} = inv(x)*g
@@ -87,12 +92,15 @@ struct ScaledIdentityMPO{T} <: AbstractMPO{T}
 end
 Base.IndexStyle(::Type{<:ScaledIdentityMPO}) = IndexLinear()
 Base.getindex(g::ScaledIdentityMPO, i::Integer) = g.data^(1/length(g)) *IdentityMPOsite
+Base.getindex(g::ScaledIdentityMPO, I) = g.data^(1/length(g)) *fill(IdentityMPOsite,length(I))
 data(g::ScaledIdentityMPO) = g.data
+sites(g::ScaledIdentityMPO) = g[1:length(g)]
+
 
 IdentityMPO(n) = ScaledIdentityMPO(true,n)
 Base.length(mpo::ScaledIdentityMPO) = mpo.length
 LinearAlgebra.ishermitian(mpo::ScaledIdentityMPO) = isreal(mpo.data)
-isunitary(mpo::ScaledIdentityMPO) = mpo.data'*mpo.data ≈ 1
+isunitary(mpo::ScaledIdentityMPO) = data(mpo)'*data(mpo) ≈ 1
 Base.:*(x::K, g::ScaledIdentityMPO) where {K<:Number} = ScaledIdentityMPO(x*data(g), length(g))
 Base.:*(g::ScaledIdentityMPO, x::K) where {K<:Number} = ScaledIdentityMPO(x*data(g), length(g))
 Base.:/(g::ScaledIdentityMPO, x::K) where {K<:Number} = inv(x)*g
@@ -122,12 +130,10 @@ data(mpo::MPO) = mpo.data
 
 Base.size(mposite::MPOsite) = size(data(mposite))
 # Base.length(mpo::MPOsite) = 1
-Base.size(mpo::AbstractMPO) = size(data(mpo))
 # Base.length(mpo::MPO) = length(data(mpo))
 # Base.IndexStyle(::Type{<:MPOsite}) = IndexLinear()
-Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
-Base.getindex(mpo::MPOsite, i::Integer) = mpo.data[i]
-Base.getindex(mpo::AbstractMPO, i::Integer) = mpo.data[i]
+Base.@propagate_inbounds Base.getindex(mpo::MPOsite, i::Integer) = mpo.data[i]
+Base.@propagate_inbounds Base.getindex(mpo::AbstractMPO, i::Integer) = mpo.data[i]
 #Base.setindex!(mpo::MPOsite, v, I::Vararg{Integer,4}) = (mpo.data[I] = v)
 #Base.setindex!(mpo::AbstractMPO, v, I::Vararg{Integer,N}) where {N} = (mpo.data[I] = v)
 
@@ -182,23 +188,29 @@ end
 
 
 
+function multiplyMPOsites(site1,site2)
+    s1 = size(site1)
+    s2 = size(site2)
+    @tensor temp[:] := data(site1)[-1,-3,1,-5] * data(site2)[-2,1,-4,-6]
+    return MPOsite(reshape(temp,s1[1]*s2[1],s1[2],s2[3],s1[4]*s2[4]))
+end
 """
 ```multiplyMPOs(mpo1,mpo2)```
 """
 function multiplyMPOs(mpo1,mpo2) 
-    L = length(mpo1)
-    mpo = similar(mpo1)
-    for j=1:L
-        # if c
-        @tullio temp[l1,l2,u,d,r1,r2] := data(mpo1[j])[l1,u,c,r1] * data(mpo2[j])[l2,c,d,r2]
-            #@tensor temp[:] := mpo1[j].data[-1,-3,1,-5] * conj(mpo2[j].data[-2,-4,1,-6])
-        # else
-        #     @tensor temp[:] := mpo1[j].data[-1,-3,1,-5] * mpo2[j].data[-2,1,-4,-6]
-        # end
-        s=size(temp)
-        mpo[j] = MPOsite(reshape(temp,s[1]*s[2],s[3],s[4],s[5]*s[6]))
-    end
-    return MPO(mpo)
+    # L = length(mpo1)
+    # mpo = similar(mpo1)
+    return MPO([multiplyMPOsites(s1,s2) for (s1,s2) in zip(mpo1,mpo2)])
+    #     # if c
+    #     # @tullio temp[l1,l2,u,d,r1,r2] := data(mpo1[j])[l1,u,c,r1] * data(mpo2[j])[l2,c,d,r2]
+    #         #@tensor temp[:] := mpo1[j].data[-1,-3,1,-5] * conj(mpo2[j].data[-2,-4,1,-6])
+    #     # else
+    #     @tensor temp[:] := data(mpo1[j])[-1,-3,1,-5] * data(mpo2[j])[-2,1,-4,-6]
+    #     # end
+    #     s=size(temp)
+    #     mpo[j] = MPOsite(reshape(temp,s[1]*s[2],s[3],s[4],s[5]*s[6]))
+    # end
+    # return MPO(mpo)
 end
 
 
