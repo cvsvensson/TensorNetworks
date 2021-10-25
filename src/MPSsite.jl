@@ -12,6 +12,8 @@ Base.size(site::VirtualSite, dim) = size(site.Λ, dim)
 Base.size(site::VirtualSite) = size(site.Λ)
 Base.length(site::LinkSite) = length(site.Λ)
 
+Base.conj(s::GenericSite) = GenericSite(conj(data(s)),ispurification(s))
+
 #Base.isapprox(s1::AbstractSite,s2::AbstractSite) = isapprox(data(s1),data(s2))
 Base.isapprox(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = isapprox(s1.Γ, s2.Γ) && isapprox(s1.Λ1, s2.Λ1) && isapprox(s1.Λ2, s2.Λ2)
 ispurification(site::GenericSite) = site.purification
@@ -160,6 +162,16 @@ Base.:*(G::VirtualSite, Λ::LinkSite) = VirtualSite(reshape(diag(Λ.Λ),1,size(G
 Base.:/(Γ::LinkSite, α::Number) = LinkSite(data(Γ)/α)
 Base.:/(Γ::VirtualSite, α::Number) = VirtualSite(data(Γ)/α)
 
+function Base.:*(v::Vector{<:Number}, Γ::GenericSite)
+	v2 = reshape(v,1,length(v))
+	@tensor new[:] := v2[-1,l]*data(Γ)[l,-2,-3]
+	GenericSite(new, Γ.purification)
+end
+function Base.:*(Γ::GenericSite, v::Vector{<:Number})
+	v2 = reshape(v,length(v),1)
+	@tensor new[:] := data(Γ)[-1,-2,r]*v2[r,-3]
+	GenericSite(new, Γ.purification)
+end
 
 Base.:*(Λ::LinkSite, Γ::GenericSite) = GenericSite(reshape(diag(Λ.Λ),size(Γ,1),1,1) .* data(Γ), Γ.purification)
 Base.:*(Γ::GenericSite, Λ::LinkSite) = GenericSite(data(Γ) .* reshape(diag(Λ.Λ),1,1,size(Γ,3)), Γ.purification)

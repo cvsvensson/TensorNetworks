@@ -1,4 +1,4 @@
-struct TruncationArgs
+mutable struct TruncationArgs
     Dmax::Int
     tol::Float64
 	normalize::Bool
@@ -97,11 +97,11 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
     error::Float64
 
     center::Int
-    function LCROpenMPS(
-        Γ::Vector{GenericSite{T}};
+    function LCROpenMPS{T}(
+        Γ::Vector{GenericSite{K}};
         truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
         error=0.0,
-    ) where {T}
+    ) where {K,T}
         count=1
         N = length(Γ)
         while count<N+1 && isleftcanonical(data(Γ[count])) 
@@ -110,7 +110,7 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
         center = min(count,N)
         if count<N+1
             if !(norm(data(Γ[count])) ≈ 1)
-                @warn "LCROpenMPS is not normalized.\nnorm= $n"
+                @warn "LCROpenMPS is not normalized.\nnorm= $(norm(data(Γ[count]))))"
             end
             count+=1
         end
@@ -121,7 +121,13 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
         new{T}(Γ, truncation, error, center)
     end
 end
-
+function LCROpenMPS(
+    Γ::Vector{GenericSite{K}};
+    truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
+    error=0.0,
+)  where K
+    LCROpenMPS{K}(Γ;truncation=truncation,error=error)
+end
 mutable struct UMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     #In gamma-lambda notation
     Γ::Vector{GenericSite{T}}

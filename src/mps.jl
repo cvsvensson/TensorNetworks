@@ -10,7 +10,7 @@ Base.show(io::IO, m::MIME"text/plain", mps::AbstractMPS) = show(io,mps)
 function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
 	K = numtype(mps1,mps2)
 	Ts::Vector{LinearMap{K}} = transfer_matrices(mps1,mps2)
-	vl = transfer_matrix_bond(mps1,mps2,1,:right)*boundaryvec(mps1,mps2,:right)
+	vl = transfer_matrix_bond(mps1,mps2,1,:right)*boundaryvec(mps1,mps2,:left)
 	vr::Vector{K} = boundaryvec(mps1,mps2,:right)
 	for k in length(mps1):-1:1
 		vr = Ts[k] * vr
@@ -18,7 +18,7 @@ function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
 	return transpose(vr)*vl
 end
 
-LinearAlgebra.norm(mps::AbstractMPS) = scalar_product(mps,mps)
+LinearAlgebra.norm(mps::AbstractMPS) = sqrt(abs(scalar_product(mps,mps)))
 
 function prepare_layers(mps::AbstractMPS, gs::Vector{<:AbstractSquareGate}, dt, trotter_order)
 	gates = ispurification(mps) ? auxillerate.(gs) : gs
@@ -85,12 +85,15 @@ Apply the operator at every site
 function apply_local_op(mps,op)
     N = length(mps.Γ)
 	Γ = similar(mps.Γ)
+	mpsout = copy(mps)
 	if ispurification(mps)
 		op = auxillerate(op)
 	end
  	for n in 1:N 
-    	@tensor Γ[n][:] = mps.Γ[n][-1,2,-3]*op[-2,2] #TODO Replace by Tullio or matrix mult?
+    	@tensor temp[:] := data(mps.Γ[n])[-1,2,-3]*data(op)[-2,2] #TODO Replace by Tullio or matrix mult?
+		mpsout.Γ[n] = GenericSite(temp,ispurification(mps.Γ[n]))
 	end
+	return mpsout
 end
 
 """
@@ -137,9 +140,6 @@ end
 # 	return OrthogonalLinkSite(Λ1,Γ,Λ2,check=false)
 # end
 # Base.kron(l1::LinkSite,l2::LinkSite) = LinkSite(kron(data(l1),data(l2)))
-
-
-
 
 # function Base.:*(x::Number, site::OrthogonalLinkSite)
 # 	OrthogonalLinkSite(link(site,:left), x*site.Γ, link(site,:right), check=false)

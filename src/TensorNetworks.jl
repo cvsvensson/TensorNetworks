@@ -34,12 +34,12 @@ export scalar_product, set_center, set_center!, entanglement_entropy
 export entanglement_entropy, IdentityGate, data, compress, qubit
 export randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, randomGenericSite
 export IdentityMPOsite, environment, update_environment!
-export ShiftCenter, SubspaceExpand, getindex, setindex!, kron,repeatedgate,*, +
+export ShiftCenter, SubspaceExpand, getindex, setindex!, kron,repeatedgate,*, +, vec
 
 include("types.jl")
-include("MPSSum.jl")
 include("pauli.jl")
 include("mpo.jl")
+include("MPSSum.jl")
 include("environment.jl")
 include("mps.jl")
 include("iterative_compression.jl")

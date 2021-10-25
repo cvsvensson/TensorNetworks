@@ -180,7 +180,7 @@ function transfer_spectrum(mps1::UMPS, mps2::UMPS, direction::Symbol=:left; nev=
     else
 		x0 = vec(Matrix{eltype(mps1[end])}(I,D1,D2))
         vals, vecsvec = eigsolve(T,x0,nev, :LM)#eigs(T,nev=nev)
-		vecs = hreduce(hcat,vecsvec)
+		vecs = reduce(hcat,vecsvec)
     end
 	nev = min(length(vals),nev)
 	tensors =  [reshape(vecs[:,k],D1,D2) for k in 1:nev]

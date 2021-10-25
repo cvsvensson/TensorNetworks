@@ -262,47 +262,51 @@ end
 @testset "Transfer" begin
     D = 10;
     d = 2;
-    site = randomGenericSite(D,d,D);
     R = randomRightOrthogonalSite(D,d,D);
     L = randomLeftOrthogonalSite(D,d,D);
     LR = randomOrthogonalLinkSite(D,d,D);
     id = Matrix{ComplexF64}(I,D,D);
     idvec = vec(id);
-    T = transfer_matrix(site, :left)
-    @test size(T) == (D^2,D^2)
-    @test Matrix(T') ≈ Matrix(T)'
-    @test transpose(Matrix(T)) ≈ Matrix(transfer_matrix(site,:right))
-
-    z = rand(ComplexF64)
-    @test Matrix(T) ≈ Matrix(transfer_matrix(site,IdentityGate(1)))
-    @test z*Matrix(T) ≈ Matrix(transfer_matrix(site,z*IdentityGate(1)))
-
     @test idvec ≈ transfer_matrix(R)*idvec
     @test idvec ≈ transfer_matrix(L,:right)*idvec
     @test idvec ≈ transfer_matrix(LR,:right)*idvec
     @test idvec ≈ transfer_matrix(LR,:left)*idvec
-    
-    T1 = transfer_matrix(site,MPOsite(sz));
-    @test size(T1) == (D^2,D^2)
-    #@test Matrix(T1') ≈ Matrix(T1)'
+    function testsite(site)
+        D = size(site,1)
+        d = size(site,2)
+        T = transfer_matrix(site, :left)
+        @test size(T) == (D^2,D^2)
+        @test Matrix(T') ≈ Matrix(T)'
+        @test transpose(Matrix(T)) ≈ Matrix(transfer_matrix(site,:right))
 
-    g2 = Gate(TensorNetworks.gate(kron(sz,sz),2));
-    T2 = prod(transfer_matrices([site,site], g2));
-    @test Matrix(T2) ≈ Matrix(T1*T1)
-    @test transpose(Matrix(T2)) ≈ Matrix(prod(transfer_matrices([site,site], g2,:right)))
+        z = rand(ComplexF64)
+        @test Matrix(T) ≈ Matrix(transfer_matrix(site,IdentityGate(1)))
+        @test z*Matrix(T) ≈ Matrix(transfer_matrix(site,z*IdentityGate(1)))
 
-    g3 = Gate(TensorNetworks.gate(kron(sz,sz,sz),3));
-    T3 = prod(transfer_matrices([site,site,site], g3));
-    @test Matrix(T3) ≈ Matrix(T1*T1*T1)
-    @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]))))
-    @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]), [site,site,site])))
-    @test transpose(Matrix(T3)) ≈ Matrix(prod(transfer_matrices([site,site,site], g3,:right)))
+        T1 = transfer_matrix(site,MPOsite(sz));
+        @test size(T1) == (D^2,D^2)
+        #@test Matrix(T1') ≈ Matrix(T1)'
 
-    g4 = Gate(TensorNetworks.gate(kron(sz,sz,sz,sz),4));
-    T4 = prod(transfer_matrices([site,site,site,site], g4));
-    @test Matrix(T4) ≈ Matrix(T1*T1*T1*T1)
-    @test transpose(Matrix(T4)) ≈ Matrix(prod(transfer_matrices([site,site,site,site], g4,:right)))
+        g2 = Gate(TensorNetworks.gate(kron(sz,sz),2));
+        T2 = prod(transfer_matrices([site,site], g2));
+        @test Matrix(T2) ≈ Matrix(T1*T1)
+        @test transpose(Matrix(T2)) ≈ Matrix(prod(transfer_matrices([site,site], g2,:right)))
 
+        g3 = Gate(TensorNetworks.gate(kron(sz,sz,sz),3));
+        T3 = prod(transfer_matrices([site,site,site], g3));
+        @test Matrix(T3) ≈ Matrix(T1*T1*T1)
+        @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]))))
+        @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]), [site,site,site])))
+        @test transpose(Matrix(T3)) ≈ Matrix(prod(transfer_matrices([site,site,site], g3,:right)))
+
+        g4 = Gate(TensorNetworks.gate(kron(sz,sz,sz,sz),4));
+        T4 = prod(transfer_matrices([site,site,site,site], g4));
+        @test Matrix(T4) ≈ Matrix(T1*T1*T1*T1)
+        @test transpose(Matrix(T4)) ≈ Matrix(prod(transfer_matrices([site,site,site,site], g4,:right)))
+    end
+    site = randomGenericSite(D,d,D);
+    testsite(site)
+    testsite(site + site)
 end
 
 @testset "Compression" begin
@@ -393,16 +397,20 @@ end
     hammat = Matrix(ham);
     mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
     energiesED, _ = eigsolve(hammat,4,:SR);
-    states, energies = eigenstates(ham, mps, 4; precision = 1e-8, shifter=SubspaceExpand(1.0));
+    states, energies = eigenstates(ham, mps, 4; precision = 1e-8, shifter=SubspaceExpand(1.0), maxsweeps = 20);
     @test sort(energies) ≈ energiesED[1:4]
 
     #Ground state energy of Ising CFT
     Nchain = 20
-    Dmax = 20
+    Dmax = 30
     ham = IsingMPO(Nchain, 1, 1, 0);
     mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
-    states, energies = eigenstates(ham, mps, 5; precision = 1e-8,shifter = SubspaceExpand(1.0));
+    states, energies = eigenstates(ham, mps, 5; precision = 1e-8,shifter = SubspaceExpand(1.0), maxsweeps = 20);
     @test abs(energies[1]/(Nchain) + 4/π) < 1/Nchain
+
+    states, energies = TensorNetworks.eigenstates2(ham, mps, 5; precision = 1e-8, maxsweeps = 20);
+    @test abs(energies[1]/(Nchain) + 4/π) < 1/Nchain
+
 end
 
 @testset "UMPS expectation values" begin
@@ -485,4 +493,33 @@ using DoubleFloats
     @test E ≈ e0 ≈ Eanalytic
 
     #TEBD
+end
+
+@testset "MPSSum" begin
+    mps = canonicalize(randomOpenMPS(5,2,5));
+    smps = mps+mps
+    @test length(mps) == length(smps)
+    parityop = MPO(fill(MPOsite(sz),5))
+    parity(state) = expectation_value(state, parityop)
+    mpsplus = (TensorNetworks.apply_local_op(mps,Gate(sz)) + mps)/sqrt(2)
+    mpsplus = mpsplus/(norm(mpsplus))
+    mpsminus = (TensorNetworks.apply_local_op(mps,Gate(sz)) - mps)/sqrt(2)
+    mpsminus = mpsminus/(norm(mpsminus))
+    @test all(iscanonical.(mpsplus))
+    @test all(iscanonical.(mpsminus))
+    @test norm(mpsplus) ≈ norm(mpsminus) ≈ 1
+    @test abs(scalar_product(mpsplus,mpsminus)) < 1e-10
+
+    denseplus = TensorNetworks.dense(mpsplus)
+    denseminus= TensorNetworks.dense(mpsminus)
+    @test norm(denseplus) ≈ norm(denseminus) ≈ 1
+    @test abs(scalar_product(denseplus,denseminus)) < 1e-10
+    @test all(iscanonical.(denseplus))
+    @test all(iscanonical.(denseminus))
+    denseplus = canonicalize(denseplus)
+    denseminus= canonicalize(denseminus)
+    @test all(iscanonical.(denseplus))
+    @test all(iscanonical.(denseminus))
+    @test norm(denseplus) ≈ norm(denseminus) ≈ 1
+    @test abs(scalar_product(denseplus,denseminus)) < 1e-10
 end

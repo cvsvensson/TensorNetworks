@@ -324,7 +324,7 @@ function __local_transfer_matrix(sites::Tuple, direction::Symbol=:left)
 		return _transfer_left_mpo(sites...)
 	else
 		if direction !== :right
-			@warn "Defaulting direction to :left"
+			@warn "Defaulting direction to :right"
 		end
 		return _transfer_right_mpo(sites...)
 	end
@@ -367,11 +367,11 @@ transfer_matrix(site::AbstractSite, op::Union{AbstractSquareGate{<:Any,2}, Matri
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) 
 	@assert length(sites1) == length(sites2)
 	n = length(op)
-	return [_local_transfer_matrix(view(sites1,k:k+n-1), op, view(sites2,k:k+n-1), direction) for k in 1:length(sites1)+1-n]
+	return [_local_transfer_matrix(sites1[k:k+n-1], op, sites2[k:k+n-1], direction) for k in 1:length(sites1)+1-n]
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol=:left) 
 	n = length(op)
-	return [_local_transfer_matrix(view(sites1,k:k+n-1), op, direction) for k in 1:length(sites1)+1-n]
+	return [_local_transfer_matrix(sites1[k:k+n-1], op, direction) for k in 1:length(sites1)+1-n]
 end
 
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) 

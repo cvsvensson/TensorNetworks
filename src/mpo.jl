@@ -122,7 +122,8 @@ Base.:(==)(mpo1::ScaledIdentityMPO, mpo2::ScaledIdentityMPO) = data(mpo1) == dat
 
 MPO(mpo::MPOsite) = MPO([mpo])
 MPO(op::Array{<:Number,2}) = MPO(MPOsite(op))
-MPO(ops::Vector{T}) where {T} = MPO(map(MPOsite,ops))
+MPO(ops::Vector{Matrix{T}}) where {T} = MPO(map(MPOsite,ops))
+MPO(ops::Vector{Array{T,4}}) where {T} = MPO(map(MPOsite,ops))
 data(mpo::MPO) = mpo.data
 # HermitianMPO(mpo::MPOsite) = HermitianMPO(MPO([mpo]))
 # HermitianMPO(op::Array{T,2}) where {T<:Number} = HermitianMPO(MPOsite(op))

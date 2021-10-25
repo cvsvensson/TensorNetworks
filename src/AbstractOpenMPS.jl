@@ -2,7 +2,7 @@ isinfinite(::T) where {T<:AbstractMPS} = isinfinite(boundaryconditions(T))
 isinfinite(::OpenBoundary) = false
 isinfinite(::InfiniteBoundary) = true
 
-function boundary(::OpenBoundary, mps::AbstractMPS, side)
+function boundary(::OpenBoundary, mps::AbstractMPS, side::Symbol)
     if side==:right
         return [one(eltype(mps[end]))]
     else 
@@ -13,7 +13,7 @@ function boundary(::OpenBoundary, mps::AbstractMPS, side)
     end
 end
 boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS,side) = kron(boundary(bc,mps1,side), boundary(bc,mps2,side))
-boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO,side) = boundary(bc,mps,side)
+boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO,side) = boundary(bc,mps,mps,side)
 boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = kron(boundary(bc,mps1,side), boundary(bc,mps2,side))
 
 boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps),mps,args...)

@@ -7,6 +7,8 @@ function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LC
     ### input: canonical random mps
     ### output: ground state mps, ground state energy
     precision::Float64=get(kwargs,:precision, DEFAULT_DMRG_precision)
+    maxsweeps::Int=get(kwargs,:maxsweeps, 5)
+    
     mps = canonicalize(copy(mps_input))
     set_center!(mps,1)
     #canonicalize!(mps)
@@ -21,7 +23,7 @@ function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LC
     println("E, var = ", E, ", ", var)
     count=1
    
-    while count<50 #TODO make maxcount choosable
+    while count<=maxsweeps #TODO make maxcount choosable
         Eprev = E
         mps = sweep(mps,mpo,Henv,orthenv,direction,orth; kwargs...)
         mps = canonicalize(mps,center=center(mps))
@@ -69,11 +71,12 @@ function eigs(heff::LinearMap, x0, nev, prec)
     return evals::Vector{eltype(heff)}, evecs::Matrix{eltype(heff)}
 end
 function _eigs_small(heff)
+    T = eltype(heff)
     vals,vecs = eigen(heff)
-    return vals::Vector{eltype(heff)},vecs::Matrix{eltype(heff)}
+    return T.(vals)::Vector{T},vecs::Matrix{T}
 end
 function _eigs_large(heff::LinearMap, x0, nev, prec)
-    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(data(x0)), nev, :SR, tol=prec, ishermitian=true, maxiter=1000)
+    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol=prec, ishermitian=true, maxiter=3, krylovdim=20)
     evecsvec::Matrix{eltype(heff)} = reduce(hcat,evecs)
     return evals, evecsvec
 end
@@ -84,7 +87,7 @@ end
 function eigensite(site::GenericSite, mposite, hl, hr, orthvecs, prec)
     szmps=size(site)
     heff = effective_hamiltonian(mposite, hl,hr, orthvecs)
-    evals, evecs = eigs(heff,site,1,prec)
+    evals, evecs = eigs(heff,data(site),1,prec)
     e::eltype(hl) = evals[1]
     vecmin::Vector{eltype(hl)} = evecs[:,1]
     if !(e ≈ real(e))
@@ -145,8 +148,20 @@ function eigenstates(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; kwargs...
     end
     return states, energies
 end
-eigenstates(hamiltonian, mps::OpenMPS, n::Integer; kwargs...) = eigenstates(hamiltonian,LCROpenMPS(mps), n; kwargs...)
-DMRG(mpo::AbstractMPO, mps::OpenMPS; kwargs...) = DMRG(mpo,LCROpenMPS(mps) ; kwargs...)
+
+function eigenstates2(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; kwargs...) where {T}
+    #T = eltype(data(mps[1]))
+    states = Vector{LCROpenMPS{T}}(undef,n)
+    shifter0 = deepcopy(get(kwargs, :shifter, ShiftCenter()))
+    energies = Vector{real(promote_type(T,eltype(hamiltonian[1])))}(undef,n)
+    for k = 1:n
+        @time state, E = DMRG2(hamiltonian, mps, states[1:k-1]; shifter = shifter0, kwargs...)
+        states[k] = state
+        energies[k] = E
+    end
+    return states, energies
+end
+
 const DEFAULT_DMRG_precision=1e-12
 
 function expansion_term(alpha, site, env, mposite)
@@ -189,3 +204,146 @@ function subspace_expand(alpha,site,nextsite,env,mposite, trunc, dir)
     return newsite, newnextsite
 end
 
+
+
+function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LCROpenMPS{T}[];kwargs...) where {T}
+    ### input: canonical random mps
+    ### output: ground state mps, ground state energy
+    precision::Float64=get(kwargs,:precision, DEFAULT_DMRG_precision)
+    maxsweeps::Int=get(kwargs,:maxsweeps, 5)
+    maxbonds::Vector{Int} = get(kwargs,:maxbonds, [mps_input.truncation.Dmax])
+    mps = canonicalize(copy(mps_input))
+    #canonicalize!(mps)
+    set_center!(mps,1)
+    L = length(mps_input)
+    @assert (norm(mps_input) ≈ 1 && L == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
+    direction = :right
+    Henv = environment(mps,mpo)
+    orthenv = [environment(state,mps) for state in orth]
+    Hsquared = multiplyMPOs(mpo,mpo)
+    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+    var = H2 - E^2
+    println("E, var = ", E, ", ", var)
+    count=1
+   
+    while count<=maxsweeps 
+        Eprev = E
+        if count<=length(maxbonds)
+            mps.truncation.Dmax = maxbonds[count]
+        end
+        mps = twosite_sweep(mps,mpo,Henv,orthenv,direction,orth; kwargs...)
+        #mps = canonicalize(mps)
+        direction = reverse_direction(direction)
+        E, H2 = real(expectation_value(mps,mpo)), real(expectation_value(mps,Hsquared))
+        #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
+        if isapprox(E,real(E); atol = precision)  &&  isapprox(H2,real(H2); atol=precision)
+            E, H2 = real(E), real(H2)
+        else
+            @warn "Energies are not real"
+        end
+        var = H2 - E^2
+        println("Sweep: ", count, ". E, var, ΔE/E = ", E, ", ", var, ", ", (Eprev-E)/E, ". Max bonddim: ", maximum(size.(mps,1)))
+        count=count+1
+        if abs((Eprev-E)/E) < precision && var/E^2 < precision #&& count>10
+           break
+        end
+    end
+
+    return canonicalize(mps)::LCROpenMPS{T}, E
+end
+
+""" sweeps from left to right in the DMRG algorithm """
+function twosite_sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir, orth::Vector{LCROpenMPS{T}}=LCROpenMPS{T}[]; kwargs...) where {T}
+    L::Int = length(mps)
+    precision = get(kwargs,:precision, DEFAULT_DMRG_precision) 
+    if dir==:right 
+        itr = 1:1:L-1
+        update! = update_left_environment!
+        # dirval=1
+    else
+        if dir!==:left
+            @error "In sweep: choose dir :left or :right"
+        end
+        itr = L-1:-1:1
+        update! = update_right_environment!
+        # dirval=-1
+    end
+    for j in itr
+        j1,j2 = dir==:right ? (j,j+1) : (j+1,j)
+        @assert iscenter(mps,j1) "The optimization step is not performed at the center of the mps: $(center(mps)) vs $j"
+        orthvecs = [twosite_orthvec(oe.L[j]', oe.R[j+1]',data(o[j]),data(o[j+1])) for (oe,o) in zip(orthenv,orth)]
+        A, Λ, B = twosite_eigensite(mps[j],mps[j+1], mpo[j],mpo[j+1], Henv.L[j], Henv.R[j+1], orthvecs, precision, mps.truncation)
+        if dir==:right
+            shift_center!(mps,1)
+            mps[j] = A
+            mps[j+1] = Λ*B
+        else
+            shift_center!(mps,-1)
+            mps[j] = A*Λ
+            mps[j+1] = B
+        end
+        update!(Henv,j1,mps[j1],mpo[j1],mps[j1])
+        # update!(Henv,j2,mps[j2],mpo[j2],mps[j2])
+        for (oe,o) in zip(orthenv,orth)
+            update!(oe,j1,o[j1],mps[j1])
+            # update!(oe,j2,o[j2],mps[j2])
+        end
+    end
+    return mps::LCROpenMPS{T}
+end
+
+function twosite_mpo_application(hl,hr,mpol,mpor,twosite)
+    #@tensoropt (lm,dc,rd,-1,-4) out[-1,-2,-3,-4] := hl[-1,lm,ld] * mpol[lm,-2,msl,c] * mpor[c,-3,msr,rm] * sitel[ld, msl, dc]*siter[dc,msr,rd] * hr[-4,rm,rd] 
+    # println.(size.([hl,mpol,mpor,twosite,hr]))
+    @tensoropt (lm,rd,-1,-4) out[-1,-2,-3,-4] := hl[-1,lm,ld] * mpol[lm,-2,msl,c] * mpor[c,-3,msr,rm] * twosite[ld, msl,msr, rd] * hr[-4,rm,rd] 
+end
+function twosite_orthvec(L,R,sl,sr)
+    @tensoropt (lm,dc,rd,-1,-4) out[-1,-2,-3,-4] := L[-1,ld] * sl[ld, -2, dc]*sr[dc,-3,rd] * R[-4,rd]
+    return vec(out)
+end
+
+function twosite_effective_hamiltonian(mpol,mpor, hl, hr, orthvecs)
+    blocksize = (size(hl,3),size(mpol,3),size(mpor,3),size(hr,3))
+    overlap2(o,v) = 100*o*(o'*v) #TODO make weight choosable
+    function f(v) 
+        A = reshape(v, blocksize)
+        HA = twosite_mpo_application(hl,hr,data(mpol),data(mpor),A)
+        overlap(o) = overlap2(o,v)
+        OA = sum(overlap, orthvecs; init = zero(v))
+        return vec(HA) + OA
+    end
+    return LinearMap{eltype(hl)}(f, prod(blocksize), ishermitian=true)
+end
+function twosite_eigensite(siteL,siteR, mpoL,mpoR, hL, hR, orthvecs, prec, truncation)
+    @tensor block[:] := data(siteL)[-1,-2,1] * data(siteR)[1,-3,-4]
+    blocksize = size(block)
+    heff = twosite_effective_hamiltonian(mpoL,mpoR, hL,hR, orthvecs)
+    evals, evecs = eigs(heff,block,1,prec)
+    e::eltype(hL) = evals[1]
+    vecmin::Vector{eltype(hL)} = evecs[:,1]
+    if !(e ≈ real(e))
+        error("ERROR: complex eigenvalues")
+    end
+    theta = reshape(vecmin, blocksize[1]*blocksize[2],blocksize[3]*blocksize[4])
+    U,S,Vt,Dm,err = split_truncate!(theta/norm(theta), truncation)
+    Ss = LinkSite(S)
+    Us = GenericSite(Array(reshape(U,blocksize[1],blocksize[2],Dm)), ispurification(siteL))
+	Vts = GenericSite(Array(reshape(Vt,Dm,blocksize[3],blocksize[4])), ispurification(siteR))
+
+    # @tensor checkcan[:] := inv(data(siteL.Λ1))[-2,5]*inv(data(siteL.Λ1))[-1,1]*block[1,3,2,4]*conj(block[5,3,2,4])
+    # println("Block canonical?", norm(checkcan - Matrix(I,blocksize[1],blocksize[1]))) #Yes it is
+    # thetaN = theta/norm(theta)
+    # @tensor checkcan[:] := inv(data(siteL.Λ1))[-1,1]*(thetaN*thetaN')[1,2] * inv(data(siteL.Λ1))[-2,2]
+    # println("Block canonical?", norm(checkcan - Matrix(I,blocksize[1],blocksize[1]))) 
+    # println(norm(theta))
+    # println(norm((U*Diagonal(S)*Vt)))
+    # println("SVD works?: ", norm(theta - (U*Diagonal(S)*Vt))) #No it does not
+
+	# U2 = inv(siteL.Λ1)*Us
+    # Vt2 = Vts*inv(siteR.Λ2)
+	# Γ1new = OrthogonalLinkSite(siteL.Λ1, U2, Ss)
+	# Γ2new = OrthogonalLinkSite(Ss, Vt2, siteR.Λ2)
+    # println("R",isrightcanonical(Γ1new))
+    # println("L",isleftcanonical(Γ1new))
+    return Us,Ss, Vts
+end

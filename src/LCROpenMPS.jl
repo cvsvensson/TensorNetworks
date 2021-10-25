@@ -26,7 +26,7 @@ center(mps::LCROpenMPS) = mps.center::Int
 # end
 
 function LCROpenMPS(
-    M::Vector{Array{<:Number,3}};
+    M::Vector{Array{<:Any,3}};
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
     purification = false, center=1, error = 0.0,
 )
@@ -168,7 +168,7 @@ function randomLCROpenMPS(N, d, D; T=ComplexF64, purification = false,
         χR = Int(round(d^(min(i, log(d,D), N-i))))
         Γ[i] = randomRightOrthogonalSite(χL, d, χR, T, purification = purification)
     end
-    return LCROpenMPS(Γ, truncation = truncation)
+    return LCROpenMPS{T}(Γ, truncation = truncation)
 end
 
 """
@@ -207,8 +207,8 @@ end
 
 Make mps left canonical up to the `center` site and right canonical after, assuming the input mps is canonical.
 """
-function canonicalize(mps::LCROpenMPS; center=1)
-    Γ = to_left_right_orthogonal(mps[1:length(mps)], center=center)
+function canonicalize(mps::LCROpenMPS; center=1, method=:qr)
+    Γ = to_left_right_orthogonal(mps[1:length(mps)], center=center,method=method)
     LCROpenMPS(Γ, truncation = mps.truncation, error = mps.error)
 end
 

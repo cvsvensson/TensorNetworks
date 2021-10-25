@@ -88,13 +88,13 @@ function IsingMPO(L, J, h, g, shift=0)
     T = promote_type(eltype.((J,h,g))...)
     mpo = Vector{Array{T,4}}(undef,L)
     mpo[1] = zeros(T,1,2,2,3)
-    mpo[1][1,:,:,:] = reshape([si -J*sz -h*sx-g*sz+shift*si/L],2,2,3)
+    mpo[1][1,:,:,:] = reshape([si  -J*sz  -h*sx-g*sz+shift*si/L],2,2,3)
     mpo[L] = zeros(T,3,2,2,1)
     mpo[L][:,:,:,1] = permutedims(reshape([-h*sx-g*sz+shift*si/L sz si], 2,2,3), [3,1,2])
     for i=2:L-1
         # hardcoded implementation of index structure (a,i,j,b):
         help = zeros(T,3,2,2,3)
-        help[1,:,:,1] = help[3,:,:,3] = si
+        help[1,:,:,1] = help[3,:,:,3] = si #Maybe this should not be here at i=L-1?
         help[1,:,:,2] = -J*sz
         help[1,:,:,3] = -h*sx-g*sz+shift*si/L
         help[2,:,:,1] = help[2,:,:,2] = help[3,:,:,1] = help[3,:,:,2] = s0
@@ -104,21 +104,54 @@ function IsingMPO(L, J, h, g, shift=0)
     return MPO(mpo)
 end
 
+
+"""
+KitaevMPO(lattice sites, J, transverse, longitudinal)
+
+Returns the Kitaev spin chain
+"""
+function KitaevMPO(N, t, Δ, U, μ)
+    T = complex(promote_type(eltype.(((t+Δ)/2,(Δ-t)/2,U,μ/2))...))
+    mpo = Vector{Array{T,4}}(undef,N)
+    D = 5
+    firstrow = [si  -sx*(t+Δ)/2  sy*(Δ-t)/2  U*sz  -μ/2*sz]
+    mpo[1] = zeros(T,1,2,2,D)
+    mpo[1][1,:,:,:] = reshape(firstrow,2,2,D)
+    for i=2:N-1
+        help = zeros(T,D,2,2,D)
+        help[1,:,:,:] = firstrow
+        help[2,:,:,D] = sx
+        help[3,:,:,D] = sy
+        help[4,:,:,D] = sz
+        help[D,:,:,D] = si
+        # help[9,:,:,9] = si
+        mpo[i] = help
+    end
+    mpo[N] = zeros(T,D,2,2,1)
+    mpo[N][1,:,:,1] = -μ/2 *sz
+    mpo[N][2,:,:,1] = sx
+    mpo[N][3,:,:,1] = sy
+    mpo[N][4,:,:,1] = sz
+    mpo[N][D,:,:,1] = si
+
+    return MPO(mpo)
+end
+
 """
     HeisenbergMPO(lattice sites,Jx,Jy,Jz,transverse)
 
-Returns the Heisenberg gamiltonian as an MPO
+Returns the Heisenberg hamiltonian as an MPO
 """
 function HeisenbergMPO(L, Jx, Jy, Jz, h)
-    mpo = Vector{Array{ComplexF64,4}}(L)
-    mpo[1] = Array{ComplexF64}(1,2,2,5)
+    mpo = Vector{Array{ComplexF64,4}}(undef,L)
+    mpo[1] = zeros(ComplexF64,1,2,2,5)
     mpo[1][1,:,:,:] = reshape([si Jx*sx Jy*sy Jz*sz h*sx], 2,2,5)
-    mpo[L] = Array{ComplexF64}(5,2,2,1)
+    mpo[L] =zeros(ComplexF64,5,2,2,1)
     mpo[L][:,:,:,1] = permutedims(reshape([h*sx sx sy sz si], 2,2,5), [3,1,2])
 
     for i=2:L-1
         # hardcoded implementation of index structure (a,i,j,b):
-        help = Array{ComplexF64}(5,2,2,5)
+        help = zeros(ComplexF64,5,2,2,5)
         help[1,:,:,1] = help[5,:,:,5] = si
         help[1,:,:,2] = Jx*sx
         help[1,:,:,3] = Jy*sy
@@ -128,13 +161,34 @@ function HeisenbergMPO(L, Jx, Jy, Jz, h)
         help[3,:,:,5] = sy
         help[4,:,:,5] = sz
         #help[2,:,:,1:4] = help[3,:,:,1:4] = help[4,:,:,1:4] = help[5,:,:,1:4] = s0
-        help[2,:,:,1] = help[2,:,:,2] = help[2,:,:,3] = help[2,:,:,4] = s0
-        help[3,:,:,1] = help[3,:,:,2] = help[3,:,:,3] = help[3,:,:,4] = s0
-        help[4,:,:,1] = help[4,:,:,2] = help[4,:,:,3] = help[4,:,:,4] = s0
-        help[5,:,:,1] = help[5,:,:,2] = help[5,:,:,3] = help[5,:,:,4] = s0
         mpo[i] = help
     end
     return MPO(mpo)
+end
+
+function HeisenbergS1MPO(L, Jx, Jy, Jz, h)
+    mpo = Vector{Array{ComplexF64,4}}(undef,L)
+    id = Matrix{ComplexF64}(I,3,3)
+    mpo[1] = zeros(ComplexF64,1,3,3,5)
+    mpo[1][1,:,:,:] = reshape([id Jx*sx1 Jy*sy1 Jz*sz1 h*sx1], 3,3,5)
+    mpo[L] =zeros(ComplexF64,5,3,3,1)
+    mpo[L][:,:,:,1] = permutedims(reshape([h*sx1 sx1 sy1 sz1 id], 3,3,5), [3,1,2])
+
+    for i=2:L-1
+        # hardcoded implementation of index structure (a,i,j,b):
+        help = zeros(ComplexF64,5,3,3,5)
+        help[1,:,:,1] = help[5,:,:,5] = id
+        help[1,:,:,2] = Jx*sx1
+        help[1,:,:,3] = Jy*sy1
+        help[1,:,:,4] = Jz*sz1
+        help[1,:,:,5] = h*sx1
+        help[2,:,:,5] = sx1
+        help[3,:,:,5] = sy1
+        help[4,:,:,5] = sz1
+        #help[2,:,:,1:4] = help[3,:,:,1:4] = help[4,:,:,1:4] = help[5,:,:,1:4] = s0
+        mpo[i] = help
+    end
+    return MPO(-mpo)
 end
 
 """

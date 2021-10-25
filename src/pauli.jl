@@ -12,3 +12,7 @@ const IX = kron(sx, si)
 const XY = kron(sy, sx)
 const YX = kron(sx, sy)
 const II = kron(si, si)
+
+const sx1 = [0 1 0; 1 0 1; 0 1 0]/sqrt(2)
+const sy1 = 1im*[0 -1 0; 1 0 -1; 0 1 0]/sqrt(2)
+const sz1 = [1 0 0; 0 0 0; 0 0 -1]

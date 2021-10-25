@@ -7,8 +7,8 @@ Return the expectation value of the gate starting at `site`
 function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical=false, string=IdentityMPOsite) 
     n = length(op)
     if !iscanonical || string != IdentityMPOsite
-        L = Array(vec(boundary(mps,:left)))
-        R = Array(vec(boundary(mps,:right)))
+        L = Array(vec(boundary(mps,mps,:left)))
+        R = Array(vec(boundary(mps,mps,:right)))
         for k in 1:site - 1
             L = transfer_matrix(mps[k], string, :right) * L
         end
@@ -25,12 +25,24 @@ end
 
 function expectation_value(mps::AbstractMPS, mpo::AbstractMPO) 
     @assert length(mps) == length(mpo) "Length of mps is not equal to length of mpo"
-    K = numtype(mps)
+    #K = numtype(mps)
     L = vec(boundary(mps,mpo,:left))
-    R::Vector{K} = vec(boundary(mps,mpo,:right))
+    R = vec(boundary(mps,mpo,:right))
     Ts = transfer_matrices(mps,mpo,:left)
-    Tc = transfer_matrix_bond(mps, 1, :right)
+    Tc = transfer_matrix_bond(mps,mps, 1, :right)
     for k in length(mps):-1:1
+        R = Ts[k]*R
+    end
+    return transpose(R)*(Tc*L)
+end
+function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS) 
+    @assert length(mps1) == length(mpo) ==length(mps2) "Length of mps is not equal to length of mpo"
+    #K = numtype(mps)
+    L = vec(boundary(mps1,mpo,mps2,:left))
+    R = vec(boundary(mps1,mpo,mps2,:right))
+    Ts = transfer_matrices(mps1,mpo,mps2,:left)
+    Tc = transfer_matrix_bond(mps1,mps2, 1, :right)
+    for k in length(mps1):-1:1
         R = Ts[k]*R
     end
     return transpose(R)*(Tc*L)
@@ -52,7 +64,7 @@ function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer;
     return (transpose(Tc*(T* R))*L)::K
 end
 
-function expectation_value(mps::MPSSum, op, site::Integer; string=IdentityMPOsite)
+function expectation_value2(mps::MPSSum, op, site::Integer; string=IdentityMPOsite)
     #FIXME define matrix_element. Decide if "site" argument should be included or not. Decide on gate or mpo
     #Define alias Operator as Union{(MPOsite, site), MPO, Gate, Gates}?
     
@@ -121,7 +133,7 @@ Return the two-site expectation values
 
 See also: [`connected_correlator`](@ref)
 """
-function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string = IdentityGate(1))
+function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string = IdentityGate(1)) #Check if it works for MPSsum and for OrthogonalLinksites
     N = length(mps)
 	oplength1 = length(op1)
 	oplength2 = length(op2)
@@ -130,21 +142,21 @@ function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string
 	op1transfers = transfer_matrices(mps,op1,:left)[1:N-oplength1+1]#map(site -> transfer_matrix(mps,op1,site,:left),1:N-oplength1+1)
     op2transfers = transfer_matrices(mps,op2,:left)[1:N-oplength2+1]#map(site -> transfer_matrix(mps,op2,site,:left),1:N-oplength2+1) 
     op1stringtransfers = transfer_matrices(mps,op1*repeatedgate(string,oplength1),:left)[1:N-oplength1+1]
-    op2stringtransfers = transfer_matrices(mps,op2*repeatedgate(string,oplength2),:left)[1:N-oplength2+1]
+    op2stringtransfers = transfer_matrices(mps,repeatedgate(string,oplength2)*op2,:left)[1:N-oplength2+1]
     function idR(n)
-        d = size(mps.Γ[n],3)
-        return vec(Matrix{eltype(mps.Γ[n])}(I,d,d))
+        d = size(mps[n],3)
+        return vec(Matrix{eltype(mps[n])}(I,d,d))
     end
     function idL(n)
-        d = size(mps.Γ[n],1)
-        return vec(Matrix{eltype(mps.Γ[n])}(I,d,d))
+        d = size(mps[n],1)
+        return vec(Matrix{eltype(mps[n])}(I,d,d))
     end
 
     corr = zeros(eltype(mps[1]),N-oplength1+1,N-oplength2+1)
     for n2 in k2:-1:oplength1+1 #Op2 is on the right
         L = op2transfers[n2]*idR(n2+oplength2-1)
         for n1 in n2-oplength1:-1:k1
-            Λ2 = transfer_matrix_bond(mps,n1,:left)  # = mps.Λ[n1].^2
+            Λ2 = transfer_matrix_bond(mps,mps,n1,:left)  # = mps.Λ[n1].^2
             # L2 = reshape(op1transfers[n1]*L,length(Λ2),length(Λ2))
             # corr[n1,n2] = tr(Λ2*L2)
             L2 = op1stringtransfers[n1]*L #String operator intersects with the left operator
@@ -155,7 +167,7 @@ function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string
     for n2 in k2:-1:oplength2+1 #Op1 is on the right
         L = op1transfers[n2]*idR(n2+oplength1-1)
         for n1 in n2-oplength2:-1:k1
-            Λ2 = transfer_matrix_bond(mps,n1,:left)#mps.Λ[n1].^2
+            Λ2 = transfer_matrix_bond(mps,mps,n1,:left)#mps.Λ[n1].^2
             # L2 = reshape(op2transfers[n1]*L,length(Λ2),length(Λ2))
             # corr[n2,n1] = tr(Λ2*L2)
             L2 = op2stringtransfers[n1]*L
