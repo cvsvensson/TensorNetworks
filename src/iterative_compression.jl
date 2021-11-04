@@ -2,7 +2,7 @@ abstract type AbstractMixer end
 
 struct ShiftCenter <: AbstractMixer end
 
-mutable struct SubspaceExpand <: AbstractMixer
+mutable struct SubspaceExpand <: AbstractMixer #TODO really check if this works as intended
     alpha::Float64
     rate::Float64
     oldmin::Union{Float64,Nothing}
@@ -12,6 +12,9 @@ mutable struct SubspaceExpand <: AbstractMixer
     end
 end
 SubspaceExpand(alpha) = SubspaceExpand(alpha,9/10)
+
+# copy(s::SubspaceExpand) = SubspaceExpand(copy(s.alpha), copy(s.rate))
+# copy(s::ShiftCenter) = ShiftCenter()
 
 function shift_center!(mps,j,dir,::ShiftCenter; kwargs...)
     if dir==:right 
@@ -23,6 +26,10 @@ end
 
 function shift_center!(mps,j,dir,SE::SubspaceExpand; mpo,env, kwargs...)
     newmin = transpose(transfer_matrix(mps[j], mpo[j], mps[j]) * vec(env.R[j])) * vec(env.L[j])
+    if SE.alpha < mps.truncation.tol 
+        shift_center!(mps,j,dir,ShiftCenter(); mpo,env)
+        return SE.oldmin
+    end
     if dir==:right
         dirval=+1
         j1 = j
@@ -44,9 +51,10 @@ function shift_center!(mps,j,dir,SE::SubspaceExpand; mpo,env, kwargs...)
         if real((truncmin - newmin)/(SE.oldmin - newmin)) >.3 
             SE.alpha *= SE.rate
         else
-            SE.alpha *= 1/SE.rate
+            SE.alpha *= 1/(SE.rate)^(1/10)
         end
     end
+    # println(SE.alpha)
     SE.oldmin = real.(truncmin)
 end
 

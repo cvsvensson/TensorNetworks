@@ -1,5 +1,17 @@
 using Test, TensorNetworks, TensorOperations, LinearAlgebra, KrylovKit
 
+@testset "Pauli" begin
+    s = 1/2
+    @test norm(Sx(s)*Sy(s) - Sy(s)*Sx(s) - 1im*Sz(s)) < 1e-14
+    @test norm(Sy(s)*Sz(s) - Sz(s)*Sy(s) - 1im*Sx(s)) < 1e-14
+    s=1
+    @test norm(Sx(s)*Sy(s) - Sy(s)*Sx(s) - 1im*Sz(s)) < 1e-14
+    @test norm(Sy(s)*Sz(s) - Sz(s)*Sy(s) - 1im*Sx(s)) < 1e-14
+    s=3/2
+    @test norm(Sx(s)*Sy(s) - Sy(s)*Sx(s) - 1im*Sz(s)) < 1e-14
+    @test norm(Sy(s)*Sz(s) - Sz(s)*Sy(s) - 1im*Sx(s)) < 1e-14
+end
+
 @testset "Types" begin
     mps = randomUMPS(ComplexF64,2,2,1)
     @test mps isa UMPS
@@ -392,7 +404,7 @@ end
 
     Nchain = 10
     Dmax = 20
-    h,g = rand(2)
+    h,g = (0.226579,0.988821)
     ham = IsingMPO(Nchain, 1, h,g);
     hammat = Matrix(ham);
     mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
@@ -427,8 +439,7 @@ end
     #Empo = expectation_value(mps,hammpo)
     @test E ≈ e0 ≈ Eanalytic
 
-    mps = randomUMPS(ComplexF64,1,2,1)
-    canonicalize!(mps)
+    mps = canonicalize(randomUMPS(ComplexF64,1,2,1))
     E = expectation_value(mps,hamgates[1],1)
     e0, heff,info = TensorNetworks.effective_hamiltonian(mps,hammpo,direction=:left);
     #Empo = expectation_value(mps,hammpo)
@@ -456,7 +467,7 @@ using DoubleFloats
     mps = randomLCROpenMPS(N,2,Dmax,T=ComplexDF64);
     @test eltype(mps) == GenericSite{ComplexDF64}
     @test norm(mps) ≈ 1
-    @test eltype(norm(mps)) == ComplexDF64
+    @test eltype(norm(mps)) == real(ComplexDF64)
     @test eltype(canonicalize(mps)) == GenericSite{ComplexDF64}
 
     T = ComplexDF64

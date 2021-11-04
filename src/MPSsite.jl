@@ -1,6 +1,7 @@
 Base.permutedims(site::GenericSite, perm) = GenericSite(permutedims(site.Γ,perm), site.purification)
-Base.copy(site::OrthogonalLinkSite) = OrthogonalLinkSite([copy(getfield(site, k)) for k = 1:length(fieldnames(OrthogonalLinkSite))]...) 
+Base.copy(site::OrthogonalLinkSite) = OrthogonalLinkSite(copy(site.Λ1),copy(site.Γ),copy(site.Λ2))
 Base.copy(site::GenericSite) = GenericSite([copy(getfield(site, k)) for k = 1:length(fieldnames(GenericSite))]...) 
+Base.copy(site::LinkSite) = LinkSite(data(site))
 
 Base.@propagate_inbounds Base.getindex(site::AbstractSite, I...) = getindex(data(site),I...)
 
@@ -161,6 +162,9 @@ Base.:*(Λ::LinkSite, G::VirtualSite) = VirtualSite(reshape(diag(Λ.Λ),size(G,1
 Base.:*(G::VirtualSite, Λ::LinkSite) = VirtualSite(reshape(diag(Λ.Λ),1,size(G,2)) .* G.Λ)
 Base.:/(Γ::LinkSite, α::Number) = LinkSite(data(Γ)/α)
 Base.:/(Γ::VirtualSite, α::Number) = VirtualSite(data(Γ)/α)
+
+Base.:*(Λ::LinkSite, α::Number) = LinkSite(α*data(Λ))
+Base.:*( α::Number, Λ::LinkSite) = LinkSite(α*data(Λ))
 
 function Base.:*(v::Vector{<:Number}, Γ::GenericSite)
 	v2 = reshape(v,1,length(v))

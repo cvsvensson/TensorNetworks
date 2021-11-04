@@ -145,8 +145,8 @@ function transfer_spectrum(mps::UMPS{K}, direction::Symbol=:left; nev=1) where {
 	# 	mps = convert(UMPS{ComplexF64},mps)
 	# end
     T = transfer_matrix(mps,direction)
-	D = Int(sqrt(size(T,2)))
-	nev = minimum([D^2, nev])
+	D = length(vec(mps.Λ[1]))#(sqrt(size(T,2)))
+	nev::Int = min(D^2, nev)
     if D<4
         vals, vecs = eigen(Matrix(T))
         vals = vals[end:-1:1]
@@ -165,8 +165,8 @@ function transfer_spectrum(mps::UMPS{K}, direction::Symbol=:left; nev=1) where {
 	# 	tensors[i] = reshape(vecs[:,i],D,D)
 	# end
 	nev = min(length(vals),nev)
-	tensors =  [reshape(vecs[:,k],D,D) for k in 1:nev]
-    return vals[1:nev], canonicalize_eigenoperator.(tensors) #canonicalize_eigenoperator.(tensors)
+	tensors::Vector{Matrix{K}} =  [reshape(vecs[:,k],D,D) for k in 1:nev]
+    return K.(vals[1:nev])::Vector{K}, canonicalize_eigenoperator.(tensors) #canonicalize_eigenoperator.(tensors)
 end
 function transfer_spectrum(mps1::UMPS, mps2::UMPS, direction::Symbol=:left; nev=1)
     T = transfer_matrix(mps1,mps2,direction)
@@ -236,72 +236,72 @@ function canonicalize!(mps::UMPS,n)
 	return mps
 end
 
-"""
-	canonicalize_cell!(mps::UMPS)
+# """
+# 	canonicalize_cell!(mps::UMPS)
 
-Make the unit cell canonical
-"""
-function canonicalize_cell!(mps::UMPS)
-	D = length(mps.Λ[1])
-	N = length(mps.Γ)
-	Γ = mps.Γ
-	Λ = mps.Λ
+# Make the unit cell canonical
+# """
+# function canonicalize_cell!(mps::UMPS)
+# 	D = length(mps.Λ[1])
+# 	N = length(mps.Γ)
+# 	Γ = mps.Γ
+# 	Λ = mps.Λ
 
-	valR, rhoRs = transfer_spectrum(mps,:left,nev=2)
-	valL, rhoLs = transfer_spectrum(mps,:right,nev=2)
-	rhoR =  canonicalize_eigenoperator(rhoRs[1])
-	rhoL =  canonicalize_eigenoperator(rhoLs[1])
+# 	valR, rhoRs = transfer_spectrum(mps,:left,nev=2)
+# 	valL, rhoLs = transfer_spectrum(mps,:right,nev=2)
+# 	rhoR =  canonicalize_eigenoperator(rhoRs[1])
+# 	rhoL =  canonicalize_eigenoperator(rhoLs[1])
 
-    #Cholesky
-	if isposdef(rhoR) && isposdef(rhoL)
-    	X = Matrix(cholesky(rhoR, check=true).U)
-    	Y = Matrix(cholesky(rhoL, check=true).U)
-	else
-		@warn("Not positive definite. Cholesky failed. Using eigen instead.")
-		evl, Ul = eigen(Matrix(rhoL))
-	    evr, Ur = eigen(Matrix(rhoR))
-	    sevr = sqrt.(complex.(evr))
-	    sevl = sqrt.(complex.(evl))
-	    X = Diagonal(sevr)[abs.(sevr) .> mps.truncation.tol,:] * Ur'
-	    Y = Diagonal(sevl)[abs.(sevl) .> mps.truncation.tol,:] * Ul'
-	end
-	F = svd(Y*data(mps.Λ[1])*transpose(X))
+#     #Cholesky
+# 	if isposdef(rhoR) && isposdef(rhoL)
+#     	X = Matrix(cholesky(rhoR, check=true).U)
+#     	Y = Matrix(cholesky(rhoL, check=true).U)
+# 	else
+# 		@warn("Not positive definite. Cholesky failed. Using eigen instead.")
+# 		evl, Ul = eigen(Matrix(rhoL))
+# 	    evr, Ur = eigen(Matrix(rhoR))
+# 	    sevr = sqrt.(complex.(evr))
+# 	    sevl = sqrt.(complex.(evl))
+# 	    X = Diagonal(sevr)[abs.(sevr) .> mps.truncation.tol,:] * Ur'
+# 	    Y = Diagonal(sevl)[abs.(sevl) .> mps.truncation.tol,:] * Ul'
+# 	end
+# 	F = svd(Y*data(mps.Λ[1])*transpose(X))
 
-    #U,S,Vt,D,err = truncate_svd(F)
+#     #U,S,Vt,D,err = truncate_svd(F)
 
-    #rest
-    YU = VirtualSite(pinv(Y)*F.U ./ (valL[1])^(1/4))
-    VX = VirtualSite(F.Vt*pinv(transpose(X)) ./ (valR[1])^(1/4))
-	Γ[end] = Γ[end] * YU
-	Γ[1] = VX*Γ[1]
-    # @tensor Γ[end][:] := data(Γ[end])[-1,-2,3]*YU[3,-3]
-    # @tensor Γ[1][:] := VX[-1,1]*data(Γ[1])[1,-2,-3]
-	S = LinkSite(F.S)
-	if mps.truncation.normalize
-		Λ[1] = S / norm(S)
-	else
-		Λ[1] = S
-	end
-	return
-end
+#     #rest
+#     YU = VirtualSite(pinv(Y)*F.U ./ (valL[1])^(1/4))
+#     VX = VirtualSite(F.Vt*pinv(transpose(X)) ./ (valR[1])^(1/4))
+# 	Γ[end] = Γ[end] * YU
+# 	Γ[1] = VX*Γ[1]
+#     # @tensor Γ[end][:] := data(Γ[end])[-1,-2,3]*YU[3,-3]
+#     # @tensor Γ[1][:] := VX[-1,1]*data(Γ[1])[1,-2,-3]
+# 	S = LinkSite(F.S)
+# 	if mps.truncation.normalize
+# 		Λ[1] = S / norm(S)
+# 	else
+# 		Λ[1] = S
+# 	end
+# 	return
+# end
 
-function canonicalize!(mps::UMPS)
-	N = length(mps)
-	if N>2
-		error("Canonicalize with identity layers if the unit cell is larger than two sites")
-	end
-	canonicalize_cell!(mps)
-	if N==2
-		ΓL, ΓR, error = apply_two_site_gate(mps[1],mps[2], IdentityGate(2), mps.truncation)
-	    #mps.Γ[1], mps.Λ[2], mps.Γ[2], err = apply_two_site_identity(mps.Γ, mps.Λ[mod1.(1:3,2)], mps.truncation)
-		#mps.error += err
-		Γ, Λ = ΓΛ([ΓL, ΓR]) 
-		mps.Γ = Γ
-		mps.Λ = Λ[1:end-1]
-		mps.error += error
-	end
-    return mps
-end
+# function canonicalize(mps::UMPS)
+# 	N = length(mps)
+# 	if N>2
+# 		error("Canonicalize with identity layers if the unit cell is larger than two sites")
+# 	end
+# 	mps = canonicalize_cell(mps)
+# 	if N==2
+# 		ΓL, ΓR, error = apply_two_site_gate(mps[1],mps[2], IdentityGate(2), mps.truncation)
+# 	    #mps.Γ[1], mps.Λ[2], mps.Γ[2], err = apply_two_site_identity(mps.Γ, mps.Λ[mod1.(1:3,2)], mps.truncation)
+# 		#mps.error += err
+# 		Γ, Λ = ΓΛ([ΓL, ΓR]) 
+# 		mps.Γ = Γ
+# 		mps.Λ = Λ[1:end-1]
+# 		mps.error += error
+# 	end
+#     return mps
+# end
 
 function canonicalize(mps::UMPS,n)
 	for i in 1:n
@@ -395,9 +395,9 @@ end
 
 Make the unit cell canonical and return the resulting UMPS
 """
-function canonicalize_cell(mps::UMPS)
+function canonicalize_cell(mps::UMPS{K}) where K
 	D = length(mps.Λ[1])
-	N = length(mps.Γ)
+	N = length(mps)
 	Γcopy = copy(mps.Γ)
 	Λcopy = copy(mps.Λ)
 
@@ -411,30 +411,41 @@ function canonicalize_cell(mps::UMPS)
     	X = Matrix(cholesky(rhoR, check=true).U)
     	Y = Matrix(cholesky(rhoL, check=true).U)
 	else
-		@warn("Not positive definite. Cholesky failed. Using eigen instead.")
-		evl, Ul = eigen(Matrix(rhoL))
-	    evr, Ur = eigen(Matrix(rhoR))
-	    sevr = sqrt.(complex.(evr))
-	    sevl = sqrt.(complex.(evl))
-	    X = Diagonal(sevr)[abs.(sevr) .> mps.truncation.tol,:] * Ur'
-	    Y = Diagonal(sevl)[abs.(sevl) .> mps.truncation.tol,:] * Ul'
+		@warn "Not positive definite. Cholesky failed. Using eigen instead."
+		evl::Vector{K}, Ul::Matrix{K} = eigen(Matrix(rhoL))
+	    evr::Vector{K}, Ur::Matrix{K} = eigen(Matrix(rhoR))
+	    sevr = sqrt.(evr)
+	    sevl = sqrt.(evl)
+	    X = Diagonal(sevr)[abs.(sevr) .> sqrt(mps.truncation.tol),:] * Ur'
+	    Y = Diagonal(sevl)[abs.(sevl) .> sqrt(mps.truncation.tol),:] * Ul'
+		println(minimum(abs.(sevr)))
 	end
-	F = svd!(Y*data(mps.Λ[1])*transpose(X))
-
-    U,S,Vt,D,err = truncate_svd(F, mps.truncation)
+	F = try 
+		svd!(Y*data(mps.Λ[1])*transpose(X))
+	catch y
+		svd!(Y*data(mps.Λ[1])*transpose(X), alg=LinearAlgebra.QRIteration())
+	end
+    U,S,Vt,D,err = truncate_svd(F, mps.truncation) #split_truncate!(Y*data(mps.Λ[1])*transpose(X), mps.truncation) 
 	Λ = LinkSite(S)
     #rest
-    YU = VirtualSite(pinv(Y)*U ./ (valL[1])^(1/4))
-    VX = VirtualSite(Vt*pinv(transpose(X)) ./ (valR[1])^(1/4))
+	#nf = sqrt(valL[1]/norm(F.S)^2)
+	if mps.truncation.normalize
+		α = valL[1]^(1/4) / sqrt(norm(F.S))
+		# println(norm(Λ))
+		#β = 1 
+	else
+		α = one(K)
+		#β = 1/norm(mps.Λ[1])
+	end
+    YU = VirtualSite(pinv(Y)*U / α)
+    VX = VirtualSite(Vt*pinv(transpose(X)) / α)
 	Γcopy[end] = mps.Γ[end]*YU
-	Γcopy[1] = VX*mps.Γ[1]
+	Γcopy[1] = VX*Γcopy[1]
+	Λcopy[1] = Λ #/ β
     # @tensor Γcopy[end][:] := Γcopy[end][-1,-2,3]*YU[3,-3]
     # @tensor Γcopy[1][:] := VX[-1,1]*Γcopy[1][1,-2,-3]
-	if mps.truncation.normalize
-		Λcopy[1] = Λ / norm(Λ)
-	else
-		Λcopy[1] = Λ
-	end
+	@assert valR[1] ≈ valL[1]
+
 	return UMPS(Γcopy, Λcopy, mps, error = err)
 end
 
@@ -546,7 +557,7 @@ function canonicalize_eigenoperator(rho::AbstractMatrix)
     phase = trρ/abs(trρ)
     rho = rho ./ phase
 	rhoH = Hermitian((rho + rho')/2)
-    return rhoH/tr(rhoH) * size(rhoH,1)
+    return rhoH/norm(rhoH) * sqrt(size(rhoH,1))
 end
 
 

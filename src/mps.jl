@@ -33,7 +33,7 @@ Return a list of thermal states with the specified betas
 function get_thermal_states(mps::AbstractMPS, hamGates, βs, dβ; order=2)
 	Nβ = length(βs)
 	mps = identityMPS(mps)
-	canonicalize!(mps)
+	mps = canonicalize(mps)
 	mpss = Array{typeof(mps),1}(undef,Nβ)
 	layers = prepare_layers(mps, hamGates,dβ*1im/2, order)
 	β=0
@@ -43,7 +43,7 @@ function get_thermal_states(mps::AbstractMPS, hamGates, βs, dβ; order=2)
 		count=0
 		while β < βs[n]
 			mps = apply_layers_nonunitary(mps,layers)
-			canonicalize!(mps)
+			mps = canonicalize(mps)
 			β += dβ
 			count+=1
 			if mod(count,floor(Nsteps/10))==0
@@ -59,14 +59,14 @@ end
 
 function imaginaryTEBD(mps::AbstractMPS, hamGates, βtotal, dβ; order=2)
 	mps = deepcopy(mps)
-	canonicalize!(mps)
+	mps = canonicalize(mps)
 	layers = prepare_layers(mps, hamGates,dβ*1im, order)
 	β=0
 	count=0
 	Nsteps = βtotal/dβ
 	while β < βtotal
 		mps = apply_layers_nonunitary(mps,layers)
-		canonicalize!(mps)
+		mps = canonicalize(mps)
 		β += dβ
 		count+=1
 		if mod(count,floor(Nsteps/10))==0

@@ -3,7 +3,7 @@
 
 Use DMRG to calculate the lowest energy eigenstate orthogonal to `orth`
 """
-function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LCROpenMPS{T}[];kwargs...) where {T}
+function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LCROpenMPS{T}[]; kwargs...) where {T}
     ### input: canonical random mps
     ### output: ground state mps, ground state energy
     precision::Float64=get(kwargs,:precision, DEFAULT_DMRG_precision)
@@ -22,7 +22,6 @@ function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}}=LC
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
     count=1
-   
     while count<=maxsweeps #TODO make maxcount choosable
         Eprev = E
         mps = sweep(mps,mpo,Henv,orthenv,direction,orth; kwargs...)
@@ -136,26 +135,24 @@ end
 
 Return the `n` eigenstates and energies with the lowest energy
 """
-function eigenstates(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; kwargs...) where {T}
+function eigenstates(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; shifter = ShiftCenter(), kwargs...) where {T}
     #T = eltype(data(mps[1]))
     states = Vector{LCROpenMPS{T}}(undef,n)
-    shifter0 = deepcopy(get(kwargs, :shifter, ShiftCenter()))
     energies = Vector{real(promote_type(T,eltype(hamiltonian[1])))}(undef,n)
     for k = 1:n
-        @time state, E = DMRG(hamiltonian, mps, states[1:k-1]; shifter = shifter0, kwargs...)
+        @time state, E = DMRG(hamiltonian, mps, states[1:k-1]; shifter = deepcopy(shifter), kwargs...)
         states[k] = state
         energies[k] = E
     end
     return states, energies
 end
 
-function eigenstates2(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; kwargs...) where {T}
+function eigenstates2(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; shifter = ShiftCenter(), kwargs...) where {T}
     #T = eltype(data(mps[1]))
     states = Vector{LCROpenMPS{T}}(undef,n)
-    shifter0 = deepcopy(get(kwargs, :shifter, ShiftCenter()))
     energies = Vector{real(promote_type(T,eltype(hamiltonian[1])))}(undef,n)
     for k = 1:n
-        @time state, E = DMRG2(hamiltonian, mps, states[1:k-1]; shifter = shifter0, kwargs...)
+        @time state, E = DMRG2(hamiltonian, mps, states[1:k-1]; shifter = deepcopy(shifter), kwargs...)
         states[k] = state
         energies[k] = E
     end

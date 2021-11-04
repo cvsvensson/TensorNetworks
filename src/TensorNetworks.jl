@@ -26,7 +26,7 @@ export prepare_layers, norm, apply_layers
 export DMRG, eigenstates
 export isingHamBlocks, isingHamGates, IdentityMPO, IsingMPO, HeisenbergMPO
 export get_thermal_states, TEBD!, apply_layers_nonunitary,apply_layer_nonunitary!, apply_two_site_gate
-export sx, sy,sz,si,s0,ZZ,ZI,IZ,XI,IX,XY,YX,II
+export sx, sy,sz,si,s0,ZZ,ZI,IZ,XI,IX,XY,YX,II,Sx,Sy,Sz
 export OrthogonalLinkSite, GenericSite, VirtualSite, LinkSite
 export GenericSquareGate, AbstractSquareGate, AbstractGate, Gate
 export isleftcanonical, isrightcanonical, data, isunitary
