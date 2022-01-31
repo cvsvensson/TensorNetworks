@@ -118,7 +118,6 @@ function apply_layers_nonunitary(sitesin::AbstractVector{<:OrthogonalLinkSite}, 
     return sites, total_error
 end
 
-
 function apply_layers(sitesin::AbstractVector{<:OrthogonalLinkSite}, layers, truncation; isperiodic=false)
     total_error = 0.0
 	sites = copy(sitesin)

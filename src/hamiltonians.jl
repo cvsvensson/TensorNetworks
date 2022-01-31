@@ -145,6 +145,14 @@ function KitaevMPO(N, t, Δ, U, μ; type=ComplexF64)
     return MPO(mpo)
 end
 
+function KitaevMPO(t, Δ, U, μs::Array; type=ComplexF64)
+    N = length(μs)
+    mpo = [_KitaevMPO_center(t,Δ,U,μ,type=type) for μ in μs]
+    mpo[1] = _KitaevMPO_left(t,Δ,U,μs[1],type=type)
+    mpo[N] = _KitaevMPO_right(t,Δ,U,μs[N],type=type)
+    return MPO(mpo)
+end
+
 function DisorderedKitaevMPO(N, t, Δ, U, μ::Tuple{K,T}; type=ComplexF64) where {K,T}
     (mμ,sμ) = μ
     μs = sμ*randn(N) .+ mμ
@@ -153,6 +161,17 @@ function DisorderedKitaevMPO(N, t, Δ, U, μ::Tuple{K,T}; type=ComplexF64) where
     mpo[N] = _KitaevMPO_right(t,Δ,U,μs[N],type=type)
     return MPO(mpo)
 end
+
+function KitaevGates(t, Δ, U, μs::Array)
+    N = length(μs)
+    gates = [_KitaevGate_center(t,Δ,U,μ) for μ in μs[1:N-1]]
+    gates[1] = _KitaevGate_left(t,Δ,U,μs[1])
+    gates[end] = _KitaevGate_right(t,Δ,U,μs[N-1],μs[N])
+    return gates
+end
+_KitaevGate_center(t, Δ, U, μ) = -gXX*(t+Δ)/2 + gYY*(Δ-t)/2 + U*gZZ -μ/2*gZI
+_KitaevGate_left(t, Δ, U, μ) = -gXX*(t+Δ)/2 + gYY*(Δ-t)/2 + U*gZZ -μ/2*gZI
+_KitaevGate_right(t, Δ, U, μ1,μ2) = -gXX*(t+Δ)/2 + gYY*(Δ-t)/2 + U*gZZ -μ1/2*gZI - μ2/2*gIZ
 
 function _KitaevMPO_center(t, Δ, U, μ; type=ComplexF64)
     D = 5

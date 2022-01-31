@@ -21,7 +21,7 @@ function quasiparticle(mps::UMPS{T}, ham::MPO; nev=2, all=false) where {T}
         evals, evecs = eigen(Matrix(ham_lin))
     else
         evals, evecs = eigsolve(ham_lin, prod(sB), nev, :SR, tol=mps.truncation.tol, ishermitian=true)
-        evecs = hcat(evecs...)
+        evecs = reduce(hcat,evecs)
     end
     if all 
         return evals, evecs

@@ -14,6 +14,8 @@ Base.size(site::VirtualSite) = size(site.Λ)
 Base.length(site::LinkSite) = length(site.Λ)
 
 Base.conj(s::GenericSite) = GenericSite(conj(data(s)),ispurification(s))
+Base.conj(s::OrthogonalLinkSite) = OrthogonalLinkSite(s.Λ1,conj(s.Γ),s.Λ2)
+
 
 #Base.isapprox(s1::AbstractSite,s2::AbstractSite) = isapprox(data(s1),data(s2))
 Base.isapprox(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = isapprox(s1.Γ, s2.Γ) && isapprox(s1.Λ1, s2.Λ1) && isapprox(s1.Λ2, s2.Λ2)

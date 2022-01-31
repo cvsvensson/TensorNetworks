@@ -178,6 +178,10 @@ function to_orthogonal_link(M::Vector{GenericSite{T}}, trunc::TruncationArgs) wh
     return to_orthogonal_link_from_right_orth(MR,trunc)
 end
 
+function apply_layers(mps::OpenMPS, layers) 
+    sites,  err = apply_layers(mps[1:end],layers,mps.truncation,isperiodic=false)
+    return OpenMPS(sites,truncation=mps.truncation, error = mps.error + err)
+end
 
 function apply_layers_nonunitary(mps::OpenMPS, layers)
     sites, err = apply_layers_nonunitary(mps[1:end], layers, mps.truncation)

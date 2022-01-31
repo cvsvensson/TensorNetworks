@@ -31,7 +31,7 @@ function Base.kron(g1::AbstractSquareGate, g2::AbstractSquareGate)
 	s2 = size(g2)
 	l1 = length(g1)
 	l2 = length(g2)
-	return Gate(reshape(kron(data(g1),data(g2)), (s1[1:l1]..., s2[1:l2]..., s1[l1+1:end]..., s2[l2+1:end]...)...))
+	return Gate(reshape(kron(Matrix(g1),Matrix(g2)), (s1[1:l1]..., s2[1:l2]..., s1[l1+1:end]..., s2[l2+1:end]...)...))
 end
 function Base.kron(g1::ScaledIdentityGate, g2::ScaledIdentityGate)
 	l1 = length(g1)
@@ -57,6 +57,13 @@ Base.:+(g1::GenericSquareGate{K,N}, g2::GenericSquareGate{T,N}) where {T,K,N} = 
 Base.:+(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1)+ data(g2),length(g1))
 Base.:+(g1::ScaledIdentityGate{T,N}, g2::GenericSquareGate{K,N}) where {T,K,N} = data(g1)*one(data(g2))+ data(g2)
 Base.:+(g1::GenericSquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2)*one(data(g1))+ data(g1)
+
+Base.:-(g1::GenericSquareGate{K,N}, g2::GenericSquareGate{T,N}) where {T,K,N} = GenericSquareGate(data(g1) - data(g2))
+Base.:-(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1) - data(g2),length(g1))
+Base.:-(g1::ScaledIdentityGate{T,N}, g2::GenericSquareGate{K,N}) where {T,K,N} = data(g1)*one(data(g2)) - data(g2)
+Base.:-(g1::GenericSquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2)*one(data(g1)) - data(g1)
+
+Base.:-(g::GenericSquareGate) = Gate(-data(g))
 
 Base.exp(g::GenericSquareGate{T,N}) where {T,N} = GenericSquareGate(gate(exp(Matrix(g)), Int(N/2)))
 Base.exp(g::ScaledIdentityGate{T,N}) where {T,N} = ScaledIdentityGate(exp(data(g)),length(g))
@@ -112,4 +119,32 @@ function auxillerate(op::GenericSquareGate{T,N}) where {T,N}
 	tens::Array{T,2*N} = ncon((op.data,idop),(odds,evens))
 	return GenericSquareGate(reshape(tens,(opSize .^2)...))
 end
+
+function auxillerate(op::GenericSquareGate{T,N}, opaux::GenericSquareGate{K,N}) where {T,K,N}
+	opSize = size(op)
+	opLength = Int(N/2)
+	odds = -1:-2:(-4*opLength)
+	evens = -2:-2:(-4*opLength)
+	tens::Array{T,2*N} = ncon((data(op), data(opaux)),(odds,evens))
+	return GenericSquareGate(reshape(tens,(opSize .^2)...))
+end
+
 auxillerate(gate::ScaledIdentityGate) = gate
+
+
+
+const gsx = Gate(sx)
+const gsy = Gate(sy)
+const gsz = Gate(sz)
+const gsi = Gate(si)
+
+const gZZ = kron(gsz, gsz)
+const gYY = kron(gsy, gsy)
+const gXX = kron(gsx, gsx)
+const gZI = kron(gsi, gsz)
+const gIZ = kron(gsz, gsi)
+const gXI = kron(gsi, gsx)
+const gIX = kron(gsx, gsi)
+const gXY = kron(gsy, gsx)
+const gYX = kron(gsx, gsy)
+const gII = kron(gsi, gsi)

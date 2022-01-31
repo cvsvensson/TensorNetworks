@@ -1,6 +1,8 @@
 struct SqrtDensityMatrix{MPS,Site} <: AbstractMPS{Site}
     mps::MPS
-
+    function SqrtDensityMatrix(mps::AbstractMPS)
+        new{typeof(mps), eltype(mps)}(mps)
+    end
 end
 #passthrough: canonicalize, 
 
