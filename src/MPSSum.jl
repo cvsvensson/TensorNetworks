@@ -14,6 +14,7 @@ Base.show(io::IO, mps::MPSSum) =
 Base.show(io::IO, m::MIME"text/plain", mps::MPSSum) = show(io,mps)
 Base.size(mps::MPSSum) = (length(mps), )
 Base.length(mps::MPSSum) = length(mps.states[1])
+Base.copy(mps::MPSSum) = MPSSum(copy(mps.states), copy(mps.scalings))
 
 struct SiteSum{S<:AbstractSite,T} <: AbstractCenterSite{T}
     sites::Vector{S}
@@ -29,6 +30,8 @@ Base.show(io::IO, m::MIME"text/plain", mps::SiteSum) = show(io,mps)
 Base.size(sites::SiteSum) = (sum(size.(sites.sites,1)),size(sites.sites[1],2),sum(size.(sites.sites,3)))
 Base.length(sites::SiteSum) = length(sites.sites)
 Base.size(sites::SiteSum,i::Integer) = (sum(size.(sites.sites,1)),size(sites.sites[1],2),sum(size.(sites.sites,3)))[i]
+
+Base.conj(site::SiteSum) = SiteSum(conj.(site.sites))
 
 Base.:+(mps1::AbstractMPS,mps2::AbstractMPS) = MPSSum([mps1, mps2])
 Base.:+(mps::AbstractMPS,sum::MPSSum) = 1*mps + sum
@@ -52,6 +55,15 @@ Base.getindex(sum::SiteSum,i::Integer) = sum.sites[i]
 Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
 reverse_direction(sitesum::SiteSum) = SiteSum(reverse_direction.(sitesum.sites))
 ispurification(sitesum::SiteSum) = ispurification(sitesum[1])
+
+
+function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
+    @assert length(v) == length(mps[i]) "Error: incompatible number of sites in setindex!"
+    for n in 1:length(v)
+        mps[i].sites[n] = v[n]
+    end
+	return v
+end
 
 function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) 
     #FIXME Might screw up type stability, so might need a TransferMatrix struct?

@@ -5,7 +5,7 @@ expectation_value(mps::AbstractOpenMPS, op::AbstractGate, site::Integer; iscanon
 Return the expectation value of the gate starting at `site`
 """
 function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical=false, string=IdentityMPOsite) 
-    n = length(op)
+    n = operatorlength(op)
     if !iscanonical || string != IdentityMPOsite
         L = Array(vec(boundary(mps,mps,:left)))
         R = Array(vec(boundary(mps,mps,:right)))
@@ -24,7 +24,7 @@ function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical=fals
 end
 
 function expectation_value(mps::AbstractMPS, mpo::AbstractMPO) 
-    @assert length(mps) == length(mpo) "Length of mps is not equal to length of mpo"
+    @assert length(mps) == operatorlength(mpo) "Length of mps is not equal to length of mpo"
     #K = numtype(mps)
     L = vec(boundary(mps,mpo,:left))
     R = vec(boundary(mps,mpo,:right))
@@ -36,7 +36,7 @@ function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     return transpose(R)*(Tc*L)
 end
 function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS) 
-    @assert length(mps1) == length(mpo) ==length(mps2) "Length of mps is not equal to length of mpo"
+    @assert length(mps1) == operatorlength(mpo) ==length(mps2) "Length of mps is not equal to length of mpo"
     #K = numtype(mps)
     L = vec(boundary(mps1,mpo,mps2,:left))
     R = vec(boundary(mps1,mpo,mps2,:right))
@@ -49,7 +49,7 @@ function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
 end
 
 function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string=IdentityMPOsite)
-    n = length(op)
+    n = operatorlength(op)
     K = numtype(mps1,mps2)
     L::Vector{K} = boundary(mps1, mps2, :left)
     R::Vector{K} = boundary(mps1, mps2, :right)
@@ -88,7 +88,7 @@ function expectation_value2(mps::MPSSum, op, site::Integer; string=IdentityMPOsi
 end
 
 function expectation_value(sites::Vector{OrthogonalLinkSite{T}}, gate::AbstractSquareGate) where {T}
-    @assert length(sites) == length(gate)
+    @assert length(sites) == operatorlength(gate)
     Λ = data(sites[1].Λ1).^2
     transfer = transfer_matrix(sites, gate, :left)
     DR = size(sites[end], 3)
@@ -96,7 +96,7 @@ function expectation_value(sites::Vector{OrthogonalLinkSite{T}}, gate::AbstractS
     return vec(Λ)' * (transfer * idR)
 end
 function expectation_value(sites::Vector{GenericSite{T}}, gate::AbstractSquareGate) where {T}
-    @assert length(sites) == length(gate) "Error in 'expectation value': length(sites) != length(gate)"
+    @assert length(sites) == operatorlength(gate) "Error in 'expectation value': length(sites) != operatorlength(gate)"
     transfer = transfer_matrix(sites, gate, :left)
     DL = size(sites[1], 1)
     DR = size(sites[end], 3)
@@ -114,13 +114,13 @@ Return a list of expectation values on every site
 See also: [`expectation_value`](@ref)
 """
 function expectation_values(mps::Union{AbstractMPS,MPSSum}, op; string=IdentityMPOsite)
-    opLength = length(op)
+    opLength = operatorlength(op)
     N = length(mps)
     return [expectation_value(mps,op,site, string=string) for site in 1:N+1-opLength]
 end
 
 function expectation_values(mps::AbstractMPS, op::Vector{T}; string=IdentityMPOsite) where {T}
-    opLength = length(op)
+    opLength = operatorlength(op)
     N = length(mps)
     @assert N == opLength + length(op[end])-1
     return [expectation_value(mps,op[site],site; string=string) for site in 1:N-length(op[end])+1]
@@ -135,8 +135,8 @@ See also: [`connected_correlator`](@ref)
 """
 function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string = IdentityGate(1)) #Check if it works for MPSsum and for OrthogonalLinksites
     N = length(mps)
-	oplength1 = length(op1)
-	oplength2 = length(op2)
+	oplength1 = operatorlength(op1)
+	oplength2 = operatorlength(op2)
 
 	emptytransfers = transfer_matrices(mps,string,:left)
 	op1transfers = transfer_matrices(mps,op1,:left)[1:N-oplength1+1]#map(site -> transfer_matrix(mps,op1,site,:left),1:N-oplength1+1)
@@ -179,18 +179,18 @@ function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string
 end
 function correlator(mps::AbstractMPS,op1,op2) 
     N = length(mps.Γ)
-    oplength1 = length(op1)
-	oplength2 = length(op2)
+    oplength1 = operatorlength(op1)
+	oplength2 = operatorlength(op2)
     correlator(mps,op1,op2,1,N+1-max(oplength1,oplength2))
 end
 function correlator(mps::AbstractMPS,op)
     N = length(mps.Γ)
-    oplength = length(op)
+    oplength = operatorlength(op)
     correlator(mps,op,1,N+1-oplength)
 end
 function correlator(mps::AbstractMPS, op, k1::Integer, k2::Integer)
     N = length(mps.Γ)
-	oplength = length(op)
+	oplength = operatorlength(op)
 	emptytransfers = transfer_matrices(mps,:left)
 	optransfers = map(site -> transfer_matrix(mps,op,site,:left),1:N-oplength+1)
     function idR(n)
@@ -213,20 +213,20 @@ end
 
 function connected_correlator(mps::AbstractMPS,op1,op2)
     N = length(mps.Γ)
-    oplength1 = length(op1)
-	oplength2 = length(op2)
+    oplength1 = operatorlength(op1)
+	oplength2 = operatorlength(op2)
     return connected_correlator(mps,op1,op2,1,N+1-max(oplength1,oplength2))
 end
 function connected_correlator(mps::AbstractMPS,op)
     N = length(mps.Γ)
-    oplength = length(op)
+    oplength = operatorlength(op)
     return connected_correlator(mps,op,1,N+1-oplength)
 end
 function connected_correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer)
     corr = correlator(mps,op1,op2,k1,k2)
     N = length(mps.Γ)
-    oplength1 = length(op1)
-	oplength2 = length(op2)
+    oplength1 = operatorlength(op1)
+	oplength2 = operatorlength(op2)
     ev1 = map(k->expectation_value(mps,op1,k), k1:k2)
     ev2 = map(k->expectation_value(mps,op2,k), k1:k2)
     concorr=zeros(eltype(mps[1]),k2-k1+1,k2-k1+1)
@@ -245,7 +245,7 @@ end
 function connected_correlator(mps::AbstractMPS, op, k1::Integer, k2::Integer)
     corr = correlator(mps,op,k1,k2)
     N = length(mps.Γ)
-    oplength = length(op)
+    oplength = operatorlength(op)
     ev = pmap(k->expectation_value(mps,op,k), k1:k2)
     concorr=zeros(eltype(mps[1]),k2-k1+1,k2-k1+1)
     for n1 in 1:(k2-k1+1-oplength)

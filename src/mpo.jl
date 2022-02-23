@@ -7,6 +7,7 @@ struct MPOsite{T} <: AbstractMPOsite{T}
     # isunitary::Bool
 end
 Base.getindex(g::MPOsite, I::Vararg{Int,4}) = getindex(data(g),I...)
+operatorlength(::AbstractMPOsite) = 1
 
 MPOsite{K}(site::MPOsite,dir) where {K} = MPOsite{K}(data(site))
 
@@ -38,6 +39,7 @@ end
 sites(mpo::MPO) = mpo.data
 Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
 Base.size(mpo::AbstractMPO) = size(sites(mpo))
+operatorlength(mpo::AbstractMPO) = length(mpo)
 
 struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
     data::T 
@@ -50,7 +52,8 @@ const IdentityMPOsite = ScaledIdentityMPOsite(true)
 
 # MPOsite(s::ScaledIdentityMPOsite) = s
 # MPOsite{K}(s::ScaledIdentityMPOsite) where {K} = ScaledIdentityMPOsite{K}(data(s))
-Base.length(mpo::ScaledIdentityMPOsite) = 1
+#Base.length(mpo::ScaledIdentityMPOsite) = 1
+
 function Base.size(::ScaledIdentityMPOsite, i::Integer)
     if i==1 || i==4
         return 1
@@ -99,6 +102,7 @@ sites(g::ScaledIdentityMPO) = g[1:length(g)]
 
 IdentityMPO(n) = ScaledIdentityMPO(true,n)
 Base.length(mpo::ScaledIdentityMPO) = mpo.length
+operatorlength(mpo::ScaledIdentityMPO) = mpo.length
 LinearAlgebra.ishermitian(mpo::ScaledIdentityMPO) = isreal(mpo.data)
 isunitary(mpo::ScaledIdentityMPO) = data(mpo)'*data(mpo) ≈ 1
 Base.:*(x::K, g::ScaledIdentityMPO) where {K<:Number} = ScaledIdentityMPO(x*data(g), length(g))

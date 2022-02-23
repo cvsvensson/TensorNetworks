@@ -18,6 +18,7 @@ function Base.setindex!(mps::UMPS, v::OrthogonalLinkSite, i::Integer)
 	mps.Γ[i1] =  v.Γ
 	mps.Λ[i1] =  v.Λ1
 	mps.Λ[i2] =  v.Λ2
+	return v
 end
 
 
@@ -126,7 +127,7 @@ end
 
 # %% Transfer
 # function transfer_matrix(mps::UMPS, gate::AbstractSquareGate, site::Integer, direction = :left)
-# 	oplength = length(gate)
+# 	oplength = operatorlength(gate)
 # 	if ispurification(mps)
 # 		gate = auxillerate(gate)
 # 	end
@@ -504,7 +505,7 @@ end
 
 #%% Expectation values
 function expectation_value(mps::UMPS, op::Array{T_op,N_op}, site::Integer) where {T_op<:Number,N_op}
-	opLength=length(op)
+	opLength=operatorlength(op)
 	N = length(mps.Γ)
 	if ispurification(mps)
 		op = auxillerate(op)
@@ -519,10 +520,10 @@ function expectation_value(mps::UMPS, op::Array{T_op,N_op}, site::Integer) where
 	return val
 end
 
-
+#TODO check if this function works, especially for different sizes of operators
 function correlator(mps::UMPS{T},op1,op2,n) where {T}
 	opsize = size(op1)
-	oplength = Int(length(opsize)/2)
+	oplength = operatorlength(op1)
 	transfers = transfer_matrices(mps,:right)
 	N = length(transfers)
 	Ts = transfers[mod1.((1+oplength):(n+oplength-1),N)]

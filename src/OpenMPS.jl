@@ -12,6 +12,7 @@ function Base.setindex!(mps::OpenMPS, v::OrthogonalLinkSite{<:Number}, i::Intege
 	mps.Γ[i] = v.Γ
 	mps.Λ[i] = v.Λ1
 	mps.Λ[i+1] = v.Λ2
+    return v
 end
 
 #%% Constructors

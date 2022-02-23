@@ -225,7 +225,7 @@ _transfer_right_mpo(sites::Vararg{Union{AbstractMPOsite,AbstractSite},N}) where 
 reverse_direction(Γ::Array{<:Number,3}) = permutedims(Γ,[3,2,1])
 reverse_direction(Γs::AbstractVector{<:Union{AbstractMPOsite,AbstractSite}}) = reverse(reverse_direction.(Γs))
 function _transfer_left_gate(Γ1, gate::AbstractSquareGate, Γ2) 
-	# oplength = length(gate)
+	# oplength = operatorlength(gate)
 	# Γnew1 = copy(reverse([Γ1...]))
 	# Γnew2 = copy(reverse([Γ2...]))
 	# for k = 1:oplength
@@ -239,7 +239,7 @@ function _transfer_left_gate(Γ1, gate::AbstractSquareGate, Γ2)
 end 
 
 function _transfer_left_gate(Γ, gate::AbstractSquareGate)
-	# oplength = length(gate)
+	# oplength = operatorlength(gate)
 	# Γnew = copy(reverse([Γ...]))
 	Γnew = reverse_direction(Γ)
 	# for k = 1:oplength
@@ -252,7 +252,7 @@ _transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSqu
 _transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:OrthogonalLinkSite}) = _transfer_right_gate([GenericSite(Γ,:left) for Γ in Γ1],gate, [GenericSite(Γ,:left) for Γ in Γ2])
 function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::GenericSquareGate, Γ2::AbstractVector{GenericSite{T}}) where {T} 
 	op = data(gate)
-    oplength = length(gate)
+    oplength = operatorlength(gate)
 	@assert length(Γ1) == length(Γ2) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
 	@assert size(gate,1) == size(Γ1[1],2) == size(Γ2[1],2) "Error in transfer_right_gate: physical dimension of gate and site do not match"
 	perm = [Int(floor((k+1)/2))+ oplength*iseven(k) for k in 1:2*oplength]
@@ -278,7 +278,7 @@ function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::Generic
 end
 function _transfer_right_gate(Γ::AbstractVector{GenericSite{T}}, gate::GenericSquareGate)  where T
 	op = data(gate)
-    oplength = length(gate)
+    oplength = operatorlength(gate)
 	@assert length(Γ) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
 	@assert size(gate,1) == size(Γ[1],2) "Error in transfer_right_gate: physical dimension of gate and site do not match"
 	perm = [Int(floor((k+1)/2))+ oplength*iseven(k) for k in 1:2*oplength]
@@ -333,7 +333,7 @@ end
 _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol=:left) = data(op)*prod(transfer_matrices(site1,direction))
 _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = data(op)*prod(transfer_matrices(site1,site2,direction))
 function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
-	@assert length(site1) == length(site2) == length(op)
+	@assert length(site1) == length(site2) == operatorlength(op)
 	if ispurification(site1[1])
 		@assert ispurification(site2[1])
 		op = auxillerate(op)
@@ -348,7 +348,7 @@ function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::Abstr
 	return T
 end
 function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol=:left)
-	@assert length(site1) == length(op)
+	@assert length(site1) == operatorlength(op)
 	if ispurification(site1[1])
 		op = auxillerate(op)
 	end
@@ -366,17 +366,17 @@ transfer_matrix(site::AbstractSite, op::Union{AbstractSquareGate{<:Any,2}, Matri
 
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) 
 	@assert length(sites1) == length(sites2)
-	n = length(op)
+	n = operatorlength(op)
 	return [_local_transfer_matrix(sites1[k:k+n-1], op, sites2[k:k+n-1], direction) for k in 1:length(sites1)+1-n]
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol=:left) 
-	n = length(op)
+	n = operatorlength(op)
 	return [_local_transfer_matrix(sites1[k:k+n-1], op, direction) for k in 1:length(sites1)+1-n]
 end
 
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) 
 	@assert length(sites1) == length(sites2)
-	return [_local_transfer_matrix((sites1[k], op, sites2[k:k+n-1]), direction) for k in 1:length(sites1)]
+	return [_local_transfer_matrix((sites1[k], op, sites2[k]), direction) for k in 1:length(sites1)]
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, direction::Symbol=:left) 
 	return [_local_transfer_matrix((sites1[k], op, direction),direction) for k in 1:length(sites1)]
@@ -385,7 +385,7 @@ end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
 	@assert length(sites1) == length(sites2) == length(ops)
 	N = length(sites1)
-	ns = length.(ops)
+	ns = operatorlength.(ops)
 	return [_local_transfer_matrix(sites1[k:k+ns[k]-1],op,sites2[k:k+ns[k]-1], direction) for (k,op) in enumerate(ops) if !(k+ns[k]-1>N)]
 	# Ts = LinearMap{numtype(sites1,sites2)}[]
 	# for k in 1:N
@@ -402,7 +402,7 @@ function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::Abstract
 	@assert length(sites1) == length(ops)
 	N = length(sites1)
 	# Ts = LinearMap{numtype(sites1)}[]
-	ns = length.(ops)
+	ns = operatorlength.(ops)
 	return [_local_transfer_matrix(sites1[k:k+ns[k]-1],op, direction) for (k,op) in enumerate(ops) if !(k+ns[k]-1>N)]
 	# for k in 1:N
 	# 	n = length(op[k])
