@@ -17,24 +17,3 @@ function evaluate_wavefunction(mps, indices)
     end
     scalar_product(LCROpenMPS(sites),mps)
 end
-
-function test_ew()
-    N = 5
-    qubits = [qubit(rand(),rand()) for k in 1:N]
-    mps = LCROpenMPS(qubits)
-    indices = rand([1,2], N)
-    println(indices)
-    wf = evaluate_wavefunction(mps, indices)
-    println(wf)
-    println(prod([q[1,indices[k],1] for (k,q) in enumerate(qubits)]))
-    println(wf ≈ prod([q[1,indices[k],1] for (k,q) in enumerate(qubits)]))
-
-    # Test for entangled states and larger physical dim
-    d=5
-    sites = [randomLeftOrthogonalSite(1,d,d) , randomLeftOrthogonalSite(d,d,1)]
-    mps = LCROpenMPS(sites)
-    for (n1,n2) in Iterators.product(1:d,1:d)
-        wf = evaluate_wavefunction(mps, [n1,n2])
-        println(wf ≈ transpose(sites[1][1,n1,:]) * sites[2][:,n2,1])
-    end
-end
