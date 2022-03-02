@@ -58,5 +58,6 @@ include("transfer.jl")
 include("dmrg.jl")
 include("expectation_values.jl")
 include("states.jl")
+include("evaluate_wavefunction.jl")
 
 end # module

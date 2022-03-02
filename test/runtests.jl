@@ -534,3 +534,19 @@ end
     @test norm(denseplus) ≈ norm(denseminus) ≈ 1
     @test abs(scalar_product(denseplus,denseminus)) < 1e-10
 end
+
+@testset "Misc" begin
+    N = 5
+    qubits = [qubit(rand(),rand()) for k in 1:N]
+    mps = LCROpenMPS(qubits)
+    indices = rand([1,2], N)
+    wf = TensorNetworks.evaluate_wavefunction(mps, indices)
+    @test wf ≈ prod([q[1,indices[k],1] for (k,q) in enumerate(qubits)])
+    d=5
+    sites = [randomLeftOrthogonalSite(1,d,d) , randomLeftOrthogonalSite(d,d,1)]
+    mps = LCROpenMPS(sites)
+    for (n1,n2) in Iterators.product(1:d,1:d)
+        wf = TensorNetworks.evaluate_wavefunction(mps, [n1,n2])
+        @test wf ≈ transpose(sites[1][1,n1,:]) * sites[2][:,n2,1]
+    end 
+end
