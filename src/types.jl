@@ -1,9 +1,9 @@
 mutable struct TruncationArgs
     Dmax::Int
     tol::Float64
-	normalize::Bool
+    normalize::Bool
 end
-Base.copy(ta::TruncationArgs) = TruncationArgs([copy(getfield(ta, k)) for k = 1:length(fieldnames(TruncationArgs))]...) 
+Base.copy(ta::TruncationArgs) = TruncationArgs([copy(getfield(ta, k)) for k = 1:length(fieldnames(TruncationArgs))]...)
 
 abstract type AbstractGate{T,N} <: AbstractArray{T,N} end
 abstract type AbstractSquareGate{T,N} <: AbstractGate{T,N} end
@@ -12,14 +12,14 @@ struct ScaledIdentityGate{T,N} <: AbstractSquareGate{T,N}
     data::T
     ishermitian::Bool
     isunitary::Bool
-    function ScaledIdentityGate(scaling::T,n::Integer) where {T}
-        new{T,2*n}(scaling, isreal(scaling), scaling'*scaling ≈ 1)
+    function ScaledIdentityGate(scaling::T, n::Integer) where {T}
+        new{T,2 * n}(scaling, isreal(scaling), scaling' * scaling ≈ 1)
     end
 end
-IdentityGate(n) = ScaledIdentityGate(true,n)
+IdentityGate(n) = ScaledIdentityGate(true, n)
 
-Base.show(io::IO, g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true ==data(g), "",string(data(g),"*")), string("IdentityGate of length ", Int(N/2)))
-Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g),"*")), string("IdentityGate of length ", Int(N/2)))
+Base.show(io::IO, g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))
+Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))
 
 struct GenericSquareGate{T,N} <: AbstractSquareGate{T,N}
     data::Array{T,N}
@@ -28,9 +28,9 @@ struct GenericSquareGate{T,N} <: AbstractSquareGate{T,N}
     function GenericSquareGate(data::AbstractArray{T,N}) where {T,N}
         @assert iseven(N) "Gate should be square"
         sg = size(data)
-        l = Int(N/2)
+        l = Int(N / 2)
         D = prod(sg[1:l])
-        mat = reshape(data,D,D)
+        mat = reshape(data, D, D)
         new{T,N}(data, ishermitian(mat), isunitary(mat))
     end
 end
@@ -55,7 +55,7 @@ struct OrthogonalLinkSite{T} <: AbstractCenterSite{T}
     Γ::GenericSite{T}
     Λ1::LinkSite{T}
     Λ2::LinkSite{T}
-    function OrthogonalLinkSite(Λ1::LinkSite, Γ::GenericSite{T}, Λ2::LinkSite; check=false) where {T}
+    function OrthogonalLinkSite(Λ1::LinkSite, Γ::GenericSite{T}, Λ2::LinkSite; check = false) where {T}
         if check
             @assert isleftcanonical(Λ1 * Γ) "Error in constructing OrthogonalLinkSite: Is not left canonical"
             @assert isrightcanonical(Γ * Λ2) "Error in constructing OrthogonalLinkSite: Is not right canonical"
@@ -81,7 +81,7 @@ mutable struct OpenMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     function OpenMPS(
         Γ::Vector{GenericSite{T}},
         Λ::Vector{LinkSite{T}};
-        truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION, error=0.0) where {T}
+        truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION, error = 0.0) where {T}
         new{T}(Γ, Λ, truncation, error)
     end
 end
@@ -100,44 +100,44 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
     function LCROpenMPS{T}(
         Γ::Vector{GenericSite{K}};
         truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
-        error=0.0,
+        error = 0.0
     ) where {K,T}
-        count=1
+        count = 1
         N = length(Γ)
-        while count<N+1 && isleftcanonical(data(Γ[count])) 
-            count+=1
+        while count < N + 1 && isleftcanonical(data(Γ[count]))
+            count += 1
         end
-        center = min(count,N)
-        if count<N+1
+        center = min(count, N)
+        if count < N + 1
             if !(norm(data(Γ[count])) ≈ 1)
                 @warn "LCROpenMPS is not normalized.\nnorm= $(norm(data(Γ[count]))))"
             end
-            count+=1
+            count += 1
         end
-        while count<N+1 && isrightcanonical(data(Γ[count]))
-            count+=1
+        while count < N + 1 && isrightcanonical(data(Γ[count]))
+            count += 1
         end
-        @assert count == N+1 "LCROpenMPS is not LR canonical"
+        @assert count == N + 1 "LCROpenMPS is not LR canonical"
         new{T}(Γ, truncation, error, center)
     end
 end
 function LCROpenMPS(
     Γ::Vector{GenericSite{K}};
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
-    error=0.0,
-)  where K
-    LCROpenMPS{K}(Γ;truncation=truncation,error=error)
+    error = 0.0
+) where {K}
+    LCROpenMPS{K}(Γ; truncation = truncation, error = error)
 end
 mutable struct UMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     #In gamma-lambda notation
     Γ::Vector{GenericSite{T}}
     Λ::Vector{LinkSite{T}}
 
-	# Max bond dimension and tolerance
-	truncation::TruncationArgs
+    # Max bond dimension and tolerance
+    truncation::TruncationArgs
 
-	# Accumulated error
-	error::Float64
+    # Accumulated error
+    error::Float64
 end
 
 mutable struct CentralUMPS{T} <: AbstractMPS{GenericSite{T}}
@@ -149,11 +149,11 @@ mutable struct CentralUMPS{T} <: AbstractMPS{GenericSite{T}}
     #Indicates whether the MPS should be treated as a purification or not
     purification::Bool
 
-	# Max bond dimension and tolerance
-	truncation::TruncationArgs
+    # Max bond dimension and tolerance
+    truncation::TruncationArgs
 
-	# Accumulated error
-	error::Float64
+    # Accumulated error
+    error::Float64
 end
 
 # numtype(::LCROpenMPS{T}) where {T} = T
@@ -161,7 +161,7 @@ end
 # numtype(::CentralUMPS{T}) where {T} = T
 # numtype(::OpenMPS{T}) where {T} = T
 numtype(ms::Vararg{AbstractVector{<:AbstractSite},<:Any}) = promote_type(numtype.(ms)...)
-numtype(::AbstractVector{<:AbstractSite{T}}) where T = T
+numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
 sites(mps::LCROpenMPS) = mps.Γ
 sites(mps::UMPS) = mps.Γ
 sites(mps::CentralUMPS) = mps.Γ
@@ -170,7 +170,7 @@ sites(mps::OpenMPS) = mps.Γ
 abstract type BoundaryCondition end
 struct OpenBoundary <: BoundaryCondition end
 struct InfiniteBoundary <: BoundaryCondition end
-boundaryconditions(::T) where {T<:AbstractMPS} = boundaryconditions(T) 
+boundaryconditions(::T) where {T<:AbstractMPS} = boundaryconditions(T)
 boundaryconditions(::Type{<:OpenMPS}) = OpenBoundary()
 boundaryconditions(::Type{<:LCROpenMPS}) = OpenBoundary()
 boundaryconditions(::Type{<:UMPS}) = InfiniteBoundary()

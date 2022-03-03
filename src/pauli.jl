@@ -22,23 +22,23 @@ const II = kron(si, si)
 function Sx(s)
     @assert isinteger(2s)
     s2 = Int(2s)
-    upper = [sqrt((s+1)*2k - k*(k+1))/2 for k in 1:s2]
-    middle = zeros(s2+1)
-    return Tridiagonal(upper,middle,upper)
+    upper = [sqrt((s + 1) * 2k - k * (k + 1)) / 2 for k in 1:s2]
+    middle = zeros(s2 + 1)
+    return Tridiagonal(upper, middle, upper)
 end
 function Sy(s)
     @assert isinteger(2s)
     s2 = Int(2s)
-    upper = [-1im*sqrt((s+1)*2k - k*(k+1))/2 for k in 1:s2]
-    middle = zeros(eltype(upper),s2+1)
-    return Tridiagonal(-upper,middle,upper)
+    upper = [-1im * sqrt((s + 1) * 2k - k * (k + 1)) / 2 for k in 1:s2]
+    middle = zeros(eltype(upper), s2 + 1)
+    return Tridiagonal(-upper, middle, upper)
 end
 function Sz(s)
     @assert isinteger(2s)
     s2 = Int(2s)
-    middle = [s+1-k for k in 1:s2+1]
+    middle = [s + 1 - k for k in 1:s2+1]
     return Diagonal(middle)
 end
 function Si(s)
-    Matrix(I,Int(2s+1),Int(2s+1))
+    Matrix(I, Int(2s + 1), Int(2s + 1))
 end
