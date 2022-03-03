@@ -68,6 +68,8 @@ end
 
 abstract type AbstractMPS{T<:AbstractCenterSite} <: AbstractVector{T} end
 
+truncation(mps::AbstractMPS) = mps.truncation
+
 mutable struct OpenMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     #In gamma-lambda notation
     Γ::Vector{GenericSite{T}}

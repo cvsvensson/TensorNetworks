@@ -1,12 +1,12 @@
 
-struct MPSSum{MPS<:AbstractMPS,Site<:AbstractSite,Num} <: AbstractMPS{Site}
-    states::Vector{MPS}
+struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
+    states::MPSs
     scalings::Vector{Num}
-    function MPSSum(mpss::Vector{T}) where {T<:AbstractMPS}
-        new{T,SiteSum{eltype(mpss[1]),numtype(mpss...)},numtype(mpss...)}([mpss...], fill(1, length(mpss)))
+    function MPSSum(mpss::Vector)
+        new{typeof(Tuple(mpss)),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), fill(1, length(mpss)))
     end
-    function MPSSum(mpss::Vector{T}, scalings::Vector{Num}) where {T<:AbstractMPS,Num}
-        new{T,SiteSum{eltype(mpss[1]),numtype(mpss...)},numtype(mpss...)}(mpss, scalings)
+    function MPSSum(mpss::Vector, scalings::Vector{Num}) where {Num}
+        new{typeof(Tuple(mpss)),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
     end
 end
 Base.show(io::IO, mps::MPSSum) =
@@ -16,13 +16,15 @@ Base.size(mps::MPSSum) = (length(mps),)
 Base.length(mps::MPSSum) = length(mps.states[1])
 Base.copy(mps::MPSSum) = MPSSum(copy(mps.states), copy(mps.scalings))
 
-struct SiteSum{S<:AbstractSite,T} <: AbstractCenterSite{T}
-    sites::Vector{S}
-    function SiteSum(sites::Vector{S}) where {S<:AbstractCenterSite}
-        new{S,eltype(sites[1])}(sites)
+struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
+    sites::S
+    function SiteSum(sites::Vector{<:S}) where {S<:AbstractCenterSite}
+        #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
+        new{typeof(Tuple(sites)), promote_type(eltype.(sites)...)}(Tuple(sites))
     end
 end
 SiteSum(site::AbstractCenterSite) = SiteSum([site])
+SiteSum(sites::NTuple{<:Any,<:AbstractCenterSite}) = SiteSum([sites...])
 Base.show(io::IO, mps::SiteSum) =
     print(io, "SiteSum: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps.sites))
 Base.show(io::IO, m::MIME"text/plain", mps::SiteSum) = show(io, mps)
@@ -36,7 +38,7 @@ Base.conj(site::SiteSum) = SiteSum(conj.(site.sites))
 Base.:+(mps1::AbstractMPS, mps2::AbstractMPS) = MPSSum([mps1, mps2])
 Base.:+(mps::AbstractMPS, sum::MPSSum) = 1 * mps + sum
 Base.:+(sum::MPSSum, mps::AbstractMPS) = sum + 1 * mps
-Base.:+(s1::MPSSum, s2::MPSSum) = MPSSum(vcat(s1.states, s2.states), vcat(s1.scalings, s2.scalings))
+Base.:+(s1::MPSSum, s2::MPSSum) = MPSSum([s1.states..., s2.states...], vcat(s1.scalings, s2.scalings))
 
 Base.:+(s1::AbstractSite, s2::AbstractSite) = SiteSum([s1, s2])
 
@@ -152,7 +154,13 @@ function _apply_transfer_matrices(Ts)
     return LinearMap{eltype(Ts[1, 1])}(f, f_adjoint, DL, DR)
 end
 
-boundaryconditions(::Type{<:MPSSum{M,S}}) where {M,S} = boundaryconditions(M)
+#boundaryconditions(::Type{<:MPSSum{M,S}}) where {M,S} = boundaryconditions(M)
+function boundaryconditions(mps::MPSSum)
+    bcs = boundaryconditions.(mps.states)
+    @assert length(union(bcs)) == 1
+    return bcs[1]
+end
+
 function boundary(::OpenBoundary, mps::MPSSum, side::Symbol)
     if side == :right
         return fill(one(eltype(mps.scalings)), length(mps.scalings))
@@ -163,17 +171,25 @@ function boundary(::OpenBoundary, mps::MPSSum, side::Symbol)
         return mps.scalings
     end
 end
-transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:GenericSite,<:Any}}, site::Integer, dir::Symbol) = I
+transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer, dir::Symbol) where N = I
 
+truncation(mps::MPSSum) = truncation(mps.states[1])
 
 function dense(mpss::MPSSum{LCROpenMPS{T},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(getproperty.(mpss.states, :error)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(error.(mpss.states)))
 end
 
-function dense(sitesum::SiteSum{<:GenericSite,T}) where {T}
+function LCROpenMPS(mpss::MPSSum{<:Any,<:AbstractSite{T},<:Any}) where {T}
+    sites = dense.(mpss)
+    sites[1] = (mpss.scalings) * sites[1]
+    sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(error.(mpss.states)))
+end
+
+function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}
     sizes = size.(sitesum.sites)
     d = sizes[1][2] #Maybe check that all sites have the same physical dim?
     DL = sum([s[1] for s in sizes])
@@ -191,7 +207,7 @@ function dense(sitesum::SiteSum{<:GenericSite,T}) where {T}
     return GenericSite(newsite, ispurification(sitesum))
 end
 
-function dense(sitesum::SiteSum{<:OrthogonalLinkSite,T}) where {T}
+function dense(sitesum::SiteSum{<:NTuple{<:Any,OrthogonalLinkSite},T}) where {T}
     Γ = dense(SiteSum(getproperty.(sitesum.sites, :Γ)))
     Λ1s = getproperty.(sitesum.sites, :Λ1)
     Λ2s = getproperty.(sitesum.sites, :Λ2)
@@ -208,7 +224,7 @@ end
 
 Base.vec(site::LinkSite) = vec(diag(data(site)))
 
-function transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:OrthogonalLinkSite,<:Any}}, site::Integer, dir::Symbol)
+function transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,OrthogonalLinkSite},<:Any}}, site::Integer, dir::Symbol) where {N}
     Λ1s = getproperty.(mps[site].sites, :Λ1)
     return LinkSite(reduce(vcat, vec.(Λ1s)))
 end

@@ -59,5 +59,5 @@ include("dmrg.jl")
 include("expectation_values.jl")
 include("states.jl")
 include("evaluate_wavefunction.jl")
-
+include("ldos.jl")
 end # module

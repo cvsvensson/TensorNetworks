@@ -457,6 +457,11 @@ end
     mps = TensorNetworks.iterative_compression(target, guess);
     @test scalar_product(mps,target) ≈ 1
     @test scalar_product(mps,guess) ≈ scalar_product(target,guess)
+
+    target = canonicalize(randomLCROpenMPS(N,2,3)) + canonicalize(randomLCROpenMPS(N,2,3));
+    mps = TensorNetworks.iterative_compression(target, guess);
+    @test scalar_product(mps,target) ≈ norm(target)
+    @test scalar_product(mps,guess) ≈ scalar_product(target,guess)/norm(target)
 end
 
 using DoubleFloats
@@ -549,4 +554,19 @@ end
         wf = TensorNetworks.evaluate_wavefunction(mps, [n1,n2])
         @test wf ≈ transpose(sites[1][1,n1,:]) * sites[2][:,n2,1]
     end 
+
+    d=2
+    sites = [randomLeftOrthogonalSite(1,d,d) , randomLeftOrthogonalSite(d,d,1)]
+    mps = LCROpenMPS(sites)
+    mposite = MPOsite(si)
+    mpo = MPO([mposite,mposite])
+    lp = mpo*mps
+    @test scalar_product(lp,mps) ≈ scalar_product(mps,mps) ≈ scalar_product(lp,lp)
+    @test lp[1] ≈ mps[1]
+
+    mposite = MPOsite(sz)
+    mpo = MPO([mposite,mposite])
+    lp = mpo*mps
+    @test scalar_product(lp,mps) ≈ TensorNetworks.matrix_element(mps,mpo,mps)
+    @test lp[1] ≈ mposite*mps[1]
 end

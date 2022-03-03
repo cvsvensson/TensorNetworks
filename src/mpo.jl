@@ -159,6 +159,34 @@ end
 auxillerate(mpo::MPO) = MPO(auxillerate.(mpo.data))
 #auxillerate(mpo::HermitianMPO) = HermitianMPO(auxillerate.(mpo.data))
 
+
+struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPO<:AbstractMPO} <: AbstractMPS{SITE}
+    mpo::MPO
+    mps::MPS
+end
+Base.:*(mpo::MPO, mps::AbstractMPS{S}) where {MPO<:AbstractMPO,S<:AbstractSite} = LazyProduct{typeof(mps),S,MPO}(mpo, mps)
+truncation(lp::LazyProduct) = truncation(lp.mps)
+Base.length(lp::LazyProduct) = length(lp.mps)
+Base.eltype(lp::LazyProduct) = eltype(lp.mps)
+Base.getindex(lp::LazyProduct, i::Integer) = lp.mpo[i] * lp.mps[i]
+Base.size(lp::LazyProduct) = size(lp.mps)
+boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
+Base.error(lp::LazyProduct) = error(lp.mps)
+
+function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
+    Γ = to_left_right_orthogonal(lp[1:end], center = center, method = method)
+    LCROpenMPS(Γ, truncation = truncation(lp), error = error(lp))
+end
+
+function Base.:*(op::MPOsite, site::GenericSite)
+    sop = size(op)
+    ss = size(site)
+    @tensor out[:] := data(op)[-1,-3,1,-4]*data(site)[-2,1,-5]
+    GenericSite(reshape(out,sop[1]*ss[1],sop[2],sop[4]*ss[3]),site.purification)
+end
+
+Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
+
 # %% Todo
 """
 gives the mpo corresponding to a*mpo1 + b*mpo2.

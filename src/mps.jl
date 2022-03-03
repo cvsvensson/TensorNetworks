@@ -1,10 +1,11 @@
 Base.IndexStyle(::Type{<:AbstractMPS}) = IndexLinear()
 Base.size(mps::AbstractMPS) = size(sites(mps))
+Base.error(mps::Union{LCROpenMPS,UMPS,OpenMPS}) = mps.error
 
 ispurification(mps::AbstractMPS) = ispurification(mps[1])
 
 Base.show(io::IO, mps::AbstractMPS) =
-    print(io, "MPS: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps), "\nTruncation: ", mps.truncation)
+    print(io, "MPS: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps), "\nTruncation: ", truncation(mps))
 Base.show(io::IO, m::MIME"text/plain", mps::AbstractMPS) = show(io, mps)
 
 function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)

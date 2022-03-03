@@ -141,6 +141,8 @@ local_mul(envL, envR, site::Array{<:Number,3}) = @tensor temp[:] := envL[-1, 1] 
 local_mul(envL, envR, site::GenericSite) = GenericSite(local_mul(envL, envR, data(site)), ispurification(site))
 local_mul(envL, envR, site::OrthogonalLinkSite) = local_mul(envL, envR, site.Λ1 * site.Γ * site.Λ2)
 
+local_mul(envL, envR, site::SiteSum) = local_mul(envL, envR, dense(site))
+
 function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)
     if dir == :right
         return env.R[i]

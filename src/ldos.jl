@@ -1,0 +1,32 @@
+#https://journals.aps.org/prb/pdf/10.1103/PhysRevB.83.195115
+
+"""
+    ldos()
+
+
+"""
+function ldos(mps, hamiltonian, op1, op2; Nmax = 100, prec=1e-8,maxiter=50,shifter=ShiftCenter)
+    H = hamiltonian #TODO: implement rescalings
+    μs = Vector{eltype(mps[1])}(undef, Nmax)
+    #norms = Vector{eltype(mps[1])}(undef, Nmax)
+    t0 = op2*mps
+    t1 = H*t0
+    μs[1] = matrix_element(t0,op1,t0)
+    μs[2] = matrix_element(t1,op1,t0)
+    #t2 = 2*(H*t1) - t0
+    #println(2*(H*t1) - t0)
+    rec(t1,t0) = norm(2*(H*t1) - t0)*iterative_compression(2*(H*t1) - t0, LCROpenMPS(t1), prec, maxiter=maxiter, shifter=shifter)
+    for k in 3:Nmax
+        #println(rec(t1,t0).scalings)
+        println("2Ht1: ",typeof(2*(H*t1)))
+        println("t0:", typeof(t0))
+        println("diff: ", typeof(2*(H*t1) - t0))
+        newstate = (rec(t1,t0))
+        #println("dense:", dense(newstate))
+        μs[k] = matrix_element(mps,op1,newstate)
+        println(μs[k])
+        t0 = t1
+        t1 = newstate
+    end
+    return μs
+end

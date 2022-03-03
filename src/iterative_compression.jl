@@ -65,11 +65,27 @@ function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec = 1
     mps = canonicalize(guess)
     set_center!(mps, 1)
     dir = :right
-    #targetnorm = norm(target)
+    targetnorm = norm(target)
     # IL(site) = Array(vec(Diagonal{eltype(guess[1])}(I,size(site,1))))
     # IR(site) = Array(vec(Diagonal{eltype(guess[1])}(I,size(site,3))))
-    errorfunc(mps) = 1 - abs(scalar_product(target, mps)) #FIXME can save memory by using precomputed envuronments
+    #errorfunc(mps) = 1 - abs(scalar_product(target, mps)) #FIXME can save memory by using precomputed envuronments
+    function errorfunc(mps,dir,env)
+        if dir==:right
+            temp = transfer_matrix(mps[end],target[end],:right)*vec(env.L[end])
+            #@tensor overlap[:] := env.L[end-1][1,2] *conj(target[end][1,3,4])* mps[end][2,3,4]
+        elseif dir==:left
+            temp = transfer_matrix(mps[1],target[1],:left)*vec(env.R[1])
+            #@tensor overlap[:] := env.R[2][1,2] *conj(target[1][4,3,1])* mps[1][4,3,2]
+        end
+        overlap = boundary(target,mps,dir)'*temp
+        @assert length(overlap)==1
 
+        #println(norm(mps))
+        #println(norm(target))
+        #println(scalar_product(target,mps))
+        #println((overlap[1]))
+        return 1-norm(overlap)/(targetnorm)
+    end
     #TODO Make it work for UMPS. The following errorfunction can be used
     #density_matrix(mps,k) = @tensor rho[:] := data(mps[k])[1,-1,2]*conj(data(mps[k])[1,-2,2])
     #errorfunc(mps) = real(1- sum([tr(density_matrix(target,k)*density_matrix(mps,k)) for k in 1:length(mps)]))
@@ -77,12 +93,14 @@ function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec = 1
     #real(targetnorm - sum([transpose(transfer_matrix(site) * IR(site))*IL(site) for site in mps[1:end]])) #use @view
     #if isinfinite(target)
     count = 1
-    error = errorfunc(mps)
+    error = errorfunc(mps,dir,env)
     # error = error 
-    println(error)
+    #println(error)
     while error > prec && count < maxiter
         mps, env = sweep(target, mps, env, dir, prec)
-        newerror = errorfunc(mps)
+        newerror = errorfunc(mps,dir,env)
+        #newerror2 = errorfunc(mps,dir,env)
+        #println((newerror,newerror2))
         if abs(error - newerror) < prec
             break
         end
