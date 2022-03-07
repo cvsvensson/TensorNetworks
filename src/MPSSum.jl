@@ -1,3 +1,13 @@
+struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
+    sites::S
+    function SiteSum(sites::Vector{<:S}) where {S<:AbstractCenterSite}
+        #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
+        new{typeof(Tuple(sites)), promote_type(eltype.(sites)...)}(Tuple(sites))
+    end
+end
+
+Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
+
 
 struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
     states::MPSs
@@ -9,6 +19,9 @@ struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
         new{typeof(Tuple(mpss)),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
     end
 end
+#TODO: change vector argument to tuple arguments.
+MPSSum(sites::NTuple{<:Any,<:AbstractMPS}) = MPSSum([sites...])
+MPSSum(sites::NTuple{<:Any,<:AbstractMPS},s) = MPSSum([sites...],s)
 Base.show(io::IO, mps::MPSSum) =
     (print(io, "MPS: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps), "\nSum of ", length(mps.states), " mps's\nWith scalings "); show(io, mps.scalings))
 Base.show(io::IO, m::MIME"text/plain", mps::MPSSum) = show(io, mps)
@@ -16,15 +29,9 @@ Base.size(mps::MPSSum) = (length(mps),)
 Base.length(mps::MPSSum) = length(mps.states[1])
 Base.copy(mps::MPSSum) = MPSSum(copy(mps.states), copy(mps.scalings))
 
-struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
-    sites::S
-    function SiteSum(sites::Vector{<:S}) where {S<:AbstractCenterSite}
-        #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
-        new{typeof(Tuple(sites)), promote_type(eltype.(sites)...)}(Tuple(sites))
-    end
-end
+
 SiteSum(site::AbstractCenterSite) = SiteSum([site])
-SiteSum(sites::NTuple{<:Any,<:AbstractCenterSite}) = SiteSum([sites...])
+SiteSum(sites::Tuple) = SiteSum([sites...])
 Base.show(io::IO, mps::SiteSum) =
     print(io, "SiteSum: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps.sites))
 Base.show(io::IO, m::MIME"text/plain", mps::SiteSum) = show(io, mps)
@@ -171,11 +178,10 @@ function boundary(::OpenBoundary, mps::MPSSum, side::Symbol)
         return mps.scalings
     end
 end
-transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer, dir::Symbol) where N = I
 
 truncation(mps::MPSSum) = truncation(mps.states[1])
 
-function dense(mpss::MPSSum{LCROpenMPS{T},<:Any}) where {T}
+function dense(mpss::MPSSum{<:NTuple{<:Any,<:LCROpenMPS{T}},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
@@ -189,7 +195,26 @@ function LCROpenMPS(mpss::MPSSum{<:Any,<:AbstractSite{T},<:Any}) where {T}
     return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(error.(mpss.states)))
 end
 
-function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}
+# function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}
+#     sizes = size.(sitesum.sites)
+#     d = sizes[1][2] #Maybe check that all sites have the same physical dim?
+#     DL = sum([s[1] for s in sizes])
+#     DR = sum([s[3] for s in sizes])
+#     newsite = zeros(T, DL, d, DR)
+#     lastL = 0
+#     lastR = 0
+#     for (site, size) in zip(sitesum.sites, sizes)
+#         nextL = lastL + size[1]
+#         nextR = lastR + size[3]
+#         newsite[lastL+1:nextL, :, lastR+1:nextR] = data(site)
+#         lastL = nextL
+#         lastR = nextR
+#     end
+#     return GenericSite(newsite, ispurification(sitesum))
+# end
+
+function dense(sitesum::SiteSum{Tup,T}) where {Tup,T}
+    sites = dense.(sitesum.sites)
     sizes = size.(sitesum.sites)
     d = sizes[1][2] #Maybe check that all sites have the same physical dim?
     DL = sum([s[1] for s in sizes])
@@ -197,7 +222,7 @@ function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}
     newsite = zeros(T, DL, d, DR)
     lastL = 0
     lastR = 0
-    for (site, size) in zip(sitesum.sites, sizes)
+    for (site, size) in zip(sites, sizes)
         nextL = lastL + size[1]
         nextR = lastR + size[3]
         newsite[lastL+1:nextL, :, lastR+1:nextR] = data(site)
@@ -206,6 +231,8 @@ function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}
     end
     return GenericSite(newsite, ispurification(sitesum))
 end
+
+dense(s::GenericSite) = s
 
 function dense(sitesum::SiteSum{<:NTuple{<:Any,OrthogonalLinkSite},T}) where {T}
     Γ = dense(SiteSum(getproperty.(sitesum.sites, :Γ)))
@@ -216,7 +243,7 @@ function dense(sitesum::SiteSum{<:NTuple{<:Any,OrthogonalLinkSite},T}) where {T}
     return OrthogonalLinkSite(Λ1, Γ, Λ2)
 end
 
-function dense(mpss::MPSSum{OpenMPS{T},<:Any}) where {T}
+function dense(mpss::MPSSum{<:NTuple{<:Any,<:OpenMPS},<:Any})
     lcrsum = MPSSum(LCROpenMPS.(mpss.states), mpss.scalings)
     denselcr = dense(lcrsum)
     OpenMPS(denselcr)
@@ -224,9 +251,25 @@ end
 
 Base.vec(site::LinkSite) = vec(diag(data(site)))
 
-function transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,OrthogonalLinkSite},<:Any}}, site::Integer, dir::Symbol) where {N}
-    Λ1s = getproperty.(mps[site].sites, :Λ1)
-    return LinkSite(reduce(vcat, vec.(Λ1s)))
+#TODO: define transfer_matrix_bond such that it wors for arbitrary sites, returning a dense matrix in general
+# function transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,OrthogonalLinkSite},<:Any}}, site::Integer, dir::Symbol) where {N}
+#     Λ1s = getproperty.(mps[site].sites, :Λ1)
+#     return LinkSite(reduce(vcat, vec.(Λ1s)))
+# end
+function transfer_matrix_bond(mps::MPSSum, site::Integer, dir::Symbol)
+    return transfer_matrix_bond(mps[site],dir)
 end
+function transfer_matrix_bond(sites::SiteSum, dir::Symbol)
+    Λ1s = transfer_matrix_bond_dense.(sites.sites, dir)
+    #println(Λ1s)
+    #println( reduce(vcat,vec.(Λ1s)))
+    return LinkSite(vec(reduce(vcat, Array.(Λ1s))))
+end
+
+transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer, dir::Symbol) where N = I
+#transfer_matrix_bond(mps::MPSSum{<:NTuple{<:Any,<:LCROpenMPS},<:Any}, site::Integer, dir::Symbol) = I
+transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},<:Any}, dir::Symbol) = I
+transfer_matrix_bond_dense(mps::SiteSum, dir::Symbol) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
+
 
 iscanonical(sites::SiteSum) = all(iscanonical.(sites.sites))

@@ -45,12 +45,11 @@ end
 
 Return the identity MPO
 """
-function IdentityMPO(L, d) #FIXME Type stability. Maybe introduce a new type IdentityMPO?
-    # mpo = Array{Array{Complex{Float32},4}}(L)
-    mpo = Array{Any}(L)
+function DenseIdentityMPO(L, d; T = ComplexF64)
+    mpo = Vector{Array{T,4}}(undef, L)
     for i = 1:L
-        mpo[i] = Array{ComplexF64}(1, d, d, 1)
-        mpo[i][1, :, :, 1] = eye(d)
+        mpo[i] = Array{T,4}(undef, 1, d, d, 1)
+        mpo[i][1, :, :, 1] = Array(Diagonal(I, 2))
     end
     return MPO(mpo)
 end
@@ -60,15 +59,15 @@ end
 
 Returns a translationally invariant one-site mpo
 """
-function translationMPO(L, M)
-    mpo = Array{Any}(L)
-    mpo[1] = Array{ComplexF64}(1, 2, 2, 2)
+function translationMPO(L, M; T = ComplexF64)
+    mpo = Vector{Array{T,4}}(undef, L)
+    mpo[1] = Array{T,4}(undef,1, 2, 2, 2)
     mpo[1][1, :, :, :] = reshape([si M], 2, 2, 2)
-    mpo[L] = Array{ComplexF64}(2, 2, 2, 1)
+    mpo[L] = Array{T,4}(undef, 2, 2, 2, 1)
     mpo[L][:, :, :, 1] = permutedims(reshape([M si], 2, 2, 2), [3, 1, 2])
     for i = 2:L-1
         # hardcoded implementation of index structure (a,i,j,b):
-        help = Array{Complex128}(2, 2, 2, 2)
+        help = Array{T,4}(undef, 2, 2, 2, 2)
         help[1, :, :, 1] = help[2, :, :, 2] = si
         help[1, :, :, 2] = M
         help[2, :, :, 1] = s0

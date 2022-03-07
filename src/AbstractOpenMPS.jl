@@ -1,4 +1,4 @@
-isinfinite(::T) where {T<:AbstractMPS} = isinfinite(boundaryconditions(T))
+isinfinite(mps::AbstractMPS) = isinfinite(boundaryconditions(mps))
 isinfinite(::OpenBoundary) = false
 isinfinite(::InfiniteBoundary) = true
 

@@ -30,6 +30,10 @@ Base.conj(site::MPOsite) = MPOsite(conj(data(site)))
 Base.permutedims(site::MPOsite, perm) = MPOsite(permutedims(site.data, perm))
 
 Base.:+(site1::MPOsite, site2::MPOsite) = MPOsite(data(site1) .+ data(site2))
+Base.:*(x::K, site::MPOsite) where {K<:Number} = MPOsite(x*data(site))
+Base.:*(site::MPOsite, x::K) where {K<:Number} = x * site
+Base.:/(site::MPOsite, x::K) where {K<:Number} = inv(x) * site
+Base.copy(site::MPOsite) = MPOsite(copy(data(site)))
 
 abstract type AbstractMPO{T<:Number} <: AbstractVector{MPOsite{T}} end
 
@@ -40,6 +44,18 @@ sites(mpo::MPO) = mpo.data
 Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
 Base.size(mpo::AbstractMPO) = size(sites(mpo))
 operatorlength(mpo::AbstractMPO) = length(mpo)
+
+function Base.:*(x::K, mpo::MPO) where {K<:Number}
+    mpo2 = copy(mpo)
+    mpo2[1] = x * mpo[1]
+    return mpo2
+end
+Base.:*(mpo::MPO, x::K) where {K<:Number} = x * mpo
+Base.:/(mpo::MPO, x::K) where {K<:Number} = inv(x) * mpo
+Base.copy(mpo::MPO) = MPO(copy.(mpo))
+
+Base.setindex!(mpo::MPO, v, i::Integer) = mpo.data[i] = v
+
 
 struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
     data::T
@@ -66,7 +82,7 @@ end
 LinearAlgebra.ishermitian(mpo::ScaledIdentityMPOsite) = isreal(mpo.data)
 isunitary(mpo::ScaledIdentityMPOsite) = data(mpo)' * data(mpo) ≈ 1
 Base.:*(x::K, g::ScaledIdentityMPOsite) where {K<:Number} = ScaledIdentityMPOsite(x * data(g))
-Base.:*(g::ScaledIdentityMPOsite, x::K) where {K<:Number} = ScaledIdentityMPOsite(x * data(g))
+Base.:*(g::ScaledIdentityMPOsite, x::K) where {K<:Number} = x * g
 Base.:/(g::ScaledIdentityMPOsite, x::K) where {K<:Number} = inv(x) * g
 auxillerate(mpo::ScaledIdentityMPOsite) = mpo
 Base.show(io::IO, g::ScaledIdentityMPOsite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOsite"))
@@ -170,7 +186,8 @@ Base.length(lp::LazyProduct) = length(lp.mps)
 Base.eltype(lp::LazyProduct) = eltype(lp.mps)
 Base.getindex(lp::LazyProduct, i::Integer) = lp.mpo[i] * lp.mps[i]
 Base.size(lp::LazyProduct) = size(lp.mps)
-boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
+#boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
+boundaryconditions(mps::LazyProduct) = boundaryconditions(mps.mps)
 Base.error(lp::LazyProduct) = error(lp.mps)
 
 function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
@@ -181,20 +198,20 @@ end
 function Base.:*(op::MPOsite, site::GenericSite)
     sop = size(op)
     ss = size(site)
-    @tensor out[:] := data(op)[-1,-3,1,-4]*data(site)[-2,1,-5]
-    GenericSite(reshape(out,sop[1]*ss[1],sop[2],sop[4]*ss[3]),site.purification)
+    @tensor out[:] := data(op)[-1, -3, 1, -4] * data(site)[-2, 1, -5]
+    GenericSite(reshape(out, sop[1] * ss[1], sop[2], sop[4] * ss[3]), site.purification)
 end
 
-Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
 
-# %% Todo
+# %% TODO: make dense and Lazy mpo sums
 """
 gives the mpo corresponding to a*mpo1 + b*mpo2.
 """
 function addmpos(mpo1, mpo2, a, b, Dmax, tol = 0) #FIXME
     L = length(mpo1)
     d = size(mpo1[1])[2]
-    mpo = Array{Array{Complex{Float64}}}(L)
+    T = promote_type(eltype(eltype(mpo1)),eltype(eltype(mpo2)))
+    mpo = Vector{MPOsite{T}}(undef,L)
     mpo[1] = permutedims(cat(1, permutedims(a * mpo1[1], [4, 1, 2, 3]), permutedims(b * mpo2[1], [4, 1, 2, 3])), [2, 3, 4, 1])
     for i = 2:L-1
         mpo[i] = permutedims([permutedims(mpo1[i], [1, 4, 2, 3]) zeros(size(mpo1[i])[1], size(mpo2[i])[4], d, d); zeros(size(mpo2[i])[1], size(mpo1[i])[4], d, d) permutedims(mpo2[i], [1, 4, 2, 3])], [1, 3, 4, 2])
@@ -202,7 +219,7 @@ function addmpos(mpo1, mpo2, a, b, Dmax, tol = 0) #FIXME
             @tensor tmp[-1, -2, -3, -4, -5, -6] := mpo[i-1][-1, -2, -3, 1] * mpo[i][1, -4, -5, -6]
             tmp = reshape(tmp, size(mpo[i-1])[1] * d * d, d * d * size(mpo[i])[4])
             F = svd(tmp)
-            U, S, V = truncate_svd(F, Dmax, tol)
+            U, S, V = truncate_svd(F, TruncationArgs(Dmax, tol,false))
             mpo[i-1] = reshape(1 / 2 * U * Diagonal(S), size(mpo[i-1])[1], d, d, D)
             mpo[i] = reshape(2 * V, D, d, d, size(mpo[i])[4])
         end
@@ -212,7 +229,7 @@ function addmpos(mpo1, mpo2, a, b, Dmax, tol = 0) #FIXME
         @tensor tmp[-1, -2, -3, -4, -5, -6] := mpo[L-1][-1, -2, -3, 1] * mpo[L][1, -4, -5, -6]
         tmp = reshape(tmp, size(mpo[L-1])[1] * d * d, d * d * size(mpo[L])[4])
         F = svd(tmp)
-        U, S, V = truncate_svd(F, D, tol)
+        U, S, V = truncate_svd(F, TruncationArgs(Dmax, tol,false))
         mpo[L-1] = reshape(1 / 2 * U * Diagonal(S), size(mpo[L-1])[1], d, d, D)
         mpo[L] = reshape(2 * V, D, d, d, size(mpo[L])[4])
     end

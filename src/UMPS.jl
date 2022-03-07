@@ -326,8 +326,6 @@ function boundary(mps::UMPS)
     rhoL = reshape(rhoLs[:, 1], DL, DL)
     return rhoL, rhoR
 end
-# transfer_matrix_bond(mps::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = (s =Diagonal(data(mps.Λ[site])); kron(s,s))
-# transfer_matrix_bond(mps1::AbstractMPS{_braket(OrthogonalLinkSite)}, mps2::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = kron(Diagonal(data(mps1.Λ[site])),Diagonal(data(mps2.Λ[site])))
 
 # """ 
 # 	boundary(mps::UMPS, mpo::MPO) 

@@ -172,10 +172,13 @@ sites(mps::OpenMPS) = mps.Γ
 abstract type BoundaryCondition end
 struct OpenBoundary <: BoundaryCondition end
 struct InfiniteBoundary <: BoundaryCondition end
-boundaryconditions(::T) where {T<:AbstractMPS} = boundaryconditions(T)
-boundaryconditions(::Type{<:OpenMPS}) = OpenBoundary()
-boundaryconditions(::Type{<:LCROpenMPS}) = OpenBoundary()
-boundaryconditions(::Type{<:UMPS}) = InfiniteBoundary()
+#boundaryconditions(::T) where {T<:AbstractMPS} = boundaryconditions(T)
+#boundaryconditions(::Type{<:OpenMPS}) = OpenBoundary()
+#boundaryconditions(::Type{<:LCROpenMPS}) = OpenBoundary()
+#boundaryconditions(::Type{<:UMPS}) = InfiniteBoundary()
+boundaryconditions(mps::OpenMPS) = OpenBoundary()
+boundaryconditions(mps::LCROpenMPS) = OpenBoundary()
+boundaryconditions(mps::UMPS) = InfiniteBoundary()
 # mutable struct LROpenMPS{T<:Number} <: AbstractOpenMPS
 #     Γ::Vector{AbstractOrthogonalSite}
 #     Λ::LinkSite{T}
