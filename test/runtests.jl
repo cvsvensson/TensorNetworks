@@ -105,7 +105,7 @@ end
 end
 
 @testset "MPOsite" begin
-    id = IdentityMPOsite
+    id = IdentityMPOsite(2)
     @test data(id)
     z = rand(ComplexF64)
     zid = z*id
@@ -131,21 +131,26 @@ end
 
 @testset "MPO" begin
     N = 10
-    id = IdentityMPO(N)
-    @test length(id) == N
-    z = rand(ComplexF64)
-    zid = z*id
-    @test zid.data == z
-    @test zid == id*z
+    function test(d)
+        id = IdentityMPO(N,d)
+        @test length(id) == N
+        z = rand(ComplexF64)
+        zid = z*id
+        @test zid.data == z
+        @test zid == id*z
 
-    idsite = IdentityMPOsite
-    @test idsite == id[floor(Int, N/2)]
-    @test z^(1/N)*idsite == zid[floor(Int, N/2)]
+        idsite = IdentityMPOsite(d)
+        @test idsite == id[floor(Int, N/2)]
+        @test z^(1/N)*idsite == zid[floor(Int, N/2)]
 
-    mps = randomOpenMPS(N,2,5);
-    T0 = Matrix(prod(transfer_matrices(mps)))
-    @test T0 == Matrix(prod(transfer_matrices(mps,id)))
-    @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)))
+        mps = randomOpenMPS(N,d,5);
+        T0 = Matrix(prod(transfer_matrices(mps)))
+        @test T0 == Matrix(prod(transfer_matrices(mps,id)))
+        @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)))
+    end
+    test(2)
+    test(3)
+    @test TensorNetworks.DenseIdentityMPO(10,2) == TensorNetworks.dense(IdentityMPO(10,2))
 end
 
 
@@ -315,6 +320,11 @@ end
         T4 = prod(transfer_matrices([site,site,site,site], g4));
         @test Matrix(T4) ≈ Matrix(T1*T1*T1*T1)
         @test transpose(Matrix(T4)) ≈ Matrix(prod(transfer_matrices([site,site,site,site], g4,:right)))
+
+        T1 = transfer_matrix(site, MPOsite(sz));
+        opsum = MPOsite(sz) + MPOsite(sz)
+        MT1 = Matrix(T1)
+        @test [MT1 zeros(size(MT1)); zeros(size(MT1)) MT1] ≈ Matrix(transfer_matrix(site,opsum,site))
     end
     site = randomGenericSite(D,d,D);
     testsite(site)
@@ -538,6 +548,20 @@ end
     @test all(iscanonical.(denseminus))
     @test norm(denseplus) ≈ norm(denseminus) ≈ 1
     @test abs(scalar_product(denseplus,denseminus)) < 1e-10
+end
+
+@testset "MPOSum" begin
+    N=10
+    mpo = TensorNetworks.IsingMPO(N,1.0,1.0,.0)
+    mposum = mpo + 2*mpo
+    @test typeof(mposum) <: TensorNetworks.MPOSum
+    @test typeof(mposum[1]) <: TensorNetworks.MPOSiteSum
+    @test eltype(mposum) == typeof((mpo + mpo)[1])
+    @test length(mposum) == N
+    @test size(mposum[1]) == (2*size(mpo[1],1),2,2, 2*size(mpo[1],4))
+
+    mps = randomLCROpenMPS(N,2,5)
+    @test 3*expectation_value(mps,mpo) ≈ expectation_value(mps,mposum)
 end
 
 @testset "Misc" begin

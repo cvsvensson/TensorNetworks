@@ -14,7 +14,6 @@ function ldos(mps, hamiltonian, op1, op2; Nmax = 100, prec = 1e-8, maxiter = 50,
     μs[1] = matrix_element(t0, op1, t0)
     μs[2] = matrix_element(t1, op1, t0)
     println(μs[1])
-
     println(μs[2])
     #t2 = 2*(H*t1) - t0
     #println(2*(H*t1) - t0)
@@ -37,11 +36,12 @@ end
 function test_ldos()
     N = 10
     D = 10
-    mps = randomLCROpenMPS(N, 2, D)
-    ham = KitaevMPO(N, 1, 1, 0.0, 3)
+    mps = randomLCROpenMPS(N, 2, D);
+    ham = TensorNetworks.KitaevMPO(N, 1, 1, 0.0, 3);
     states, energy = DMRG(ham, mps)
     println(energy)
-    ham2 = -energy *DenseIdentityMPO(N,2) + ham
+    ham2 = -energy *TensorNetworks.DenseIdentityMPO(N,2) + ham;
+    states2, energy2 = DMRG(ham2, mps)
     #op = MPOsite(sx + sy*im)
-    ldos(states, ham2, ham, ham)
+    ldos(states, ham2, ham2, ham2)
 end

@@ -3,7 +3,7 @@
 
 Use DMRG to calculate the lowest energy eigenstate orthogonal to `orth`
 """
-function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
+function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
     ### input: canonical random mps
     ### output: ground state mps, ground state energy
     precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
@@ -18,6 +18,10 @@ function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = 
     Henv = environment(mps, mpo)
     orthenv = [environment(state, mps) for state in orth]
     Hsquared = multiplyMPOs(mpo, mpo)
+    println(typeof(Hsquared))
+    println(typeof(mps))
+    println(typeof(mpo))
+    println(expectation_value(mps, Hsquared))
     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
@@ -89,8 +93,8 @@ function eigensite(site::GenericSite, mposite, hl, hr, orthvecs, prec)
     evals, evecs = eigs(heff, data(site), 1, prec)
     e::eltype(hl) = evals[1]
     vecmin::Vector{eltype(hl)} = evecs[:, 1]
-    if !(e ≈ real(e))
-        error("ERROR: complex eigenvalues")
+    if !(isapprox(e, real(e), atol = prec))
+        error("ERROR: complex eigenvalues: $e")
     end
     return GenericSite(reshape(vecmin, szmps) / norm(vecmin), site.purification), real(e)
 end

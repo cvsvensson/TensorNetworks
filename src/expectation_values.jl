@@ -1,12 +1,12 @@
 
 """
-expectation_value(mps::AbstractOpenMPS, op::AbstractGate, site::Integer; iscanonical=true, string=IdentityGate(1))
+expectation_value(mps::AbstractOpenMPS, op::AbstractGate, site::Integer; iscanonical=true, string=IdentityMPOsite(0))
 
 Return the expectation value of the gate starting at `site`
 """
-function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = false, string = IdentityMPOsite)
+function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = false, string = IdentityMPOsite(0))
     n = operatorlength(op)
-    if !iscanonical || string != IdentityMPOsite
+    if !iscanonical || string != IdentityMPOsite(0)
         L = Array(vec(boundary(mps, mps, :left)))
         R = Array(vec(boundary(mps, mps, :right)))
         for k in 1:site-1
@@ -29,7 +29,7 @@ function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     L = vec(boundary(mps, mpo, :left))
     R = vec(boundary(mps, mpo, :right))
     Ts = transfer_matrices(mps, mpo, :left)
-    Tc = transfer_matrix_bond(mps, mps, 1, :right)
+    Tc = transfer_matrix_bond(mps,mpo, mps, 1, :right)
     for k in length(mps):-1:1
         R = Ts[k] * R
     end
@@ -41,7 +41,7 @@ function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     L = vec(boundary(mps1, mpo, mps2, :left))
     R = vec(boundary(mps1, mpo, mps2, :right))
     Ts = transfer_matrices(mps1, mpo, mps2, :left)
-    Tc = transfer_matrix_bond(mps1, mps2, 1, :right)
+    Tc = transfer_matrix_bond(mps1,mpo, mps2, 1, :right)
     for k in length(mps1):-1:1
         R = Ts[k] * R
     end

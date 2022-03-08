@@ -3,7 +3,7 @@ Base.copy(site::OrthogonalLinkSite) = OrthogonalLinkSite(copy(site.Λ1), copy(si
 Base.copy(site::GenericSite) = GenericSite([copy(getfield(site, k)) for k = 1:length(fieldnames(GenericSite))]...)
 Base.copy(site::LinkSite) = LinkSite(data(site))
 
-Base.@propagate_inbounds Base.getindex(site::AbstractSite, I...) = getindex(data(site), I...)
+Base.getindex(site::AbstractSite, I...) = getindex(data(site), I...)
 
 Base.size(site::AbstractSite, dim) = size(data(site), dim)
 Base.size(site::AbstractSite) = size(data(site))
@@ -16,6 +16,9 @@ Base.length(site::LinkSite) = length(site.Λ)
 Base.conj(s::GenericSite) = GenericSite(conj(data(s)), ispurification(s))
 Base.conj(s::OrthogonalLinkSite) = OrthogonalLinkSite(s.Λ1, conj(s.Γ), s.Λ2)
 
+sites(site::GenericSite) = [site]
+sites(site::OrthogonalLinkSite) = [site]
+sites(site::SiteSum) = site.sites
 
 #Base.isapprox(s1::AbstractSite,s2::AbstractSite) = isapprox(data(s1),data(s2))
 Base.isapprox(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = isapprox(s1.Γ, s2.Γ) && isapprox(s1.Λ1, s2.Λ1) && isapprox(s1.Λ2, s2.Λ2)

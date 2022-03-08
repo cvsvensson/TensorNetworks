@@ -60,10 +60,10 @@ Base.:-(mps::AbstractMPS, mps2::AbstractMPS) = mps + (-1) * mps2
 Base.IndexStyle(::Type{<:MPSSum}) = IndexLinear()
 Base.getindex(sum::MPSSum, i::Integer) = SiteSum([state[i] for state in sum.states])
 
-Base.getindex(sum::SiteSum, i::Integer) = sum.sites[i]
-Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
+#Base.getindex(sum::SiteSum, i::Integer) = sum.sites[i]
+#Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
 reverse_direction(sitesum::SiteSum) = SiteSum(reverse_direction.(sitesum.sites))
-ispurification(sitesum::SiteSum) = ispurification(sitesum[1])
+ispurification(sitesum::SiteSum) = ispurification(sitesum.sites[1])
 
 
 function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
@@ -78,7 +78,7 @@ function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, �
     #FIXME Might screw up type stability, so might need a TransferMatrix struct?
     N1 = length(Γ1[1])
     N2 = length(Γ2[1])
-    Ts = [_transfer_right_gate(getindex.(Γ1, n1), gate, getindex.(Γ2, n2)) for n1 in 1:N1, n2 in 1:N2]
+    Ts = [_transfer_right_gate(map(s->sites(s)[n1],Γ1), gate, map(s->sites(s)[n2],Γ2)) for n1 in 1:N1, n2 in 1:N2]
     return _apply_transfer_matrices(Ts)
 end
 _transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
@@ -91,30 +91,43 @@ _transfer_left_mpo(Γ1::SiteSum, op, Γ2::GenericSite) = _transfer_left_mpo(Γ1,
 _transfer_left_mpo(Γ1::GenericSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
 _transfer_left_mpo(Γ1::SiteSum, Γ2::GenericSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
 _transfer_left_mpo(Γ1::SiteSum, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
-function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
-    N1 = length(Γ1)
-    N2 = length(Γ2)
-    Ts = [_transfer_left_mpo(Γ1[n1], op, Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
+_transfer_left_mpo(Γ1::SiteSum) = _transfer_left_mpo(Γ1, Γ1)
+
+function _transfer_left_mpo(Γ1, op, Γ2)
+    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
     return _apply_transfer_matrices(Ts)
 end
-function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
-    N1 = length(Γ1)
-    N2 = length(Γ2)
-    Ts = [_transfer_left_mpo(Γ1[n1], Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
+function _transfer_left_mpo(Γ1, Γ2)
+    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
     return _apply_transfer_matrices(Ts)
 end
-function _transfer_left_mpo(Γ1::SiteSum)
-    N1 = length(Γ1)
-    Ts = [_transfer_left_mpo(Γ1[n1], Γ1[n2]) for n1 in 1:N1, n2 in 1:N1]
-    return _apply_transfer_matrices(Ts)
-end
+
+# function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
+#     N1 = length(Γ1)
+#     N2 = length(Γ2)
+#     Ts = [_transfer_left_mpo(Γ1[n1], op, Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
+#     return _apply_transfer_matrices(Ts)
+# end
+# function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
+#     N1 = length(Γ1)
+#     N2 = length(Γ2)
+#     Ts = [_transfer_left_mpo(Γ1[n1], Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
+#     return _apply_transfer_matrices(Ts)
+# end
+# function _transfer_left_mpo(Γ1::SiteSum)
+#     N1 = length(Γ1)
+#     Ts = [_transfer_left_mpo(Γ1[n1], Γ1[n2]) for n1 in 1:N1, n2 in 1:N1]
+#     return _apply_transfer_matrices(Ts)
+# end
+
+
 
 # function _transfer_left_mpo(Γ::AbstractSite)
 #     Ts = [_transfer_left_mpo(block) for block in blocks(Γ)]
 # end
 
 
-
+#TODO: replace with Blockdiagonals.jl
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
     last = 0
@@ -140,6 +153,21 @@ function _split_vector(v, s::Matrix{Int})
     end
     return tens
 end
+function _split_vector(v, s::Array{Int,3})
+    N1, N2, N3 = size(s)
+    tens = Array{Vector{eltype(v)},3}(undef, size(s))
+    last = 0
+    for n3 in 1:N3
+        for n2 in 1:N2
+            for n1 in 1:N1
+                next = last + s[n1, n2, n3]
+                tens[n1, n2, n3] = v[last+1:next]
+                last = next
+            end
+        end
+    end
+    return tens
+end
 function _join_tensor(tens)
     reduce(vcat, tens)
 end
@@ -158,7 +186,7 @@ function _apply_transfer_matrices(Ts)
         tens = _split_vector(v, sizes)
         _join_tensor([T' * t for (T, t) in zip(Ts, tens)])
     end
-    return LinearMap{eltype(Ts[1, 1])}(f, f_adjoint, DL, DR)
+    return LinearMap{eltype(Ts[1])}(f, f_adjoint, DL, DR)
 end
 
 #boundaryconditions(::Type{<:MPSSum{M,S}}) where {M,S} = boundaryconditions(M)
@@ -251,14 +279,8 @@ end
 
 Base.vec(site::LinkSite) = vec(diag(data(site)))
 
-#TODO: define transfer_matrix_bond such that it wors for arbitrary sites, returning a dense matrix in general
-# function transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,OrthogonalLinkSite},<:Any}}, site::Integer, dir::Symbol) where {N}
-#     Λ1s = getproperty.(mps[site].sites, :Λ1)
-#     return LinkSite(reduce(vcat, vec.(Λ1s)))
-# end
-function transfer_matrix_bond(mps::MPSSum, site::Integer, dir::Symbol)
-    return transfer_matrix_bond(mps[site],dir)
-end
+
+transfer_matrix_bond(mps::MPSSum, site::Integer, dir::Symbol) = transfer_matrix_bond(mps[site],dir)
 function transfer_matrix_bond(sites::SiteSum, dir::Symbol)
     Λ1s = transfer_matrix_bond_dense.(sites.sites, dir)
     #println(Λ1s)
