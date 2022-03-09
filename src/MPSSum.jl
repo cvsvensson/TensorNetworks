@@ -1,9 +1,29 @@
 struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
     sites::S
-    function SiteSum(sites::Vector{<:S}) where {S<:AbstractCenterSite}
+    function SiteSum(sites::Tuple)
         #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
-        new{typeof(Tuple(sites)), promote_type(eltype.(sites)...)}(Tuple(sites))
+        new{typeof(sites), promote_type(eltype.(sites)...)}(copy.(sites))
     end
+end
+Base.similar(site::SiteSum) = SiteSum(similar.(site.sites))
+Base.copy(site::SiteSum) = SiteSum(copy.(site.sites))
+Base.:*(x::Number, site::SiteSum) = SiteSum(x .* sites(site))
+#Base.setindex!(site::GenericSite, v, I::Vararg{Integer,3}) = (data(site)[I...] = v)
+function LinearAlgebra.mul!(w::SiteSum, v::SiteSum, x::Number)
+    @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
+    SiteSum([mul!(sw, sv, x) for (sv,sw) in zip(sites(v), sites(w))])
+end
+LinearAlgebra.rmul!(v::SiteSum, x::Number) = SiteSum([rmul!(sv, x) for sv in sites(v)])
+LinearAlgebra.norm(v::SiteSum) = norm(norm.(sites(v)))
+LinearAlgebra.dot(v::SiteSum,w::SiteSum) = sum([dot(sv,sw) for (sv,sw) in zip(sites(v),sites(w))])
+
+function LinearAlgebra.axpy!(x::Number, v::SiteSum, w::SiteSum)
+    @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
+    SiteSum([axpy!(x, sv, sw) for (sv,sw) in zip(sites(v),sites(w))])
+end
+function LinearAlgebra.axpby!(x::Number, v::SiteSum, β::Number, w::SiteSum)
+    @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
+    SiteSum([axpby!(x, sv, β, sw) for (sv,sw) in zip(sites(v),sites(w))])
 end
 
 Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
@@ -12,16 +32,16 @@ Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.site
 struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
     states::MPSs
     scalings::Vector{Num}
-    function MPSSum(mpss::Vector)
-        new{typeof(Tuple(mpss)),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), fill(1, length(mpss)))
-    end
-    function MPSSum(mpss::Vector, scalings::Vector{Num}) where {Num}
-        new{typeof(Tuple(mpss)),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
+    function MPSSum(mpss::Tuple, scalings::Vector{Num}) where {Num}
+        new{typeof(mpss),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
     end
 end
+function MPSSum(mpss::Tuple)
+    MPSSum(mpss, fill(one(numtype(mpss...)), length(mpss)))
+end
 #TODO: change vector argument to tuple arguments.
-MPSSum(sites::NTuple{<:Any,<:AbstractMPS}) = MPSSum([sites...])
-MPSSum(sites::NTuple{<:Any,<:AbstractMPS},s) = MPSSum([sites...],s)
+#MPSSum(sites::NTuple{<:Any,<:AbstractMPS}) = MPSSum([sites...])
+#MPSSum(sites::NTuple{<:Any,<:AbstractMPS},s) = MPSSum([sites...],s)
 Base.show(io::IO, mps::MPSSum) =
     (print(io, "MPS: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps), "\nSum of ", length(mps.states), " mps's\nWith scalings "); show(io, mps.scalings))
 Base.show(io::IO, m::MIME"text/plain", mps::MPSSum) = show(io, mps)
@@ -30,8 +50,8 @@ Base.length(mps::MPSSum) = length(mps.states[1])
 Base.copy(mps::MPSSum) = MPSSum(copy(mps.states), copy(mps.scalings))
 
 
-SiteSum(site::AbstractCenterSite) = SiteSum([site])
-SiteSum(sites::Tuple) = SiteSum([sites...])
+SiteSum(site::AbstractCenterSite) = SiteSum((site,))
+#SiteSum(sites::Tuple) = SiteSum([sites...])
 Base.show(io::IO, mps::SiteSum) =
     print(io, "SiteSum: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps.sites))
 Base.show(io::IO, m::MIME"text/plain", mps::SiteSum) = show(io, mps)
@@ -42,15 +62,15 @@ Base.size(sites::SiteSum, i::Integer) = (sum(size.(sites.sites, 1)), size(sites.
 
 Base.conj(site::SiteSum) = SiteSum(conj.(site.sites))
 
-Base.:+(mps1::AbstractMPS, mps2::AbstractMPS) = MPSSum([mps1, mps2])
+Base.:+(mps1::AbstractMPS, mps2::AbstractMPS) = MPSSum((mps1, mps2))
 Base.:+(mps::AbstractMPS, sum::MPSSum) = 1 * mps + sum
 Base.:+(sum::MPSSum, mps::AbstractMPS) = sum + 1 * mps
-Base.:+(s1::MPSSum, s2::MPSSum) = MPSSum([s1.states..., s2.states...], vcat(s1.scalings, s2.scalings))
+Base.:+(s1::MPSSum, s2::MPSSum) = MPSSum(tuple(s1.states..., s2.states...), vcat(s1.scalings, s2.scalings))
 
-Base.:+(s1::AbstractSite, s2::AbstractSite) = SiteSum([s1, s2])
+Base.:+(s1::AbstractSite, s2::AbstractSite) = SiteSum((s1, s2))
 
-Base.:*(x::Number, mps::AbstractMPS) = MPSSum([mps], [x])
-Base.:*(mps::AbstractMPS, x::Number) = MPSSum([mps], [x])
+Base.:*(x::Number, mps::AbstractMPS) = MPSSum((mps,), [x])
+Base.:*(mps::AbstractMPS, x::Number) = MPSSum((mps,), [x])
 Base.:*(x::Number, mps::MPSSum) = MPSSum(mps.states, x * mps.scalings)
 Base.:*(mps::MPSSum, x::Number) = MPSSum(mps.states, x * mps.scalings)
 Base.:/(mps::MPSSum, x::Number) = MPSSum(mps.states, inv(x) * mps.scalings)
@@ -58,7 +78,7 @@ Base.:-(mps::AbstractMPS) = (-1) * mps
 Base.:-(mps::AbstractMPS, mps2::AbstractMPS) = mps + (-1) * mps2
 
 Base.IndexStyle(::Type{<:MPSSum}) = IndexLinear()
-Base.getindex(sum::MPSSum, i::Integer) = SiteSum([state[i] for state in sum.states])
+Base.getindex(sum::MPSSum, i::Integer) = SiteSum(Tuple(state[i] for state in sum.states))
 
 #Base.getindex(sum::SiteSum, i::Integer) = sum.sites[i]
 #Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
@@ -127,7 +147,7 @@ end
 # end
 
 
-#TODO: replace with Blockdiagonals.jl
+#TODO: replace with Blockdiagonals.jl or BlockArrays.jl.
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
     last = 0
@@ -165,6 +185,21 @@ function _split_vector(v, s::Array{Int,3})
                 last = next
             end
         end
+    end
+    return tens
+end
+function _split_vector(v, s::Array{NTuple{N,Int},K}) where {N,K}
+    ranges = size(s)
+    tens = Array{Array{eltype(v),N},K}(undef, ranges)
+    last = 0
+    println("V:", length(v))
+    println("sizes:", s)
+    for ns in Base.product((1:r for r in ranges)...)
+        next = last + prod(s[ns...])
+        println(ns)
+        println("S: ", s[ns...])
+        tens[ns...] = reshape(v[last+1:next], s[ns...])
+        last = next
     end
     return tens
 end

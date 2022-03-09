@@ -53,7 +53,7 @@ end
 function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
     T = numtype(mps1)
     Ts = data(mpo) * transfer_matrices(mps1, mps2, reverse_direction(dir))
-    V::Vector{T} = vec(boundary(mps1, mpo, mps2, dir))
+    V::Vector{T} = vec(boundary(mps1, mps2, dir))
     N = length(mps1)
     env = Vector{Array{T,2}}(undef, N)
     if dir == :left
@@ -133,15 +133,52 @@ update_environment!(env::AbstractFiniteEnvironment, mps::AbstractSite, site::Int
 # end
 
 #TODO check performance and compare to matrix multiplication and Tullio
-local_mul(envL, envR, mposite::AbstractMPOsite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
-local_mul(envL, envR, mposite::AbstractMPOsite, site::GenericSite) = GenericSite(local_mul(envL, envR, mposite, data(site)), ispurification(site))
-local_mul(envL, envR, mposite::AbstractMPOsite, site::OrthogonalLinkSite) = local_mul(envL, envR, mposite, site.Λ1 * site * site.Λ2)
+local_mul(envL, envR, mposite::MPOsite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
+local_mul(envL, envR, mposite::MPOsite, site::GenericSite) = GenericSite(local_mul(envL, envR, mposite, data(site)), ispurification(site))
+local_mul(envL, envR, mposite::MPOsite, site::OrthogonalLinkSite) = local_mul(envL, envR, mposite, site.Λ1 * site * site.Λ2)
+
 #TODO implement these for SiteSum
 local_mul(envL, envR, site::Array{<:Number,3}) = @tensor temp[:] := envL[-1, 1] * site[1, -2, 2] * envR[-3, 2]
 local_mul(envL, envR, site::GenericSite) = GenericSite(local_mul(envL, envR, data(site)), ispurification(site))
 local_mul(envL, envR, site::OrthogonalLinkSite) = local_mul(envL, envR, site.Λ1 * site.Γ * site.Λ2)
 
-local_mul(envL, envR, site::SiteSum) = local_mul(envL, envR, dense(site))
+#local_mul(envL, envR, site::SiteSum) = local_mul(envL, envR, dense(site))
+
+#Only works for certain environs
+function local_mul(envL, envR, sitesum::SiteSum)
+    println(size(envL))
+    println(size(envR))
+    println(size.(sites(sitesum)))
+    leftsizes = size.(sites(sitesum), 1)
+    leftsizematrix = collect(Base.product(leftsizes, leftsizes))
+    lefttensors = _split_vector(vec(envL), leftsizematrix)
+    rightsizematrix = collect(Base.product(size.(sites(sitesum), 3), size.(sites(sitesum), 3)))
+    righttensors = _split_vector(vec(envR), rightsizematrix)
+    @assert length(lefttensors) == length(righttensors) == length(sites(sitesum))^2
+    arrays = sum([data(local_mul(lefttensors[n1,n2], righttensors[n1,n2], sites(sitesum)[n2])) for (n1,n2) in Base.product(1:length(sites(sitesum)),1:length(sites(sitesum)))], dims=2)
+    SiteSum(Tuple(GenericSite.(arrays,ispurification(sitesum))))
+
+    #SiteSum(map((L,R,s) -> local_mul(L, R, s), lefttensors, righttensors, sites(sitesum)))
+
+    #SiteSum(Tuple(local_mul(L, R, s) for (L,s,R) in zip(lefttensors,sites(sitesum),righttensors)))
+    #FIXME: Test if this works
+end
+function _apply_transfer_matrices(Ts)
+    # N1, N2 = size(Ts)
+    # # sizes = [size(Γ1[n1],3)*size(Γ1[n2],3) for n1 in 1:N1, n2 in 1:N1]
+    sizes = [size(T, 2) for T in Ts]
+    DL = sum(size.(Ts, 1))
+    DR = sum(size.(Ts, 2))
+    function f(v)
+        tens = _split_vector(v, sizes)
+        _join_tensor([T * t for (T, t) in zip(Ts, tens)])
+    end
+    function f_adjoint(v)
+        tens = _split_vector(v, sizes)
+        _join_tensor([T' * t for (T, t) in zip(Ts, tens)])
+    end
+    return LinearMap{eltype(Ts[1])}(f, f_adjoint, DL, DR)
+end
 
 function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)
     if dir == :right

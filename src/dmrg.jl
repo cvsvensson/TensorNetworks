@@ -18,10 +18,6 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
     Henv = environment(mps, mpo)
     orthenv = [environment(state, mps) for state in orth]
     Hsquared = multiplyMPOs(mpo, mpo)
-    println(typeof(Hsquared))
-    println(typeof(mps))
-    println(typeof(mpo))
-    println(expectation_value(mps, Hsquared))
     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)

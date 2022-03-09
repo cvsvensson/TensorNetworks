@@ -8,6 +8,7 @@ struct MPOsite{T} <: AbstractMPOsite{T}
 end
 Base.getindex(g::MPOsite, I::Vararg{Int,4}) = getindex(data(g), I...)
 operatorlength(::AbstractMPOsite) = 1
+Base.similar(g::MPOsite) = MPOsite(similar(g.data))
 
 MPOsite{K}(site::MPOsite, dir) where {K} = MPOsite{K}(data(site))
 
@@ -49,6 +50,7 @@ function MPO(ss::Vector{S}) where {S<:AbstractMPOsite}
     T = promote_type(eltype.(ss)...)
     MPO(ss, fill(one(T),length(sites(ss[1]))))
 end
+Base.similar(mpo::MPO) = MPO(similar.(sites(mpo)),similar(mpo.boundary))
 sites(mpo::MPO) = mpo.data
 Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
 Base.size(mpo::AbstractMPO) = size(sites(mpo))
@@ -65,7 +67,6 @@ Base.copy(mpo::MPO) = MPO(copy.(mpo), copy(mpo.boundary))
 
 Base.setindex!(mpo::MPO, v, i::Integer) = mpo.data[i] = v
 
-
 struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
     data::T
     dim::Int
@@ -73,7 +74,6 @@ struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
         new{T}(scaling, dim)
     end
 end
-
 data(site::ScaledIdentityMPOsite) = site.data
 IdentityMPOsite(d) = ScaledIdentityMPOsite(true, d)
 
@@ -295,7 +295,7 @@ function dense(sitesum::MPOSiteSum{Tup,T}) where {Tup,T}
     return MPOsite(newsite)
 end
 
-dense(mpo::AbstractMPO) = MPO(dense.(mpo),mpo.boundary)
+dense(mpo::AbstractMPO) = MPO(dense.(mpo),boundary(mpo))
 function dense(mpo::MPOSum)
     sites = dense.(mpo)
     scalings = reshape(mpo.scalings, 1, length(mpo.scalings))
@@ -309,7 +309,7 @@ end
 
 function boundary(::OpenBoundary, mpo::MPO, side::Symbol)
     if side == :right
-        return [one(eltype(mpo[end]))]
+        return fill(one(eltype(mpo[end])), length(sites(mpo[end]))) # [one(eltype(mpo[end]))]
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
@@ -330,6 +330,7 @@ function boundary(::OpenBoundary, mpo::MPOSum, side::Symbol)
 end
 boundary(mpos::MPOSum) = reduce(vcat, [s*boundary(mpo) for (mpo,s) in zip(mpos.mpos,mpos.scalings)])
 boundary(mpo::MPO) = mpo.boundary
+boundary(::ScaledIdentityMPO{T}) where T = [one(T)]
 
 """
 gives the mpo corresponding to a*mpo1 + b*mpo2.
@@ -393,6 +394,7 @@ Naive multiplication of mpos. Multiplies the bond dimensions.
 multiplyMPOs(mpo1::AbstractMPO, mpo2::AbstractMPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(mpo1),boundary(mpo2)))
 #multiplyMPOs(mpo1::MPOSum, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(mpo1.boundary,mpo2.boundary))
 
+transfer_matrix_bond(mpo::AbstractMPO, site::Integer, dir) = I
 
 function Matrix(mpo::MPO)
     n = length(mpo)

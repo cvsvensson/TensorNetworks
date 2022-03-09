@@ -2,13 +2,15 @@
 transfer_matrix_bond(mps::AbstractVector{<:OrthogonalLinkSite}, site::Integer, dir::Symbol) = data(link(mps[site], :left))
 transfer_matrix_bond(mps::AbstractVector{<:GenericSite}, site::Integer, dir::Symbol) = I#Diagonal(I,size(mps[site],1))
 transfer_matrix_bond(mps1::AbstractMPS, mps2::AbstractMPS, site::Integer, dir::Symbol) = kron(transfer_matrix_bond(mps1, site, dir), transfer_matrix_bond(mps2, site, dir))
+transfer_matrix_bond(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, site::Integer, dir::Symbol) = kron(transfer_matrix_bond(mps1, site, dir), transfer_matrix_bond(mpo, site, dir), transfer_matrix_bond(mps2, site, dir))
+
 Base.kron(a::UniformScaling, b::UniformScaling) = a * b
 Base.kron(a::UniformScaling, b::AbstractMatrix) = Diagonal(a, size(b, 1)) * b
 Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
 
 transfer_matrix_bond(site::OrthogonalLinkSite, dir::Symbol) = data(link(site, :left))
-transfer_matrix_bond_dense(site::OrthogonalLinkSite, dir::Symbol) =transfer_matrix_bond(site,dir)
-transfer_matrix_bond_dense(site::GenericSite{T}, dir::Symbol) where {T} = Diagonal(I,size(site,1))
+transfer_matrix_bond_dense(site::OrthogonalLinkSite, dir::Symbol) = transfer_matrix_bond(site,dir)
+transfer_matrix_bond_dense(site::GenericSite{T}, dir::Symbol) where {T} = Matrix(one(T)I,size(site,1))
 
 # %% Transfer Matrices
 """

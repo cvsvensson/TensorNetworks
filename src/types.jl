@@ -43,13 +43,19 @@ struct LinkSite{T} <: AbstractVirtualSite{T}
     Λ::Diagonal{T,Vector{T}}
 end
 LinkSite(v::Vector) = LinkSite(Diagonal(v))
+Base.similar(site::LinkSite) = LinkSite(similar(site.Λ))
+
 struct VirtualSite{T} <: AbstractVirtualSite{T}
     Λ::Matrix{T}
 end
+Base.similar(site::VirtualSite) = VirtualSite(similar(site.Λ))
+
 struct GenericSite{T} <: AbstractCenterSite{T}
     Γ::Array{T,3}
     purification::Bool
 end
+Base.similar(site::GenericSite) = GenericSite(similar(site.Γ), site.purification)
+Base.setindex!(site::GenericSite, v, I::Vararg{Integer,3}) = (data(site)[I...] = v)
 
 struct OrthogonalLinkSite{T} <: AbstractCenterSite{T}
     Γ::GenericSite{T}
@@ -65,6 +71,7 @@ struct OrthogonalLinkSite{T} <: AbstractCenterSite{T}
         new{T}(Γ, Λ1, Λ2)
     end
 end
+Base.similar(site::OrthogonalLinkSite) = OrthogonalLinkSite(similar(site.Λ1),similar(site.Γ),similar(site.Λ2), check=false)
 
 abstract type AbstractMPS{T<:AbstractCenterSite} <: AbstractVector{T} end
 
