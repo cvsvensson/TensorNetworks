@@ -2,33 +2,34 @@ isinfinite(mps::AbstractMPS) = isinfinite(boundaryconditions(mps))
 isinfinite(::OpenBoundary) = false
 isinfinite(::InfiniteBoundary) = true
 
-function boundary(::OpenBoundary, mps::AbstractMPS, side::Symbol)
+function boundary(::OpenBoundary, mps::AbstractMPS{<:GenericSite}, side::Symbol)
     if side == :right
-        return [one(eltype(mps[end]))]
+        return BoundaryVector([one(eltype(mps[end]))])
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return [one(eltype(mps[1]))]
+        return BoundaryVector([one(eltype(mps[1]))])
     end
 end
-boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS, side) = kron(boundary(bc, mps1, side), boundary(bc, mps2, side))
+boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS, side) = BlockBoundaryVector(boundary(bc, mps1, side), boundary(bc, mps2, side))
 boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO, side) = boundary(bc, mps, mpo, mps, side)
-boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = kron(boundary(bc, mps1, side),boundary(bc, mpo, side), boundary(bc, mps2, side))
+boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = BlockBoundaryVector(
+boundary(bc, mps1, side),boundary(bc, mpo, side), boundary(bc, mps2, side))
 
 boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps), mps, args...)
 
 function boundary(::InfiniteBoundary, mps::AbstractMPS, g::ScaledIdentityMPO, mps2::AbstractMPS, side::Symbol)
     _, rhos = transfer_spectrum(mps, mps2, reverse_direction(side), nev = 1)
-    return (data(g) ≈ 1 ? 1 : 0) * rhos[1]
+    return BoundaryVector((data(g) ≈ 1 ? 1 : 0) * rhos[1])
 end
 function boundary(::InfiniteBoundary, mps::AbstractMPS, side::Symbol)
     _, rhos = transfer_spectrum(mps, reverse_direction(side), nev = 1)
-    return canonicalize_eigenoperator(rhos[1])
+    return BoundaryVector(canonicalize_eigenoperator(rhos[1]))
 end
 function boundary(::InfiniteBoundary, mps::AbstractMPS, mps2::AbstractMPS, side::Symbol)
     _, rhos = transfer_spectrum(mps, mps2, reverse_direction(side), nev = 1)
-    return canonicalize_eigenoperator(rhos[1])
+    return BoundaryVector(canonicalize_eigenoperator(rhos[1]))
 end
 
 boundaryvec(args...) = copy(vec(boundary(args...)))

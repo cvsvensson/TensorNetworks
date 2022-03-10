@@ -106,19 +106,19 @@ _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vecto
 _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
 
 
-_transfer_left_mpo(Γ1::GenericSite, op, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), op, Γ2)
-_transfer_left_mpo(Γ1::SiteSum, op, Γ2::GenericSite) = _transfer_left_mpo(Γ1, op, SiteSum(Γ2))
-_transfer_left_mpo(Γ1::GenericSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
-_transfer_left_mpo(Γ1::SiteSum, Γ2::GenericSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
-_transfer_left_mpo(Γ1::SiteSum, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
-_transfer_left_mpo(Γ1::SiteSum) = _transfer_left_mpo(Γ1, Γ1)
+# _transfer_left_mpo(Γ1::GenericSite, op, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), op, Γ2)
+# _transfer_left_mpo(Γ1::SiteSum, op, Γ2::GenericSite) = _transfer_left_mpo(Γ1, op, SiteSum(Γ2))
+# _transfer_left_mpo(Γ1::GenericSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
+# _transfer_left_mpo(Γ1::SiteSum, Γ2::GenericSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
+_transfer_left_mpo(Γ1, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
+_transfer_left_mpo(Γ1) = _transfer_left_mpo(Γ1, Γ1)
 
 function _transfer_left_mpo(Γ1, op, Γ2)
-    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
+    Ts = [__transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
     return _apply_transfer_matrices(Ts)
 end
 function _transfer_left_mpo(Γ1, Γ2)
-    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+    Ts = [__transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
     return _apply_transfer_matrices(Ts)
 end
 
@@ -207,22 +207,6 @@ function _join_tensor(tens)
     reduce(vcat, tens)
 end
 
-function _apply_transfer_matrices(Ts)
-    # N1, N2 = size(Ts)
-    # # sizes = [size(Γ1[n1],3)*size(Γ1[n2],3) for n1 in 1:N1, n2 in 1:N1]
-    sizes = [size(T, 2) for T in Ts]
-    DL = sum(size.(Ts, 1))
-    DR = sum(size.(Ts, 2))
-    function f(v)
-        tens = _split_vector(v, sizes)
-        _join_tensor([T * t for (T, t) in zip(Ts, tens)])
-    end
-    function f_adjoint(v)
-        tens = _split_vector(v, sizes)
-        _join_tensor([T' * t for (T, t) in zip(Ts, tens)])
-    end
-    return LinearMap{eltype(Ts[1])}(f, f_adjoint, DL, DR)
-end
 
 #boundaryconditions(::Type{<:MPSSum{M,S}}) where {M,S} = boundaryconditions(M)
 function boundaryconditions(mps::MPSSum)

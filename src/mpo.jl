@@ -309,12 +309,12 @@ end
 
 function boundary(::OpenBoundary, mpo::MPO, side::Symbol)
     if side == :right
-        return fill(one(eltype(mpo[end])), length(sites(mpo[end]))) # [one(eltype(mpo[end]))]
+        return BlockBoundaryVector(BoundaryVector.(fill(one(eltype(mpo[end])), length(sites(mpo[end]))))) # [one(eltype(mpo[end]))]
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return mpo.boundary
+        return BlockBoundaryVector(BoundaryVector.(mpo.boundary))
     end
 end
 
