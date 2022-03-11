@@ -11,6 +11,7 @@ Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
 transfer_matrix_bond(site::OrthogonalLinkSite, dir::Symbol) = data(link(site, :left))
 transfer_matrix_bond_dense(site::OrthogonalLinkSite, dir::Symbol) = transfer_matrix_bond(site,dir)
 transfer_matrix_bond_dense(site::GenericSite{T}, dir::Symbol) where {T} = Matrix(one(T)I,size(site,1))
+transfer_matrix_bond(site::GenericSite, dir::Symbol) = I
 
 # %% Transfer Matrices
 """
@@ -42,12 +43,19 @@ _transfer_left_mpo(s::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s, :r
 function __transfer_left_mpo(Γ1::GenericSite, Γ2::GenericSite)
     dims1 = size(Γ1)
     dims2 = size(Γ2)
-    function func(R::BoundaryVector{<:Number,3})
+    function func(R::Vector)
+        println(R)
+        println(reshape(R, dims1[3], dims2[3]))
+        println(BoundaryVector(reshape(R, dims1[3], dims2[3])))
+        vec(func(BoundaryVector(reshape(R, dims1[3], dims2[3]))))
+    end
+    func_adjoint(L::Vector) = vec(func_adjoint(BoundaryVector(reshape(L, dims1[1], dims2[1]))))
+    function func(R::BoundaryVector{<:Any,2})
         #Rtens = reshape(Rvec, dims1[3], dims2[3])
         @tensoropt (t1, b1, -1, -2) temp[:] := data(R)[t1, b1] * conj(data(Γ1)[-1, c1, t1]) * data(Γ2)[-2, c1, b1]
         return BoundaryVector(temp)
     end
-    function func_adjoint(L::BoundaryVector{<:Number,3})
+    function func_adjoint(L::BoundaryVector{<:Any,2})
         #Ltens = reshape(Lvec, dims1[1], dims2[1])
         @tensoropt (t1, b1, -1, -2) temp[:] := data(L)[t1, b1] * data(Γ1)[t1, c1, -1] * conj(data(Γ2)[b1, c1, -2])
         return BoundaryVector(temp)
@@ -57,6 +65,8 @@ end
 function __transfer_left_mpo(Γ1::GenericSite)
     dims = size(Γ1)
     Γ = data(Γ1)
+    func(R::Vector) = vec(func(BoundaryVector(reshape(R, dims1[3], dims2[3]))))
+    func_adjoint(L::Vector) = vec(func_adjoint(BoundaryVector(reshape(L, dims1[1], dims2[1]))))
     function func(R::BoundaryVector{<:Number,2})
         #Rtens = reshape(Rvec, dims[3], dims[3])
         @tensoropt (t1, b1, -1, -2) temp[:] := data(R)[t1, b1] * conj(Γ[-1, c1, t1]) * Γ[-2, c1, b1]
@@ -112,6 +122,8 @@ function __transfer_left_mpo(Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite)
     dims2 = size(Γ2)
     smpo = size(mpo)
     T = promote_type(eltype(Γ1), eltype(mpo), eltype(Γ2))
+    func(R::Vector) = vec(func(BoundaryVector(reshape(R, dims1[3], smpo[4], dims2[3]))))
+    func_adjoint(L::Vector) = vec(func_adjoint(BoundaryVector(reshape(L,dims1[1], smpo[1], dims2[1]))))
     function func(R::BoundaryVector{<:Number,3})
         #Rtens = reshape(Rvec, dims1[3], smpo[4], dims2[3])
         @tensoropt (tr, br, -1, -2, -3) temp[:] := conj(data(Γ1)[-1, u, tr]) * data(mpo)[-2, u, d, cr] * data(Γ2)[-3, d, br] * data(R)[tr, cr, br]
@@ -253,9 +265,19 @@ function _transfer_left_gate(Γ, gate::AbstractSquareGate)
     # end
     return _transfer_right_gate(Γnew, reverse_direction(gate))
 end
-_transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate)
-_transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:OrthogonalLinkSite}) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate, [GenericSite(Γ, :left) for Γ in Γ2])
-function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::GenericSquareGate, Γ2::AbstractVector{GenericSite{T}}) where {T}
+
+_transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
+function _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:AbstractSite})
+    n1 = length(sites(Γ1[1]))
+    n2 = length(sites(Γ2[1]))
+    Ts = [_transfer_right_gate_dense(getindex.(sites.(Γ1),k1),gate,getindex.(sites.(Γ2),k2)) for (k1,k2) in Base.product(1:n1,1:n2)]
+    #println(Ts)
+    println(size([1 for (k1,k2) in Base.product(1:n1,1:n2)]))
+    return _apply_transfer_matrices(Ts)
+end
+# _transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate)
+_transfer_right_gate_dense(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:OrthogonalLinkSite}) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate, [GenericSite(Γ, :left) for Γ in Γ2])
+function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::GenericSquareGate, Γ2::AbstractVector{GenericSite{T}}) where {T}
     op = data(gate)
     oplength = operatorlength(gate)
     @assert length(Γ1) == length(Γ2) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
@@ -267,7 +289,7 @@ function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::Generic
     s_final1 = size(Γ1[oplength])[3]
     s_final2 = size(Γ2[oplength])[3]
     function T_on_vec(invec::BoundaryVector{<:Number,2}) #FIXME Compare performance to a version where the gate is applied between the top and bottom layer of sites
-        v = reshape(invec, 1, s_start1, s_start2)
+        v = reshape(data(invec), 1, s_start1, s_start2)
         for k in 1:oplength
             @tensoropt (1, 2) v[:] := conj(data(Γ1[k]))[1, -2, -4] * v[-1, 1, 2] * data(Γ2[k])[2, -3, -5]
             sv = size(v)
@@ -278,31 +300,32 @@ function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::Generic
         # @tullio vout[a,b] := v[c,a,b] * opvec[c]
         return BoundaryVector(vout)
     end
+    T_on_vec(invec) = vec(T_on_vec(BoundaryVector(reshape(invec, s_start1, s_start2))))
     #TODO Define adjoint
     return LinearMap{T}(T_on_vec, s_final1 * s_final2, s_start1 * s_start2)
 end
-function _transfer_right_gate(Γ::AbstractVector{GenericSite{T}}, gate::GenericSquareGate) where {T}
-    op = data(gate)
-    oplength = operatorlength(gate)
-    @assert length(Γ) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
-    @assert size(gate, 1) == size(Γ[1], 2) "Error in transfer_right_gate: physical dimension of gate and site do not match"
-    perm = [Int(floor((k + 1) / 2)) + oplength * iseven(k) for k in 1:2*oplength]
-    opvec = vec(permutedims(op, perm))
-    s_start = size(Γ[1])[1]
-    s_final = size(Γ[oplength])[3]
-    function T_on_vec(invec::BoundaryVector{<:Number,2})
-        v = reshape(invec, 1, s_start, s_start)
-        for k in 1:oplength
-            @tensoropt (1, 2) v[:] := conj(data(Γ[k])[1, -2, -4]) * v[-1, 1, 2] * data(Γ[k])[2, -3, -5]
-            sv = size(v)
-            v = reshape(v, prod(sv[1:3]), sv[4], sv[5])
-        end
-        @tensor v[:] := v[1, -1, -2] * opvec[1]
-        return BoundaryVector(v)
-    end
-    #TODO Define adjoint
-    return LinearMap{T}(T_on_vec, s_final^2, s_start^2)
-end
+# function _transfer_right_gate(Γ::AbstractVector{GenericSite{T}}, gate::GenericSquareGate) where {T}
+#     op = data(gate)
+#     oplength = operatorlength(gate)
+#     @assert length(Γ) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
+#     @assert size(gate, 1) == size(Γ[1], 2) "Error in transfer_right_gate: physical dimension of gate and site do not match"
+#     perm = [Int(floor((k + 1) / 2)) + oplength * iseven(k) for k in 1:2*oplength]
+#     opvec = vec(permutedims(op, perm))
+#     s_start = size(Γ[1])[1]
+#     s_final = size(Γ[oplength])[3]
+#     function T_on_vec(invec::BoundaryVector{<:Number,2})
+#         v = reshape(data(invec), 1, s_start, s_start)
+#         for k in 1:oplength
+#             @tensoropt (1, 2) v[:] := conj(data(Γ[k])[1, -2, -4]) * v[-1, 1, 2] * data(Γ[k])[2, -3, -5]
+#             sv = size(v)
+#             v = reshape(v, prod(sv[1:3]), sv[4], sv[5])
+#         end
+#         @tensor v[:] := v[1, -1, -2] * opvec[1]
+#         return BoundaryVector(v)
+#     end
+#     #TODO Define adjoint
+#     return LinearMap{T}(T_on_vec, s_final^2, s_start^2)
+# end
 
 #Sites 
 transfer_matrix(site::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix(tuple(site), dir)

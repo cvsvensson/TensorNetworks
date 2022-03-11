@@ -94,16 +94,16 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
     return v
 end
 
-function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum})
-    #FIXME Might screw up type stability, so might need a TransferMatrix struct?
-    N1 = length(Γ1[1])
-    N2 = length(Γ2[1])
-    Ts = [_transfer_right_gate(map(s->sites(s)[n1],Γ1), gate, map(s->sites(s)[n2],Γ2)) for n1 in 1:N1, n2 in 1:N2]
-    return _apply_transfer_matrices(Ts)
-end
-_transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
-_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:AbstractSite}) = _transfer_right_gate(Γ1, gate, SiteSum.(Γ2))
-_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
+# function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum})
+#     #FIXME Might screw up type stability, so might need a TransferMatrix struct?
+#     N1 = length(Γ1[1])
+#     N2 = length(Γ2[1])
+#     Ts = [_transfer_right_gate(map(s->sites(s)[n1],Γ1), gate, map(s->sites(s)[n2],Γ2)) for n1 in 1:N1, n2 in 1:N2]
+#     return _apply_transfer_matrices(Ts)
+# end
+#_transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
+#_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:AbstractSite}) = _transfer_right_gate(Γ1, gate, SiteSum.(Γ2))
+#_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
 
 
 # _transfer_left_mpo(Γ1::GenericSite, op, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), op, Γ2)
