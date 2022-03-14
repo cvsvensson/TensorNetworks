@@ -1,83 +1,77 @@
-abstract type AbstractEnvironment end
-abstract type AbstractInfiniteEnvironment <: AbstractEnvironment end
-abstract type AbstractFiniteEnvironment <: AbstractEnvironment end
 
-abstract type AbstractBoundaryVector{T,N} <: AbstractVector{T} end
-struct BoundaryVector{T,N} <: AbstractBoundaryVector{T,N}
-    data::Array{T,N}
-end
-BoundaryVector(x::Number) = BoundaryVector([x])
-struct BlockBoundaryVector{T,N} <: AbstractBoundaryVector{T,N}
-    data::Array{BoundaryVector{T,N},N}
-end
-Base.vec(bv::Union{BlockBoundaryVector,BoundaryVector}) = vec(bv.data)
-Base.length(bv::Union{BoundaryVector}) = length(data(bv))
-Base.length(bv::Union{BlockBoundaryVector}) = prod(length.(data(bv)))
-data(bv::Union{BlockBoundaryVector,BoundaryVector}) = bv.data
-BlockBoundaryVector(v::Array{T,N}) where {T,N} = BlockBoundaryVector(BoundaryVector(v))
+# abstract type AbstractBoundaryVector{T,N} <: AbstractArray{T,N} end
+# struct BoundaryVector{T,N} <: AbstractBoundaryVector{T,N}
+#     data::Array{T,N}
+# end
+# BoundaryVector(x::Number) = BoundaryVector([x])
 
-Base.:*(x::Number, v::T) where {T<:Union{BlockBoundaryVector,BoundaryVector}} = T(x * data(v))
-Base.:*(v::T, x::Number) where {T<:Union{BlockBoundaryVector,BoundaryVector}} = x * v
-Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector,BoundaryVector}} = inv(x) * v
+Base.vec(bv::BlockBoundaryVector) = reduce(vcat,vec.(bv.data))
+# Base.length(bv::Union{BoundaryVector}) = length(data(bv))
+# Base.length(bv::Union{BlockBoundaryVector}) = prod(length.(data(bv)))
+data(bv::Union{BlockBoundaryVector}) = bv.data
+# BlockBoundaryVector(v::Array{T,N}) where {T,N} = BlockBoundaryVector(v)
+
+Base.:*(x::Number, v::T) where {T<:Union{BlockBoundaryVector}} = T(x * data(v))
+Base.:*(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = x * v
+Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = inv(x) * v
 
 # Base.iterate(v::Union{BlockBoundaryVector,BoundaryVector}, state) = iterate(data(v),state)
 # Base.iterate(v::Union{BlockBoundaryVector,BoundaryVector}) = iterate(data(v))
 # Base.IteratorSize(v::Union{BlockBoundaryVector,BoundaryVector}) = Base.IteratorSize(data(v))
-Base.size(v::Union{BlockBoundaryVector,BoundaryVector}) = (length(v),)
-Base.size(v::Union{BlockBoundaryVector,BoundaryVector}, i) = i == 1 ? length(v) : 1
-Base.eltype(::BlockBoundaryVector{T,N}) where {T,N} = T
-Base.eltype(::BoundaryVector{T,N}) where {T,N} = T
+Base.size(v::Union{BlockBoundaryVector}) = size(data(v))
+Base.size(v::Union{BlockBoundaryVector}, i) = size(data(v),i) #i == 1 ? length(v) : 1
+Base.eltype(::BlockBoundaryVector{T,N}) where {T,N} = Array{T,N}
+
+# Base.reshape(v::BoundaryVector, dims::Dims) = BoundaryVector(reshape(v.data,dims))
 
 # Base.similar(v::B) where {B<:Union{BlockBoundaryVector,BoundaryVector}} = B(similar(data(v)))
-Base.similar(v::BoundaryVector) = BoundaryVector(similar(data(v)))
-Base.similar(v::BlockBoundaryVector) = BlockBoundaryVector(similar.(data(v)))
+# Base.similar(v::BoundaryVector) = BoundaryVector(similar(data(v)))
 # Base.similar(v::B, dims::Dims) where {B<:Union{<:BlockBoundaryVector,<:BoundaryVector}} = B(similar(data(v), dims))
-Base.similar(v::BoundaryVector, dims::Dims) = BoundaryVector(similar(data(v), dims))
-Base.similar(v::BlockBoundaryVector, dims::Dims) = BlockBoundaryVector(similar(data(v), dims))
+# Base.similar(v::BoundaryVector, dims::Dims) = BoundaryVector(similar(data(v), dims))
 # Base.similar(v::B, ::Type{S}) where {S,B<:Union{BlockBoundaryVector,BoundaryVector}} = B(similar(data(v), S))
-Base.similar(v::BoundaryVector, ::Type{S}) where S = BoundaryVector(similar(data(v), S))
+# Base.similar(v::BoundaryVector, ::Type{S}) where S = BoundaryVector(similar(data(v), S))
+# Base.similar(v::BoundaryVector, ::Type{S}, dims::Dims) where S = BoundaryVector(similar(data(v), S, dims))
+Base.similar(v::BlockBoundaryVector) = BlockBoundaryVector(similar.(data(v)))
+# Base.similar(v::BlockBoundaryVector, dims::Dims) = BlockBoundaryVector(similar(data(v), dims))
 Base.similar(v::BlockBoundaryVector, ::Type{S}) where S = BlockBoundaryVector(similar(data(v), S))
-Base.similar(v::BoundaryVector, ::Type{S}, dims::Dims) where S = BoundaryVector(similar(data(v), S, dims))
 Base.similar(v::BlockBoundaryVector, ::Type{S}, dims::Dims) where S = BlockBoundaryVector(similar(data(v), S, dims))
 
 # Base.similar(v::B, ::Type{S}) where {S,B<:Union{BlockBoundaryVector,BoundaryVector}} = B(similar(data(v), S))
 # Base.similar(v::BoundaryVector, ::Type{S}) where S = BoundaryVector(similar(data(v), S))
 # Base.similar(v::B, ::Type{S}, dims::Dims) where {S,B<:Union{<:BlockBoundaryVector,<:BoundaryVector}} = B(similar(data(v), S, dims))
 # Base.similar(v::BoundaryVector, s::Type{S}) where S = similar(data(v),s)
-Base.copy(v::B) where {B<:Union{BlockBoundaryVector,BoundaryVector}} = B(copy.(v))
+Base.copy(v::B) where {B<:Union{BlockBoundaryVector}} = B(copy.(v))
 # Base.copy(v::BoundaryVector) = BoundaryVector(copy(data(v)))
 # Base.copyto!(dest::BlockBoundaryVector, v::BlockBoundaryVector) = BlockBoundaryVector(copy.(data(v)))
 # Base.copyto!(dest::BoundaryVector, v::BoundaryVector) = BoundaryVector(copy(data(v)))
-Base.getindex(v::Union{BlockBoundaryVector,BoundaryVector}, x::Vararg{Int,N}) where {N} = getindex(data(v), x...)
-Base.setindex!(v::Union{BlockBoundaryVector,BoundaryVector}, value, i::Vararg{Int,N}) where {N} = setindex!(data(v), value, i...)
+Base.getindex(v::Union{BlockBoundaryVector}, x::Vararg{Int,N}) where {N} = getindex(data(v), x...)
+Base.setindex!(v::Union{BlockBoundaryVector}, value, i::Vararg{Int,N}) where {N} = setindex!(data(v), value, i...)
 # Base.ndims(v::BlockBoundaryVector{<:Number,N}) where {N} = N
 # Base.ndims(v::BoundaryVector{<:Number,N}) where {N} = N
 
-LinearAlgebra.dot(v::BoundaryVector, w::BoundaryVector) = dot(data(v), data(w))
-LinearAlgebra.norm(v::BoundaryVector) = norm(data(v))
+# LinearAlgebra.dot(v::BoundaryVector, w::BoundaryVector) = dot(data(v), data(w))
+# LinearAlgebra.norm(v::BoundaryVector) = norm(data(v))
 
 LinearAlgebra.dot(v::BlockBoundaryVector, w::BlockBoundaryVector) = mapreduce(dot, +, v.data, w.data)
 LinearAlgebra.norm(v::BlockBoundaryVector) = sqrt(mapreduce(x -> norm(x)^2, +, v))
 
 #TODO: Implement the rest of the operations necessary for eigsolve
 ###
-LinearAlgebra.mul!(w::BoundaryVector, v::BoundaryVector, x::Number) = BoundaryVector(mul!(data(w), data(v),x))
-LinearAlgebra.mul!(w::BlockBoundaryVector, v::BlockBoundaryVector, x::Number) = BlockBoundaryVector([mul!(ww, vv,x) for (ww,vv) in zip(data(w), data(v))])
+# LinearAlgebra.mul!(w::BoundaryVector, v::BoundaryVector, x::Number) = BoundaryVector(mul!(data(w), data(v),x))
 # LinearAlgebra.mul!(C::BoundaryVector, A, B, α, β) )
-LinearAlgebra.rmul!(v::BoundaryVector, x::Number) = BoundaryVector(rmul!(data(v), x))
-LinearAlgebra.rmul!(v::BlockBoundaryVector, x::Number) = BlockBoundaryVector(rmul!.(data(v), x))
-
-function LinearAlgebra.axpy!(x::Number, v::SiteSum, w::SiteSum)
-    SiteSum([axpy!(x, sv, sw) for (sv,sw) in zip(sites(v),sites(w))])
+# LinearAlgebra.rmul!(v::BoundaryVector, x::Number) = BoundaryVector(rmul!(data(v), x))
+LinearAlgebra.mul!(w::BlockBoundaryVector, v::BlockBoundaryVector, x::Number) = BlockBoundaryVector([mul!(ww, vv,x) for (ww,vv) in zip(data(w), data(v))])
+LinearAlgebra.rmul!(v::BlockBoundaryVector, x::Number) = BlockBoundaryVector(rmul!(data(v), x))
+function LinearAlgebra.axpy!(x::Number, v::BlockBoundaryVector, w::BlockBoundaryVector)
+    BlockBoundaryVector([axpy!(x, sv, sw) for (sv,sw) in zip(data(v),data(w))])
 end
-function LinearAlgebra.axpby!(x::Number, v::SiteSum, β::Number, w::SiteSum)
-    @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([axpby!(x, sv, β, sw) for (sv,sw) in zip(sites(v),sites(w))])
+function LinearAlgebra.axpby!(x::Number, v::BlockBoundaryVector, β::Number, w::BlockBoundaryVector)
+    BlockBoundaryVector([axpby!(x, sv, β, sw) for (sv,sw) in zip(data(v),data(w))])
 end
 
 ###
-function BlockBoundaryVector(v::BoundaryVector{T,N}) where {T,N}
-    bv = Array{BoundaryVector{T,N},N}(undef, (1 for k in 1:N)...)
+function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
+    bv = Array{Array{T,N},N}(undef, (1 for k in 1:N)...)
     bv[1] = v
     return BlockBoundaryVector(bv)
 end
@@ -93,10 +87,12 @@ end
 #Base.size(v::Union{BlockBoundaryVector,BoundaryVector}) = size(vec(v))
 # BlockBoundaryVector(vec::Vector{<:Number}) = BlockBoundaryVector(BoundaryVector)
 function BlockBoundaryVector(vecs::Vararg{BlockBoundaryVector,N}) where {N}
-    BlockBoundaryVector([BoundaryVector(bvs...) for bvs in Base.product(data.(vecs)...)])
+    BlockBoundaryVector([tensor_product(bvs...) for bvs in Base.product(data.(vecs)...)])
 end
-BoundaryVector(bvs::Vararg{BoundaryVector,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
-BlockBoundaryVector(bvs::Vararg{BoundaryVector,N}) where {N} = BlockBoundaryVector(BlockBoundaryVector.(bvs)...)
+# BoundaryVector(bvs::Vararg{Array,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
+# BlockBoundaryVector(bvs::Vararg{Array{T,N},N}) where {T<:Number,N} = BlockBoundaryVector(BlockBoundaryVector.(bvs)...)
+
+BlockBoundaryVector(v,s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVector(_split_vector(vec(v),s))
 
 tensor_product(t1::AbstractArray) = t1
 tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1,T2} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
@@ -107,14 +103,14 @@ struct DenseFiniteEnvironment{V,T,N} <: AbstractFiniteEnvironment
     R::Vector{V}
     #leftblocksizes::Vector{Array{NTuple{N,Int},K}}
     #rightblocksizes::Vector{Array{NTuple{N,Int},K}}
-    function DenseFiniteEnvironment(L::Vector{<:AbstractBoundaryVector{T,N}}, R::Vector{<:AbstractBoundaryVector{T,N}}) where {T,N}
+    function DenseFiniteEnvironment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N}
         new{eltype(L),T,N}(L, R)
     end
 end
 struct DenseInfiniteEnvironment{V,T,N} <: AbstractInfiniteEnvironment
     L::Vector{V}
     R::Vector{V}
-    function DenseInfiniteEnvironment(L::Vector{<:AbstractBoundaryVector{T,N}}, R::Vector{<:AbstractBoundaryVector{T,N}}) where {T,N}
+    function DenseInfiniteEnvironment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N}
         new{eltype(L),T,N}(L, R)
     end
 end
@@ -122,8 +118,8 @@ end
 Base.length(env::AbstractEnvironment) = length(env.L)
 #finite_environment(L::Vector{Array{T,N}}, R::Vector{Array{T,N}}) where {T,N} = DenseFiniteEnvironment(L, R)
 #infinite_environment(L::Vector{Array{T,N}}, R::Vector{Array{T,N}}) where {T,N} = DenseInfiniteEnvironment(L, R)
-finite_environment(L::Vector{AbstractBoundaryVector{T,N}}, R::Vector{AbstractBoundaryVector{T,N}}) where {T,N} = DenseFiniteEnvironment(L, R)
-infinite_environment(L::Vector{AbstractBoundaryVector{T,N}}, R::Vector{AbstractBoundaryVector{T,N}}) where {T,N} = DenseInfiniteEnvironment(L, R)
+finite_environment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N} = DenseFiniteEnvironment(L, R)
+infinite_environment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N} = DenseInfiniteEnvironment(L, R)
 
 
 function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, dir::Symbol)
@@ -269,22 +265,24 @@ function local_mul(envL, envR, sitesum::SiteSum)
     #FIXME: Test if this works
 end
 
-function _apply_transfer_matrices(Ts)
+function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}
     # N1, N2 = size(Ts)
     # # sizes = [size(Γ1[n1],3)*size(Γ1[n2],3) for n1 in 1:N1, n2 in 1:N1]
-    sizes2 = [size(T, 2) for T in Ts]
-    sizes1 = [size(T, 1) for T in Ts]
-    DL = sum(size.(Ts, 1))
-    DR = sum(size.(Ts, 2))
+    # sizes2 = [size(T, 2) for T in Ts]
+    # sizes1 = [size(T, 1) for T in Ts]
+    # DL = sum(size.(Ts, 1))
+    # DR = sum(size.(Ts, 2))
     f(v::BlockBoundaryVector) = BlockBoundaryVector([T * t for (T, t) in zip(Ts, data(v))])
     f_adjoint(v::BlockBoundaryVector) = BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
-    f(v) = _join_tensor([T * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes2))])
-    f_adjoint(v) = _join_tensor([T' * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes1))])
+    
+    # f(v) = _join_tensor([T * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes2))])
+    # f_adjoint(v) = _join_tensor([T' * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes1))])
     #tens = _split_vector(vec(v), sizes)
     #_join_tensor([T' * t for (T, t) in zip(Ts, tens)])
     # BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
     #end
-    return LinearMap{eltype(Ts[1])}(f, f_adjoint, DL, DR)
+    return TransferMatrix(f,f_adjoint,promote_type(eltype.(Ts)...))#LinearMapAA(f, f_adjoint, (prod(size(Ts)), prod(size(Ts))); 
+        #T = Array{eltype(Ts[1]),N}, idim = (size(Ts)), odim = (size(Ts)))
 end
 
 function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)
@@ -297,4 +295,3 @@ function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)
         return env.L[i]
     end
 end
-# Base.getindex(env::ScaledIdentityEnvironment,i::Integer, dir::Symbol) = env

@@ -122,7 +122,7 @@ end
     DL1,DL2,DR1,DR2,d = rand(1:10,5)
     site1 = randomGenericSite(DL1,d,DR1);
     site2 = randomGenericSite(DL2,d,DR2);
-    T0 = Matrix(transfer_matrix(site1,site2));
+    T0 = Matrix(transfer_matrix(site1,site2), DL1*DL2, [(DR1,DR2);;]);
     Tid = Matrix(transfer_matrix(site1,id,site2));
     @test T0 == Tid
     @test Matrix(transfer_matrix(site1)) == Matrix(transfer_matrix(site1,id))

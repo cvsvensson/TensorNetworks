@@ -1,7 +1,7 @@
 module TensorNetworks
 using LinearAlgebra
 using TensorOperations
-using LinearMaps
+using LinearMaps#, LinearMapsAA
 # using DataFrames
 using KrylovKit
 using DoubleFloats

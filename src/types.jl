@@ -211,3 +211,11 @@ boundaryconditions(mps::UMPS) = InfiniteBoundary()
 #         new{T}(Γ, Λ, truncation, error, center)
 #     end
 # end
+
+abstract type AbstractEnvironment end
+abstract type AbstractInfiniteEnvironment <: AbstractEnvironment end
+abstract type AbstractFiniteEnvironment <: AbstractEnvironment end
+
+struct BlockBoundaryVector{T,N} <: AbstractArray{Array{T,N},N}
+    data::Array{Array{T,N},N}
+end

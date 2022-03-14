@@ -94,22 +94,6 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
     return v
 end
 
-# function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum})
-#     #FIXME Might screw up type stability, so might need a TransferMatrix struct?
-#     N1 = length(Γ1[1])
-#     N2 = length(Γ2[1])
-#     Ts = [_transfer_right_gate(map(s->sites(s)[n1],Γ1), gate, map(s->sites(s)[n2],Γ2)) for n1 in 1:N1, n2 in 1:N2]
-#     return _apply_transfer_matrices(Ts)
-# end
-#_transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
-#_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:AbstractSite}) = _transfer_right_gate(Γ1, gate, SiteSum.(Γ2))
-#_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
-
-
-# _transfer_left_mpo(Γ1::GenericSite, op, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), op, Γ2)
-# _transfer_left_mpo(Γ1::SiteSum, op, Γ2::GenericSite) = _transfer_left_mpo(Γ1, op, SiteSum(Γ2))
-# _transfer_left_mpo(Γ1::GenericSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
-# _transfer_left_mpo(Γ1::SiteSum, Γ2::GenericSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
 _transfer_left_mpo(Γ1, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
 _transfer_left_mpo(Γ1) = _transfer_left_mpo(Γ1, Γ1)
 
@@ -192,17 +176,14 @@ function _split_vector(v, s::Array{NTuple{N,Int},K}) where {N,K}
     ranges = size(s)
     tens = Array{Array{eltype(v),N},K}(undef, ranges)
     last = 0
-    println("V:", length(v))
-    println("sizes:", s)
     for ns in Base.product((1:r for r in ranges)...)
         next = last + prod(s[ns...])
-        println(ns)
-        println("S: ", s[ns...])
         tens[ns...] = reshape(v[last+1:next], s[ns...])
         last = next
     end
     return tens
 end
+
 function _join_tensor(tens)
     reduce(vcat, tens)
 end
@@ -307,9 +288,9 @@ function transfer_matrix_bond(sites::SiteSum, dir::Symbol)
     return LinkSite(vec(reduce(vcat, Array.(Λ1s))))
 end
 
-transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer, dir::Symbol) where N = I
+transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer, dir::Symbol) where N = IdentityTransferMatrix
 #transfer_matrix_bond(mps::MPSSum{<:NTuple{<:Any,<:LCROpenMPS},<:Any}, site::Integer, dir::Symbol) = I
-transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},<:Any}, dir::Symbol) = I
+transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},<:Any}, dir::Symbol) = IdentityTransferMatrix
 transfer_matrix_bond_dense(mps::SiteSum, dir::Symbol) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
 
 
