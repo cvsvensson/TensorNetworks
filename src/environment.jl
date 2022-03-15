@@ -10,12 +10,18 @@ BoundaryVector(x::Number) = BoundaryVector([x])
 struct BlockBoundaryVector{T,N} <: AbstractBoundaryVector{T,N}
     data::Array{BoundaryVector{T,N},N}
 end
-Base.vec(bv::Union{BlockBoundaryVector,BoundaryVector}) = vec(bv.data)
-Base.length(bv::Union{BoundaryVector}) = length(data(bv))
-Base.length(bv::Union{BlockBoundaryVector}) = prod(length.(data(bv)))
+Base.vec(bv::BoundaryVector) = vec(bv.data)
+Base.vec(bv::BlockBoundaryVector) = reduce(vcat, vec.(bv.data))
+Base.setindex!(bv::Union{BlockBoundaryVector,BoundaryVector},v,i::Int) = vec(bv)[i] = v
+Base.getindex(bv::Union{BlockBoundaryVector,BoundaryVector},i::Int) = vec(bv)[i]
+Base.length(bv::BoundaryVector) = length(data(bv))
+Base.length(bv::BlockBoundaryVector) = prod(length.(data(bv)))
 data(bv::Union{BlockBoundaryVector,BoundaryVector}) = bv.data
-BlockBoundaryVector(v::Array{T,N}) where {T,N} = BlockBoundaryVector(BoundaryVector(v))
-
+function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
+    # bvs = Array{BoundaryVector{T,N},N}(undef, (1 for k in 1:N)...)
+    BlockBoundaryVector([BoundaryVector(x .+ zeros((1 for n in 1:N)...)) for x in v])
+    # BlockBoundaryVector(bvs)
+end
 Base.:*(x::Number, v::T) where {T<:Union{BlockBoundaryVector,BoundaryVector}} = T(x * data(v))
 Base.:*(v::T, x::Number) where {T<:Union{BlockBoundaryVector,BoundaryVector}} = x * v
 Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector,BoundaryVector}} = inv(x) * v
@@ -44,7 +50,8 @@ Base.similar(v::BlockBoundaryVector, ::Type{S}, dims::Dims) where S = BlockBound
 # Base.similar(v::BoundaryVector, ::Type{S}) where S = BoundaryVector(similar(data(v), S))
 # Base.similar(v::B, ::Type{S}, dims::Dims) where {S,B<:Union{<:BlockBoundaryVector,<:BoundaryVector}} = B(similar(data(v), S, dims))
 # Base.similar(v::BoundaryVector, s::Type{S}) where S = similar(data(v),s)
-Base.copy(v::B) where {B<:Union{BlockBoundaryVector,BoundaryVector}} = B(copy.(v))
+Base.copy(v::BoundaryVector) = BoundaryVector(copy.(v))
+Base.copy(v::BlockBoundaryVector) = BlockBoundaryVector(copy(data(v)))
 # Base.copy(v::BoundaryVector) = BoundaryVector(copy(data(v)))
 # Base.copyto!(dest::BlockBoundaryVector, v::BlockBoundaryVector) = BlockBoundaryVector(copy.(data(v)))
 # Base.copyto!(dest::BoundaryVector, v::BoundaryVector) = BoundaryVector(copy(data(v)))
@@ -67,13 +74,12 @@ LinearAlgebra.mul!(w::BlockBoundaryVector, v::BlockBoundaryVector, x::Number) = 
 LinearAlgebra.rmul!(v::BoundaryVector, x::Number) = BoundaryVector(rmul!(data(v), x))
 LinearAlgebra.rmul!(v::BlockBoundaryVector, x::Number) = BlockBoundaryVector(rmul!.(data(v), x))
 
-function LinearAlgebra.axpy!(x::Number, v::SiteSum, w::SiteSum)
-    SiteSum([axpy!(x, sv, sw) for (sv,sw) in zip(sites(v),sites(w))])
-end
-function LinearAlgebra.axpby!(x::Number, v::SiteSum, β::Number, w::SiteSum)
-    @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([axpby!(x, sv, β, sw) for (sv,sw) in zip(sites(v),sites(w))])
-end
+LinearAlgebra.axpy!(x::Number, v::BoundaryVector, w::BoundaryVector) = BoundaryVector(axpy!(x, data(v), data(w)))
+LinearAlgebra.axpby!(x::Number, v::BoundaryVector, β::Number, w::BoundaryVector) = BoundaryVector(axpby!(x, data(v), β, data(w)))
+
+LinearAlgebra.axpy!(x::Number, v::BlockBoundaryVector, w::BlockBoundaryVector) = BlockBoundaryVector([axpy!(x, vv, ww) for (ww,vv) in zip(data(w), data(v))])
+LinearAlgebra.axpby!(x::Number, v::BlockBoundaryVector, β::Number, w::BlockBoundaryVector) = BlockBoundaryVector([axpby!(x, vv, β, ww) for (ww,vv) in zip(data(w), data(v))])
+
 
 ###
 function BlockBoundaryVector(v::BoundaryVector{T,N}) where {T,N}
@@ -93,6 +99,8 @@ end
 #Base.size(v::Union{BlockBoundaryVector,BoundaryVector}) = size(vec(v))
 # BlockBoundaryVector(vec::Vector{<:Number}) = BlockBoundaryVector(BoundaryVector)
 function BlockBoundaryVector(vecs::Vararg{BlockBoundaryVector,N}) where {N}
+    #println(typeof.(data.(vecs)))
+    #println(typeof([BoundaryVector(bvs...) for bvs in Base.product(data.(vecs)...)]))
     BlockBoundaryVector([BoundaryVector(bvs...) for bvs in Base.product(data.(vecs)...)])
 end
 BoundaryVector(bvs::Vararg{BoundaryVector,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
