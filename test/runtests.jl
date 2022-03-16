@@ -119,14 +119,30 @@ end
     @test id' == id
     @test zid' == conj(z) * id
 
-    DL1,DL2,DR1,DR2,d = rand(1:10,5)
+    DL1,DL2,DR1,DR2,d = rand(2:10,5)
     site1 = randomGenericSite(DL1,d,DR1);
     site2 = randomGenericSite(DL2,d,DR2);
-    T0 = Matrix(transfer_matrix(site1,site2), DL1*DL2, [(DR1,DR2);;]);
-    Tid = Matrix(transfer_matrix(site1,id,site2));
+    T0 = Matrix(transfer_matrix(site1,site2), DL1*DL2, (DR1,DR2));
+    Tid = Matrix(transfer_matrix(site1,id,site2),DL1*DL2, (DR1,DR2));
     @test T0 == Tid
-    @test Matrix(transfer_matrix(site1)) == Matrix(transfer_matrix(site1,id))
-    @test z*T0 == Matrix(transfer_matrix(site1,zid,site2))
+    @test Matrix(transfer_matrix(site1),DL1^2,(DR1,DR1)) == Matrix(transfer_matrix(site1,id),DL1^2,(DR1,DR1))
+    @test z*T0 == Matrix(transfer_matrix(site1,zid,site2),DL1*DL2,(DR1,DR2))
+
+
+    DL12,DL22,DR12,DR22 = rand(2:10,4)
+    site12 = site1 + randomGenericSite(DL12,d,DR12);
+    site22 = site2 + randomGenericSite(DL22,d,DR22);
+
+    T0 = Matrix(transfer_matrix(site1,site22),(DL1)*(DL2+DL22), blocksizes([DR1],[DR2, DR22]));
+    Tid = Matrix(transfer_matrix(site1,id,site22), (DL1)*(DL2+DL22), blocksizes([DR1],[DR2, DR22]));
+    @test T0 == Tid
+    @test z*T0 == Matrix(transfer_matrix(site1,zid,site22),(DL1)*(DL2+DL22),blocksizes([DR1],[DR2, DR22]))
+
+    T0 = Matrix(transfer_matrix(site12,site22),(DL1 + DL12)*(DL2+DL22), blocksizes([DR1, DR12],[DR2, DR22]));
+    Tid = Matrix(transfer_matrix(site12,id,site22), (DL1 + DL12)*(DL2+DL22), blocksizes([DR1, DR12],[DR2, DR22]));
+    @test T0 == Tid
+    @test Matrix(transfer_matrix(site12),(DL1+DL12)^2,blocksizes([DR1, DR12],[DR1, DR12])) == Matrix(transfer_matrix(site12,id),(DL1+DL12)^2,blocksizes([DR1, DR12],[DR1, DR12]))
+    @test z*T0 == Matrix(transfer_matrix(site12,zid,site22),(DL1 + DL12)*(DL2+DL22),blocksizes([DR1, DR12],[DR2, DR22]))
 end
 
 @testset "MPO" begin
@@ -142,11 +158,11 @@ end
         idsite = IdentityMPOsite(d)
         @test idsite == id[floor(Int, N/2)]
         @test z^(1/N)*idsite == zid[floor(Int, N/2)]
-
-        mps = randomOpenMPS(N,d,5);
-        T0 = Matrix(prod(transfer_matrices(mps)))
-        @test T0 == Matrix(prod(transfer_matrices(mps,id)))
-        @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)))
+        D=5
+        mps = randomOpenMPS(N,d,D);
+        T0 = Matrix(prod(transfer_matrices(mps)),1,blocksizes(1,1))
+        @test T0 == Matrix(prod(transfer_matrices(mps,id)),1,blocksizes(1,1))
+        @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)),1,blocksizes(1,1))
     end
     test(2)
     test(3)
@@ -170,8 +186,8 @@ end
     update_environment!(env,mid,site,site)
     TL = transfer_matrix(site,:left)
     TR = transfer_matrix(site,:right)
-    @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
-    @test vec(env.L[mid+1]) ≈ TR*vec(env.L[mid])
+    @test env.R[mid-1] ≈ TL*env.R[mid]
+    @test env.L[mid+1] ≈ TR*env.L[mid]
 
     D2 = 10
     mps2 = randomOpenMPS(N,d,D2);
@@ -181,8 +197,8 @@ end
     update_environment!(env,mid,site2,site)
     TL = transfer_matrix(site2,site,:left)
     TR = transfer_matrix(site2,site,:right)
-    @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
-    @test vec(env.L[mid+1]) ≈ TR*vec(env.L[mid])
+    @test env.R[mid-1] ≈ TL*env.R[mid]
+    @test env.L[mid+1] ≈ TR*env.L[mid]
 
     mpo = IsingMPO(N,1,1,1);
     Dmpo = size(mpo[mid],4)
@@ -191,8 +207,8 @@ end
     update_environment!(env,mid,site2,mpo[mid],site)
     TL = transfer_matrix(site2,mpo[mid],site,:left)
     TR = transfer_matrix(site2,mpo[mid],site,:right)
-    @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
-    @test vec(env.L[mid+1]) ≈ TR*vec(env.L[mid])
+    @test env.R[mid-1] ≈ TL*env.R[mid]
+    @test env.L[mid+1] ≈ TR*env.L[mid]
 end
 
 @testset "Canonicalize" begin

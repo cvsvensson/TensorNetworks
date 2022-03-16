@@ -94,15 +94,40 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
     return v
 end
 
-_transfer_left_mpo(Γ1, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
-_transfer_left_mpo(Γ1) = _transfer_left_mpo(Γ1, Γ1)
+# _transfer_left_mpo(Γ1::SiteSum, op::AbstractMPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
+_transfer_left_mpo(Γ1::SiteSum) = _transfer_left_mpo(Γ1, Γ1)
+_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite) = data(mpo)*_transfer_left_mpo(Γ1, Γ1)
+_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo)*_transfer_left_mpo(Γ1, Γ2)
+_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo)*_transfer_left_mpo(Γ1, Γ2)
+_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo)*_transfer_left_mpo(Γ1, Γ2)
 
-function _transfer_left_mpo(Γ1, op, Γ2)
-    Ts = [__transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
+
+function _transfer_left_mpo(Γ1::SiteSum, op, Γ2)
+    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
     return _apply_transfer_matrices(Ts)
 end
-function _transfer_left_mpo(Γ1, Γ2)
-    Ts = [__transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+function _transfer_left_mpo(Γ1::SiteSum, Γ2)
+    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+    return _apply_transfer_matrices(Ts)
+end
+function _transfer_left_mpo(Γ1, op, Γ2::SiteSum)
+    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
+    return _apply_transfer_matrices(Ts)
+end
+function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
+    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
+    return _apply_transfer_matrices(Ts)
+end
+# function _transfer_left_mpo(Γ1::SiteSum, op::ScaledIdentityMPOsite, Γ2::SiteSum)
+#     Ts = [data(op)*_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+#     return _apply_transfer_matrices(Ts)
+# end
+function _transfer_left_mpo(Γ1, Γ2::SiteSum)
+    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+    return _apply_transfer_matrices(Ts)
+end
+function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
+    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
     return _apply_transfer_matrices(Ts)
 end
 
@@ -124,14 +149,6 @@ end
 #     return _apply_transfer_matrices(Ts)
 # end
 
-
-
-# function _transfer_left_mpo(Γ::AbstractSite)
-#     Ts = [_transfer_left_mpo(block) for block in blocks(Γ)]
-# end
-
-
-#TODO: replace with Blockdiagonals.jl or BlockArrays.jl.
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
     last = 0
@@ -280,18 +297,17 @@ end
 Base.vec(site::LinkSite) = vec(diag(data(site)))
 
 
-transfer_matrix_bond(mps::MPSSum, site::Integer, dir::Symbol) = transfer_matrix_bond(mps[site],dir)
-function transfer_matrix_bond(sites::SiteSum, dir::Symbol)
-    Λ1s = transfer_matrix_bond_dense.(sites.sites, dir)
+transfer_matrix_bond(mps::MPSSum, site::Integer) = transfer_matrix_bond(mps[site],dir)
+function transfer_matrix_bond(sites::SiteSum)
+    Λ1s = transfer_matrix_bond_dense.(sites.sites)
     #println(Λ1s)
     #println( reduce(vcat,vec.(Λ1s)))
     return LinkSite(vec(reduce(vcat, Array.(Λ1s))))
 end
 
-transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer, dir::Symbol) where N = IdentityTransferMatrix
+# transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer) where N = IdentityTransferMatrix
 #transfer_matrix_bond(mps::MPSSum{<:NTuple{<:Any,<:LCROpenMPS},<:Any}, site::Integer, dir::Symbol) = I
-transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},<:Any}, dir::Symbol) = IdentityTransferMatrix
-transfer_matrix_bond_dense(mps::SiteSum, dir::Symbol) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
-
+transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},T}) where T = IdentityTransferMatrix(T)
+transfer_matrix_bond_dense(mps::SiteSum) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
 
 iscanonical(sites::SiteSum) = all(iscanonical.(sites.sites))

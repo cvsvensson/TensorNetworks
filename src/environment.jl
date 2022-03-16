@@ -86,7 +86,7 @@ end
 
 #Base.size(v::Union{BlockBoundaryVector,BoundaryVector}) = size(vec(v))
 # BlockBoundaryVector(vec::Vector{<:Number}) = BlockBoundaryVector(BoundaryVector)
-function BlockBoundaryVector(vecs::Vararg{BlockBoundaryVector,N}) where {N}
+function tensor_product(vecs::Vararg{BlockBoundaryVector,N}) where {N}
     BlockBoundaryVector([tensor_product(bvs...) for bvs in Base.product(data.(vecs)...)])
 end
 # BoundaryVector(bvs::Vararg{Array,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
@@ -98,28 +98,28 @@ tensor_product(t1::AbstractArray) = t1
 tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1,T2} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
 tensor_product(tensors::Vararg{<:AbstractArray,N}) where {N} = reduce(tensor_product, tensors)
 
-struct DenseFiniteEnvironment{V,T,N} <: AbstractFiniteEnvironment
+struct FiniteEnvironment{V} <: AbstractFiniteEnvironment
     L::Vector{V}
     R::Vector{V}
     #leftblocksizes::Vector{Array{NTuple{N,Int},K}}
     #rightblocksizes::Vector{Array{NTuple{N,Int},K}}
-    function DenseFiniteEnvironment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N}
-        new{eltype(L),T,N}(L, R)
+    function FiniteEnvironment(L::Vector{V}, R::Vector{V}) where {V}
+        new{V}(L, R)
     end
 end
-struct DenseInfiniteEnvironment{V,T,N} <: AbstractInfiniteEnvironment
+struct InfiniteEnvironment{V} <: AbstractInfiniteEnvironment
     L::Vector{V}
     R::Vector{V}
-    function DenseInfiniteEnvironment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N}
-        new{eltype(L),T,N}(L, R)
+    function InfiniteEnvironment(L::Vector{V}, R::Vector{V}) where V
+        new{V}(L, R)
     end
 end
 
 Base.length(env::AbstractEnvironment) = length(env.L)
 #finite_environment(L::Vector{Array{T,N}}, R::Vector{Array{T,N}}) where {T,N} = DenseFiniteEnvironment(L, R)
 #infinite_environment(L::Vector{Array{T,N}}, R::Vector{Array{T,N}}) where {T,N} = DenseInfiniteEnvironment(L, R)
-finite_environment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N} = DenseFiniteEnvironment(L, R)
-infinite_environment(L::Vector{BlockBoundaryVector{T,N}}, R::Vector{BlockBoundaryVector{T,N}}) where {T,N} = DenseInfiniteEnvironment(L, R)
+finite_environment(L::Vector{V}, R::Vector{V}) where {V} = FiniteEnvironment(L, R)
+infinite_environment(L::Vector{V}, R::Vector{V}) where {V} = InfiniteEnvironment(L, R)
 
 
 function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, dir::Symbol)
@@ -152,11 +152,11 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
     return env
 end
 function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
-    T = numtype(mps1)
+    T = numtype(mps1,mps2)
     Ts = data(mpo) * transfer_matrices(mps1, mps2, reverse_direction(dir))
-    V::Vector{T} = vec(boundary(mps1, mps2, dir))
+    V = boundary(mps1, mps2, dir)
     N = length(mps1)
-    env = Vector{Array{T,2}}(undef, N)
+    env = Vector{eltype(V)}(undef, N)
     if dir == :left
         itr = 1:1:N
         s = 1
@@ -168,7 +168,7 @@ function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::Abstra
     end
     #Vsize(k) = (size(mps1[k],s), size(mps2[k],s))
     for k in itr
-        env[k] = reshape(V, size(mps1[k], s), size(mps2[k], s))
+        env[k] = V#reshape(V, size(mps1[k], s), size(mps2[k], s))
         if k != itr[end]
             V = Ts[k] * V
         end
@@ -203,23 +203,23 @@ environment(mps::AbstractMPS) = environment(mps, IdentityMPO(length(mps)), mps)
 
 function update_left_environment!(env::AbstractFiniteEnvironment, j::Integer, sites::Vararg{Union{AbstractSite,AbstractMPOsite},N}) where {N}
     # sl = [size(site)[end] for site in sites]
-    sl = map(s -> size(s)[end], sites)
-    j == length(env) || (env.L[j+1] = reshape(_local_transfer_matrix(sites, :right) * vec(env.L[j]), sl...))
+    # sl = map(s -> size(s)[end], sites)
+    j == length(env) || (env.L[j+1] = _local_transfer_matrix(sites, :right) * env.L[j])
     return
 end
 function update_right_environment!(env::AbstractFiniteEnvironment, j::Integer, sites::Vararg{Union{AbstractSite,AbstractMPOsite},N}) where {N}
     #sr = [size(site)[1] for site in sites]
     sr = size.(sites, 1)
     if j > 1
-        env.R[j-1] = reshape(_local_transfer_matrix(sites, :left) * vec(env.R[j]), sr...)
+        env.R[j-1] = _local_transfer_matrix(sites, :left) * env.R[j]
     end
     return
 end
 function update_environment!(env::AbstractFiniteEnvironment, j::Integer, sites::Vararg{Union{AbstractSite,AbstractMPOsite},N}) where {N}
-    sl = map(s -> size(s)[end], sites)
-    sr = size.(sites, 1)
-    j == length(env) || (env.L[j+1] = reshape(_local_transfer_matrix(sites, :right) * vec(env.L[j]), sl...))
-    j == 1 || (env.R[j-1] = reshape(_local_transfer_matrix(sites, :left) * vec(env.R[j]), sr...))
+    # sl = map(s -> size(s)[end], sites)
+    # sr = size.(sites, 1)
+    j == length(env) || (env.L[j+1] = _local_transfer_matrix(sites, :right) * env.L[j])
+    j == 1 || (env.R[j-1] = _local_transfer_matrix(sites, :left) * env.R[j])
     return
 end
 

@@ -309,27 +309,27 @@ end
 
 function boundary(::OpenBoundary, mpo::MPO, side::Symbol)
     if side == :right
-        return BlockBoundaryVector(BoundaryVector.(fill(one(eltype(mpo[end])), length(sites(mpo[end]))))) # [one(eltype(mpo[end]))]
+        return fill(one(eltype(mpo[end])), length(sites(mpo[end]))) # [one(eltype(mpo[end]))]
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return BlockBoundaryVector(BoundaryVector.(mpo.boundary))
+        return mpo.boundary
     end
 end
 
 function boundary(::OpenBoundary, mpo::MPOSum, side::Symbol)
     if side == :right
-        return fill(one(eltype(mpo.scalings)), length(mpo.scalings))
+        return [fill(one(eltype(mpo.scalings)), length(mpo.scalings)) for m in mpo.mpos]
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return mpo.scalings
+        return [m.scalings for m in mpo.mpos]
     end
 end
-boundary(mpos::MPOSum) = reduce(vcat, [s*boundary(mpo) for (mpo,s) in zip(mpos.mpos,mpos.scalings)])
-boundary(mpo::MPO) = mpo.boundary
+# boundary(mpos::MPOSum) = reduce(vcat, [s*boundary(mpo) for (mpo,s) in zip(mpos.mpos,mpos.scalings)])
+# boundary(mpo::MPO) = mpo.boundary
 boundary(::ScaledIdentityMPO{T}) where T = [one(T)]
 
 """

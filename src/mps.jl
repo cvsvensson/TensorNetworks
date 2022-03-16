@@ -12,7 +12,7 @@ function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
     K = numtype(mps1, mps2)
     #::Vector{LinearMap{K}}
     Ts = transfer_matrices(mps1, mps2)
-    vl = transfer_matrix_bond(mps1, mps2, 1, :right) * boundaryvec(mps1, mps2, :left)
+    vl = transfer_matrix_bond(mps1[1], mps2[1]) * boundaryvec(mps1, mps2, :left)
     #::Vector{K}
     vr = boundaryvec(mps1, mps2, :right)
     for k in length(mps1):-1:1

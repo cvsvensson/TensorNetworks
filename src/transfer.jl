@@ -5,8 +5,7 @@ struct TransferMatrixAdj{F<:Function,Fa<:Function,T} <: AbstractTransferMatrix{T
 end
 struct TransferMatrix{F<:Function,T} <: AbstractTransferMatrix{T}
     f::F
-    TransferMatrix(f::Function, T::DataType) = TransferMatrix{typeof(f),typeof(fa),T}(f, fa)
-
+    TransferMatrix(f::Function, T::DataType) = new{typeof(f),T}(f)
 end
 #TransferMatrix(f::Function) = TransferMatrix{typeof(f)}(f)
 TransferMatrix(f::Function, fa::Function, T::DataType) = TransferMatrixAdj{typeof(f),typeof(fa),T}(f, fa)
@@ -22,23 +21,26 @@ Base.:*(T1::TransferMatrixAdj, T2::TransferMatrixAdj) = TransferMatrix(T1.f ∘ 
 
 IdentityTransferMatrix(T) = TransferMatrix(identity, identity, T)
 function Matrix(T::AbstractTransferMatrix, out::Int, s::Array{NTuple{N,Int},K}) where {N,K}
-    v = zeros(eltype(T), prod(prod.(s)))
+    v = zeros(eltype(T), sum(prod.(s)))
     v[1] = 1
-    m = zeros(eltype(T), out, prod(prod.(s)))
-    for k in prod(prod.(s))
-        # println(vec(T * BlockBoundaryVector(v, s)))
+    m = zeros(eltype(T), out, sum(prod.(s)))
+    for k in 1:sum(prod.(s))
         m[:, k] = vec(T * BlockBoundaryVector(v, s))
-        circshift!(v, 1)
+        v = circshift(v, 1)
     end
     return m
 end
-function Matrix(T::AbstractTransferMatrix, dims::Tuple{Int,Int})
-    v = zeros(eltype(T), dims[2])
+function blocksizes(dims::Vararg{Vector{Int},N}) where N
+    [dim for dim in Base.product(dims...)]
+end
+blocksizes(dims::Vararg{Int,N}) where N = blocksizes(([d] for d in dims)...)
+function Matrix(T::AbstractTransferMatrix, olength::Int, idims::Dims{2})
+    v = vec(zeros(eltype(T), idims))
     v[1] = 1
-    m = zeros(eltype(T), dims...)
-    for k in dims[2]
-        m[:, k] = vec(T * v)
-        circshift!(v, 1)
+    m = zeros(eltype(T), olength, prod(idims))
+    for k in 1:prod(idims[2])
+        m[:, k] = vec(T * reshape(v,idims))
+        v = circshift(v, 1)
     end
     return m
 end
@@ -52,10 +54,10 @@ Base.kron(a::UniformScaling, b::UniformScaling) = a * b
 Base.kron(a::UniformScaling, b::AbstractMatrix) = Diagonal(a, size(b, 1)) * b
 Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
 
-transfer_matrix_bond(site::OrthogonalLinkSite, dir::Symbol) = TransferMatrix(v -> data(link(site, :left)) * v)
-transfer_matrix_bond_dense(site::OrthogonalLinkSite, dir::Symbol) = data(link(site, :left))
-transfer_matrix_bond_dense(site::GenericSite{T}, dir::Symbol) where {T} = Matrix(one(T)I, size(site, 1))
-transfer_matrix_bond(site::GenericSite, dir::Symbol) = TransferMatrix(identity, identity)
+transfer_matrix_bond(site::OrthogonalLinkSite{T}) where {T} = TransferMatrix(v -> data(link(site, :left)) * v, T)
+transfer_matrix_bond_dense(site::OrthogonalLinkSite) = data(link(site, :left))
+transfer_matrix_bond_dense(site::GenericSite{T}) where {T} = Matrix(one(T)I, size(site, 1))
+transfer_matrix_bond(site::GenericSite{T}) where T = TransferMatrix(identity, identity,T)
 
 # %% Transfer Matrices
 """
@@ -74,18 +76,23 @@ _transfer_left_mpo(s::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s, :r
 # __transfer_left_mpo(R::AbstractVector,Γ1::GenericSite, Γ2::GenericSite) = __transfer_left_mpo(reshape(R,size(\Gamma)  )))
 __transfer_left_mpo(R::AbstractArray{<:Any,2}, Γ1::GenericSite, Γ2::GenericSite) = (@tensoropt (t1, b1, -1, -2) temp[:] := R[t1, b1] * conj(data(Γ1)[-1, c1, t1]) * data(Γ2)[-2, c1, b1])
 __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,2}, Γ1::GenericSite, Γ2::GenericSite) = @tensoropt (t1, b1, -1, -2) temp[:] := L[t1, b1] * data(Γ1)[t1, c1, -1] * conj(data(Γ2)[b1, c1, -2])
-__transfer_left_mpo(R::AbstractArray{<:Any,2}, Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite) =
-    @tensoropt (tr, br, -1, -2, -3) temp[:] := conj(data(Γ1)[-1, u, tr]) * data(mpo)[-2, u, d, cr] * data(Γ2)[-3, d, br] * R[tr, cr, br]
-__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,2}, Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite) =
-    @tensoropt (bl, tl, -1, -2, -3) temp[:] := L[tl, cl, bl] * data(Γ1)[tl, u, -1] * conj(data(mpo)[cl, u, d, -2]) * conj(data(Γ2)[bl, d, -3])
+__transfer_left_mpo(R::AbstractArray{<:Any,3}, Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite) =
+    @tensoropt (tr, br, -1, -3) temp[:] := conj(data(Γ1)[-1, u, tr]) * data(mpo)[-2, u, d, cr] * data(Γ2)[-3, d, br] * R[tr, cr, br]
+__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,3}, Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite) =
+    @tensoropt (bl, tl, -1, -3) temp[:] := L[tl, cl, bl] * data(Γ1)[tl, u, -1] * conj(data(mpo)[cl, u, d, -2]) * conj(data(Γ2)[bl, d, -3])
 
-function __transfer_left_mpo(Γ1::GenericSite{T}, Γ2::GenericSite{K}) where {T,K}
+# __transfer_left_mpo(R::AbstractArray{<:Any,3}, Γ1::GenericSite, mpo::ScaledIdentityMPOsite, Γ2::GenericSite) =
+#     @tensoropt (t1, b1, -1, -3) temp[:] := data(mpo)*R[t1,-2, b1] * conj(data(Γ1)[-1, c1, t1]) * data(Γ2)[-3, c1, b1]
+# __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,3}, Γ1::GenericSite,mpo::ScaledIdentityMPOsite, Γ2::GenericSite) =
+#     @tensoropt (t1, b1, -1, -3) temp[:] := L[t1,-2, b1] * data(Γ1)[t1, c1, -1] * conj(data(Γ2)[b1, c1, -3])
+
+function _transfer_left_mpo(Γ1::GenericSite{T}, Γ2::GenericSite{K}) where {T,K}
     f(R) = __transfer_left_mpo(R, Γ1, Γ2)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ2)
     return TransferMatrix(f, fadj,promote_type(T,K)) #LinearMapAA(func, func_adjoint, (dims1[1] * dims2[1], dims1[3] * dims2[3]);
     #odim = (dims1[1], dims2[1]), idim = (dims1[3], dims2[3]), T = eltype(Γ1))
 end
-function __transfer_left_mpo(Γ1::GenericSite{T}) where T
+function _transfer_left_mpo(Γ1::GenericSite{T}) where T
     f(R) = __transfer_left_mpo(R, Γ1, Γ1)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ1)
     return TransferMatrix(f, fadj,T)
@@ -95,7 +102,7 @@ end
 
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1)
-function __transfer_left_mpo(Γ1::GenericSite{T1}, mpo::MPOsite{T2}, Γ2::GenericSite{T3}) where {T1,T2,T3}
+function _transfer_left_mpo(Γ1::GenericSite{T1}, mpo::MPOsite{T2}, Γ2::GenericSite{T3}) where {T1,T2,T3}
     f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ2)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ2)
     return TransferMatrix(f, fadj, promote_type(T1,T2,T3))
@@ -218,12 +225,23 @@ function _transfer_left_gate(Γ, gate::AbstractSquareGate)
 end
 
 _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
-function _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:AbstractSite})
+function _transfer_right_gate(Γ1::AbstractVector{<:SiteSum}, gate::GenericSquareGate, Γ2::AbstractVector{<:AbstractSite})
     n1 = length(sites(Γ1[1]))
     n2 = length(sites(Γ2[1]))
     Ts = [_transfer_right_gate_dense(getindex.(sites.(Γ1), k1), gate, getindex.(sites.(Γ2), k2)) for (k1, k2) in Base.product(1:n1, 1:n2)]
     return _apply_transfer_matrices(Ts)
 end
+function _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:SiteSum})
+    n1 = length(sites(Γ1[1]))
+    n2 = length(sites(Γ2[1]))
+    Ts = [_transfer_right_gate_dense(getindex.(sites.(Γ1), k1), gate, getindex.(sites.(Γ2), k2)) for (k1, k2) in Base.product(1:n1, 1:n2)]
+    return _apply_transfer_matrices(Ts)
+end
+
+function _transfer_right_gate(Γ1::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}}, gate::GenericSquareGate, Γ2::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}})
+    _transfer_right_gate_dense(Γ1,gate,Γ2)
+end
+
 # _transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate)
 _transfer_right_gate_dense(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:OrthogonalLinkSite}) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate, [GenericSite(Γ, :left) for Γ in Γ2])
 function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::GenericSquareGate, Γ2::AbstractVector{GenericSite{T}}) where {T}
@@ -250,7 +268,7 @@ function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::G
         return vout
     end
     #TODO Define adjoint
-    return TransferMatrix(T_on_vec)#LinearMapAA(T_on_vec, (s_final1 * s_final2, s_start1 * s_start2);
+    return TransferMatrix(T_on_vec,T)#LinearMapAA(T_on_vec, (s_final1 * s_final2, s_start1 * s_start2);
     #odim = (s_final1, s_final2), idim = (s_start1, s_start2), T = T)
 end
 

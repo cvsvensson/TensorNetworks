@@ -95,12 +95,12 @@ Return a local expectation value of the gate. The boundaries is assumed to corre
 function expectation_value(sites::Union{Vector{GenericSite{T}},Vector{OrthogonalLinkSite{T}}}, gate::AbstractSquareGate) where {T}
     @assert length(sites) == operatorlength(gate)
     #Λ = data(sites[1].Λ1) .^ 2
-    TΛ = transfer_matrix_bond(sites[1],:left)
+    TΛ = transfer_matrix_bond(sites[1])
     transfer = transfer_matrix(sites, gate, :left)
     DL = size(sites[1], 1)
     DR = size(sites[end], 3)
-    idL = BlockBoundaryVector(Matrix{T}(I, DL, DL))
-    idR = BlockBoundaryVector(Matrix{T}(I, DR, DR))
+    idL = Matrix{T}(I, DL, DL)
+    idR = Matrix{T}(I, DR, DR)
     return dot(idL, TΛ*(transfer * idR))
 end
 # function expectation_value(sites::Vector{GenericSite{T}}, gate::AbstractSquareGate) where {T}
@@ -164,7 +164,7 @@ function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string
     for n2 in k2:-1:oplength1+1 #Op2 is on the right
         L = op2transfers[n2] * idR(n2 + oplength2 - 1)
         for n1 in n2-oplength1:-1:k1
-            Λ2 = transfer_matrix_bond(mps, mps, n1, :left)  # = mps.Λ[n1].^2
+            Λ2 = transfer_matrix_bond(mps[n1], mps[n1])  # = mps.Λ[n1].^2
             # L2 = reshape(op1transfers[n1]*L,length(Λ2),length(Λ2))
             # corr[n1,n2] = tr(Λ2*L2)
             L2 = op1stringtransfers[n1] * L #String operator intersects with the left operator
@@ -175,7 +175,7 @@ function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string
     for n2 in k2:-1:oplength2+1 #Op1 is on the right
         L = op1transfers[n2] * idR(n2 + oplength1 - 1)
         for n1 in n2-oplength2:-1:k1
-            Λ2 = transfer_matrix_bond(mps, mps, n1, :left)#mps.Λ[n1].^2
+            Λ2 = transfer_matrix_bond(mps[n1], mps[n1])#mps.Λ[n1].^2
             # L2 = reshape(op2transfers[n1]*L,length(Λ2),length(Λ2))
             # corr[n2,n1] = tr(Λ2*L2)
             L2 = op2stringtransfers[n1] * L
