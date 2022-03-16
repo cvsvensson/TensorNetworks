@@ -12,14 +12,17 @@ function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
     K = numtype(mps1, mps2)
     #::Vector{LinearMap{K}}
     Ts = transfer_matrices(mps1, mps2)
-    vl = transfer_matrix_bond(mps1[1], mps2[1]) * boundaryvec(mps1, mps2, :left)
+    vl = transfer_matrix_bond(mps1[1], mps2[1]) * boundary(mps1, mps2, :left)
     #::Vector{K}
-    vr = boundaryvec(mps1, mps2, :right)
-    for k in length(mps1):-1:1
-        vr = Ts[k] * vr
-    end
-    return transpose(vr) * vl
+    vr = boundary(mps1, mps2, :right)
+    # for k in length(mps1):-1:1
+    #     vr = Ts[k] * vr
+    # end
+    # vr = foldr(*,Ts,init=vr)
+    return inner(vl, foldr(*, Ts, init = vr))
 end
+inner(v::AbstractArray{<:Number,N}, w::AbstractArray{<:Number,N}) where {N} = mapreduce(prod, +, zip(v, w))
+inner(v::BlockBoundaryVector{<:Number,N}, w::BlockBoundaryVector{<:Number,N}) where {N} = mapreduce(inner, +, data(v), data(w))
 
 LinearAlgebra.norm(mps::AbstractMPS) = sqrt(abs(scalar_product(mps, mps)))
 

@@ -140,23 +140,28 @@ end
 
 Return the spectrum of the transfer matrix of the UMPS
 """
-function transfer_spectrum(mps::UMPS{K}, direction::Symbol = :left; nev = 1) where {K}
+function transfer_spectrum(mps::UMPS{K}, direction::Symbol = :left; nev = 1) where K
     # if K == ComplexDF64
     # 	@warn("converting ComplexDF64 to ComplexF64")
     # 	mps = convert(UMPS{ComplexF64},mps)
     # end
+    cK = complex(K)
     T = transfer_matrix(mps, direction)
-    D = length(vec(mps.Λ[1]))#(sqrt(size(T,2)))
-    nev::Int = min(D^2, nev)
-    if D < 4
-        vals, vecs = eigen(Matrix(T))
-        vals = vals[end:-1:1]
-        vecs = vecs[:, end:-1:1]
-    else
-        x0 = vec(Matrix{K}(I, D, D))
-        vals, vecsvec = eigsolve(T, x0, nev, :LM)#eigs(T,nev=nev)
-        vecs = reduce(hcat, vecsvec)
-    end
+    vals, tensors = eigs(T; nev = nev)
+    tensors2::Vector{Matrix{cK}} = canonicalize_eigenoperator.(tensors)
+    return vals::Vector{cK}, tensors2
+    # D = length(vec(mps.Λ[1]))#(sqrt(size(T,2)))
+    # nev::Int = min(D^2, nev)
+    # if D < 10
+    #     vals, vecs = eigen(Matrix(T))
+    #     vals = vals[end:-1:1]
+    #     vecs = vecs[:, end:-1:1]
+    #     tensors::Vector{Matrix{cK}} = [reshape(vecs[:, k], D, D) for k in 1:nev]
+    # else
+    #     x0 = Matrix{cK}(I, D, D)
+    #     vals, tensors = eigsolve(T.f, x0, nev, :LM)#eigs(T,nev=nev)
+    #     #vecs = reduce(hcat, vecsvec)
+    # end
     # if K == ComplexDF64
     # 	vals = ComplexDF64.(vals)
     # 	vecs = ComplexDF64.(vecs)
@@ -165,27 +170,49 @@ function transfer_spectrum(mps::UMPS{K}, direction::Symbol = :left; nev = 1) whe
     # for i in 1:nev
     # 	tensors[i] = reshape(vecs[:,i],D,D)
     # end
-    nev = min(length(vals), nev)
-    tensors::Vector{Matrix{K}} = [reshape(vecs[:, k], D, D) for k in 1:nev]
-    return K.(vals[1:nev])::Vector{K}, canonicalize_eigenoperator.(tensors) #canonicalize_eigenoperator.(tensors)
+    # nev = min(length(vals), nev)
+    # tensors2::Vector{Matrix{cK}} = [canonicalize_eigenoperator(reshape(tensors[k], D, D)) for k in 1:nev]
+    # return (vals[1:nev])::Vector{cK}, tensors2 #canonicalize_eigenoperator.(tensors)
 end
-function transfer_spectrum(mps1::UMPS, mps2::UMPS, direction::Symbol = :left; nev = 1)
-    T = transfer_matrix(mps1, mps2, direction)
-    D1 = size(mps1[end], 3)
-    D2 = size(mps2[end], 3)
-    nev = minimum([D1 * D2, nev])
-    if D1 * D2 < 20
+
+function eigs(T::AbstractTransferMatrix{K,<:Any}; nev = 1) where {K}
+    cK = complex(K)
+    sizes = size(T)
+    if sum(prod.(sizes[2])) * sum(prod.(sizes[1])) < 100
         vals, vecs = eigen(Matrix(T))
         vals = vals[end:-1:1]
         vecs = vecs[:, end:-1:1]
+        nev = min(length(vals), nev)
+        tensors = [_split_vector(vecs[:, k], sizes[1]) for k in 1:nev]
     else
-        x0 = vec(Matrix{eltype(mps1[end])}(I, D1, D2))
-        vals, vecsvec = eigsolve(T, x0, nev, :LM)#eigs(T,nev=nev)
-        vecs = reduce(hcat, vecsvec)
+        x0 = IdentityBoundary(cK, sizes[2])
+        vals::Vector{cK}, tensors::Vector{typeof(IdentityBoundary(cK, sizes[2]))} = eigsolve(v->T*v, x0, nev, :LM)
+        nev = min(length(vals), nev)
     end
-    nev = min(length(vals), nev)
-    tensors = [reshape(vecs[:, k], D1, D2) for k in 1:nev]
-    return vals[1:nev], tensors #canonicalize_eigenoperator.(tensors)
+    return vals[1:nev], tensors[1:nev]
+end
+
+function transfer_spectrum(mps1::UMPS, mps2::UMPS, direction::Symbol = :left; nev = 1) #where {T1,T2}
+    T = transfer_matrix(mps1, mps2, direction)
+    vals, tensors = eigs(T; nev = nev)
+    return vals, tensors
+    # cK = complex(promote_type(T1, T2))
+    # D1 = size(mps1[end], 3)
+    # D2 = size(mps2[end], 3)
+    # nev = minimum([D1 * D2, nev])
+    # if D1 * D2 < 20
+    #     vals, vecs = eigen(Matrix(T))
+    #     vals = vals[end:-1:1]
+    #     vecs = vecs[:, end:-1:1]
+    #     tensors::Vector{Matrix{cK}} = [reshape(vecs[:, k], D, D) for k in 1:nev]
+    # else
+    #     x0 = Matrix{cK}(I, D1, D2)
+    #     vals, tensors = eigsolve(T.f, x0, nev, :LM)#eigs(T,nev=nev)
+    #     #vecs = reduce(hcat, vecsvec)
+    # end
+    # nev = min(length(vals), nev)
+    # tensors2::Vector{Matrix{cK}} = [reshape(vecs[:, k], D1, D2) for k in 1:nev]
+    # return vals[1:nev]::Vector{cK}, tensors2 #canonicalize_eigenoperator.(tensors)
 end
 """
 	transfer_spectrum(mps::UMPS, mpo::AbstractMPO, direction=:left; nev=1)
@@ -417,7 +444,7 @@ function canonicalize_cell(mps::UMPS{K}) where {K}
         sevl = sqrt.(evl)
         X = Diagonal(sevr)[abs.(sevr).>sqrt(mps.truncation.tol), :] * Ur'
         Y = Diagonal(sevl)[abs.(sevl).>sqrt(mps.truncation.tol), :] * Ul'
-        println(minimum(abs.(sevr)))
+        # println(minimum(abs.(sevr)))
     end
     F = try
         svd!(Y * data(mps.Λ[1]) * transpose(X))
@@ -555,7 +582,7 @@ function canonicalize_eigenoperator(rho::AbstractMatrix)
     trρ = tr(rho)
     phase = trρ / abs(trρ)
     rho = rho ./ phase
-    rhoH = Hermitian((rho + rho') / 2)
+    rhoH = Matrix(Hermitian((rho + rho') / 2))
     return rhoH / norm(rhoH) * sqrt(size(rhoH, 1))
 end
 

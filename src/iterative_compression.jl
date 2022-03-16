@@ -25,7 +25,7 @@ function shift_center!(mps, j, dir, ::ShiftCenter; kwargs...)
 end
 
 function shift_center!(mps, j, dir, SE::SubspaceExpand; mpo, env, kwargs...)
-    newmin = transpose(transfer_matrix(mps[j], mpo[j], mps[j]) * vec(env.R[j])) * vec(env.L[j])
+    newmin = inner(transfer_matrix(mps[j], mpo[j], mps[j]) * env.R[j], env.L[j])
     if SE.alpha < mps.truncation.tol
         shift_center!(mps, j, dir, ShiftCenter(); mpo, env)
         return SE.oldmin
@@ -44,7 +44,7 @@ function shift_center!(mps, j, dir, SE::SubspaceExpand; mpo, env, kwargs...)
     mps.Γ[j] = A
     mps.Γ[j+dirval] = B
     T = prod(transfer_matrices(mps[j1:j2], mpo[j1:j2], mps[j1:j2], :left))
-    truncmin = transpose(T * vec(env.R[j2])) * vec(env.L[j1])
+    truncmin = inner(T * env.R[j2], env.L[j1])
 
 
     if SE.oldmin !== nothing

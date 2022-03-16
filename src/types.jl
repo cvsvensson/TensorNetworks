@@ -219,3 +219,29 @@ abstract type AbstractFiniteEnvironment <: AbstractEnvironment end
 struct BlockBoundaryVector{T,N} <: AbstractArray{Array{T,N},N}
     data::Array{Array{T,N},N}
 end
+
+abstract type AbstractTransferMatrix{T,S} end
+struct TransferMatrix{F,Fa,T,S} <: AbstractTransferMatrix{T,S}
+    f::F
+    fa::Fa
+    sizes::S
+end
+TransferMatrix(f::Function, T::DataType, s) = TransferMatrix{typeof(f),Nothing,T,typeof(s)}(f,nothing, s)
+
+struct CompositeTransferMatrix{Maps,T,S} <: AbstractTransferMatrix{T,S}
+    maps::Maps
+    sizes::S
+end
+function CompositeTransferMatrix{T}(maps::Maps) where {Maps,T}
+    s1 = size(maps[1],1)
+    s2 = size(maps[end],2)
+    CompositeTransferMatrix{Maps,T,typeof(tuple(s1,s2))}(maps,(s1,s2))
+end
+function CompositeTransferMatrix(map::TransferMatrix{<:Any,<:Any,T,S}) where {T,S}
+    CompositeTransferMatrix{typeof(tuple(map)),T,S}(tuple(map),size(map))
+end
+# struct TransferMatrix{F<:Function,Fa,T,S} <: AbstractTransferMatrix{T,S}
+#     f::F
+#     sizes::S
+#     TransferMatrix(f::Function, T::DataType, s) = new{typeof(f),T,typeof(s)}(f, s)
+# end

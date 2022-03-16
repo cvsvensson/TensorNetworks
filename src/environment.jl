@@ -86,8 +86,12 @@ end
 
 #Base.size(v::Union{BlockBoundaryVector,BoundaryVector}) = size(vec(v))
 # BlockBoundaryVector(vec::Vector{<:Number}) = BlockBoundaryVector(BoundaryVector)
-function tensor_product(vecs::Vararg{BlockBoundaryVector,N}) where {N}
-    BlockBoundaryVector([tensor_product(bvs...) for bvs in Base.product(data.(vecs)...)])
+BlockBoundaryVector(bv::BlockBoundaryVector) = bv
+# function tensor_product(vecs::Vararg{BlockBoundaryVector,N}) where {N}
+#     BlockBoundaryVector([tensor_product(bvs...) for bvs in Base.product(data.(vecs)...)])
+# end
+function tensor_product(vecs::Vararg{Union{BlockBoundaryVector,AbstractArray{<:Number,K}},N}) where {N,K}
+    BlockBoundaryVector([tensor_product(bvs...) for bvs in Base.product(data.(BlockBoundaryVector.(vecs))...)])
 end
 # BoundaryVector(bvs::Vararg{Array,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
 # BlockBoundaryVector(bvs::Vararg{Array{T,N},N}) where {T<:Number,N} = BlockBoundaryVector(BlockBoundaryVector.(bvs)...)
@@ -95,8 +99,8 @@ end
 BlockBoundaryVector(v, s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVector(_split_vector(vec(v), s))
 
 tensor_product(t1::AbstractArray) = t1
-tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1,T2} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
-tensor_product(tensors...) = reduce(tensor_product, tensors)
+tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1<:Number,T2<:Number} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
+tensor_product(tensors::Vararg{AbstractArray{<:Number,K}}) where K = foldl(tensor_product, tensors)
 tensor_product(t1::UniformScaling, t2::AbstractArray{T2,N2}) where {N2,T2} = t1.λ * t2
 tensor_product(t1::AbstractArray{T1,N1}, t2::UniformScaling) where {N1,T1} = t2.λ * t1
 
@@ -249,16 +253,18 @@ local_mul(envL, envR, site::OrthogonalLinkSite) = local_mul(envL, envR, site.Λ1
 
 #Only works for certain environs
 function local_mul(envL, envR, sitesum::SiteSum)
-    println(size(envL))
-    println(size(envR))
-    println(size.(sites(sitesum)))
-    leftsizes = size.(sites(sitesum), 1)
-    leftsizematrix = collect(Base.product(leftsizes, leftsizes))
-    lefttensors = _split_vector(vec(envL), leftsizematrix)
-    rightsizematrix = collect(Base.product(size.(sites(sitesum), 3), size.(sites(sitesum), 3)))
-    righttensors = _split_vector(vec(envR), rightsizematrix)
-    @assert length(lefttensors) == length(righttensors) == length(sites(sitesum))^2
-    arrays = sum([data(local_mul(lefttensors[n1, n2], righttensors[n1, n2], sites(sitesum)[n2])) for (n1, n2) in Base.product(1:length(sites(sitesum)), 1:length(sites(sitesum)))], dims = 2)
+    # println(size(envL))
+    # println(size(envR))
+    # println(size.(sites(sitesum)))
+    # leftsizes = size.(sites(sitesum), 1)
+    # leftsizematrix = collect(Base.product(leftsizes, leftsizes))
+    # lefttensors = _split_vector(vec(envL), leftsizematrix)
+    # rightsizematrix = collect(Base.product(size.(sites(sitesum), 3), size.(sites(sitesum), 3)))
+    # righttensors = _split_vector(vec(envR), rightsizematrix)
+    # @assert length(lefttensors) == length(righttensors) == length(sites(sitesum))^2
+    # arrays = sum([data(local_mul(lefttensors[n1, n2], righttensors[n1, n2], sites(sitesum)[n2])) for (n1, n2) in Base.product(1:length(sites(sitesum)), 1:length(sites(sitesum)))], dims = 2)
+    arrays = sum([data(local_mul(data(envL)[n1, n2], data(envR)[n1, n2], sites(sitesum)[n2])) for (n1, n2) in Base.product(1:length(sites(sitesum)), 1:length(sites(sitesum)))], dims = 2)
+
     SiteSum(Tuple(GenericSite.(arrays, ispurification(sitesum))))
 
     #SiteSum(map((L,R,s) -> local_mul(L, R, s), lefttensors, righttensors, sites(sitesum)))
@@ -268,24 +274,9 @@ function local_mul(envL, envR, sitesum::SiteSum)
 end
 
 function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}
-    # N1, N2 = size(Ts)
-    # # sizes = [size(Γ1[n1],3)*size(Γ1[n2],3) for n1 in 1:N1, n2 in 1:N1]
-    # sizes2 = [size(T, 2) for T in Ts]
-    # sizes1 = [size(T, 1) for T in Ts]
-    # DL = sum(size.(Ts, 1))
-    # DR = sum(size.(Ts, 2))
     f(v::BlockBoundaryVector) = BlockBoundaryVector([T * t for (T, t) in zip(Ts, data(v))])
     f_adjoint(v::BlockBoundaryVector) = BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
-
-    # f(v) = _join_tensor([T * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes2))])
-    # f_adjoint(v) = _join_tensor([T' * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes1))])
-    #tens = _split_vector(vec(v), sizes)
-    #_join_tensor([T' * t for (T, t) in zip(Ts, tens)])
-    # BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
-    #end
-    sizes = 
-    return TransferMatrix(f, f_adjoint, promote_type(eltype.(Ts)...), ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))#LinearMapAA(f, f_adjoint, (prod(size(Ts)), prod(size(Ts))); 
-    #T = Array{eltype(Ts[1]),N}, idim = (size(Ts)), odim = (size(Ts)))
+    return TransferMatrix(f, f_adjoint, promote_type(eltype.(Ts)...), ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))
 end
 
 function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)

@@ -1,29 +1,33 @@
-abstract type AbstractTransferMatrix{T,S} end
-struct TransferMatrixAdj{F<:Function,Fa<:Function,T,S} <: AbstractTransferMatrix{T,S}
-    f::F
-    fa::Fa
-    sizes::S
-end
-struct TransferMatrix{F<:Function,T,S} <: AbstractTransferMatrix{T,S}
-    f::F
-    sizes::S
-    TransferMatrix(f::Function, T::DataType, s) = new{typeof(f),T,typeof(s)}(f, s)
-end
 #TransferMatrix(f::Function) = TransferMatrix{typeof(f)}(f)
-TransferMatrix(f::Function, fa::Function, T::DataType, s) = TransferMatrixAdj{typeof(f),typeof(fa),T,typeof(s)}(f, fa, s)
+TransferMatrix(f::Function, fa::Function, T::DataType, s) = TransferMatrix{typeof(f),typeof(fa),T,typeof(s)}(f, fa, s)
 
 Base.eltype(::AbstractTransferMatrix{T}) where {T} = T
 Base.size(T::AbstractTransferMatrix) = T.sizes
 Base.size(T::AbstractTransferMatrix, i) = T.sizes[i]
-Base.:*(T::AbstractTransferMatrix, v) = T.f(v)
-Base.adjoint(T::TransferMatrixAdj) = TransferMatrix(T.fa, T.f, eltype(T), (size(T, 2), size(T, 1)))
-Base.:*(x::Number, T::TransferMatrix) = TransferMatrix(y -> x * T.f(y), eltype(T), size(T))
-Base.:*(x::Number, T::TransferMatrixAdj) = TransferMatrix(y -> x * T.f(y), y -> conj(x) * T.fa(y), eltype(T), size(T))
+Base.:*(T::TransferMatrix, v) = T.f(v)
+Base.:*(T::CompositeTransferMatrix, v) = foldr(*, T.maps, init = v)
+Base.adjoint(T::TransferMatrix) = TransferMatrix(T.fa, T.f, eltype(T), (size(T, 2), size(T, 1)))
+Base.adjoint(T::CompositeTransferMatrix) = CompositeTransferMatrix(reverse(adjoint.(T.maps)))
 
-Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
-Base.:*(T1::TransferMatrixAdj, T2::TransferMatrixAdj) = TransferMatrix(T1.f ∘ T2.f, T2.f ∘ T1.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
+# Base.:*(x::Number, T::TransferMatrix) = TransferMatrix(y -> x * T.f(y), eltype(T), size(T))
+Base.:*(x::K, T::AbstractTransferMatrix) where {K<:Number} = TransferMatrix(v -> x * v, K, (size(T, 1), size(T, 1))) * T
+# Base.:*(x::Number, T::TransferMatrixAdj) = TransferMatrix(y -> x * T.f(y), y -> conj(x) * T.fa(y), eltype(T), size(T))
+
+# Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
+
+Base.:*(T1::TransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1, T2))
+Base.:*(T1::TransferMatrix, T2::CompositeTransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1, T2.maps...))
+Base.:*(T1::CompositeTransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1.maps..., T2))
+
+# Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
+#Base.:*(T1::TransferMatrixAdj{F1,Fa1,K1,S}, T2::TransferMatrixAdj{F2,Fa2,K2,S}) where {F1,F2,Fa1,Fa2,K1,K2,S} = 
+# TransferMatrixAdj{ComposedFunction{F1,F2},ComposedFunction{Fa2,Fa1},promote_type(K1, K2),S}(T1.f ∘ T2.f, T2.fa ∘ T1.fa, (size(T1, 1), size(T2, 2)))
 
 IdentityTransferMatrix(T, s) = TransferMatrix(identity, identity, T, s)
+
+IdentityBoundary(T, sizes::Array{NTuple{2,Int},2}) = BlockBoundaryVector{T,2}([IdentityBoundary(T, size) for size in sizes])
+IdentityBoundary(T, size::NTuple{2,Int}) = Matrix(one(T)I, size...)
+
 function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Array{NTuple{N,Int},K}}}) where {Num,N,K}
     s = size(T)
     idim = sum(prod.(s[2]))
@@ -111,7 +115,8 @@ _transfer_matrix_bond(R::Array{<:Number,2}, diags::Vararg{AbstractMatrix,2}) = @
 _transfer_matrix_bond(R::Array{<:Number,3}, diags::Vararg{AbstractMatrix,3}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * diags[3][-3, 3] * R[1, 2, 3]
 _transfer_matrix_bond(R::Array{<:Number,4}, diags::Vararg{AbstractMatrix,4}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * diags[3][-3, 3] * diags[4][-4, 4] * R[1, 2, 3, 4]
 
-_transfer_matrix_bond(R::Array{<:Number,N}, d1::Union{Number,Bool}) where N = d1 * R
+_transfer_matrix_bond(R::Array{<:Number,N}, ds::Vararg{Union{Number,Bool},K}) where {N,K} = prod(ds) * R
+_transfer_matrix_bond(R::Array{<:Number,N}, d1::Union{Number,Bool}) where {N} = d1 * R
 _transfer_matrix_bond(R::Array{<:Number,2}, d1::AbstractMatrix, d2::Union{Number,Bool}) = @tensor out[:] := d1[-1, 1] * d2 * R[1, -2]
 _transfer_matrix_bond(R::Array{<:Number,2}, d1::Union{Number,Bool}, d2::AbstractMatrix) = @tensor out[:] := d2[-2, 2] * d1 * R[-1, 2]
 _transfer_matrix_bond(R::Array{<:Number,3}, d1::Union{Number,Bool}, d2::AbstractMatrix, d3::AbstractMatrix) =
@@ -152,15 +157,17 @@ __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,3}, Γ1::GenericSite, mpo::MP
 function _transfer_left_mpo(Γ1::GenericSite{T}, Γ2::GenericSite{K}) where {T,K}
     f(R) = __transfer_left_mpo(R, Γ1, Γ2)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ2)
-    return TransferMatrix(f, fadj, promote_type(T, K), ((size(Γ1, 1), size(Γ2, 1)), (size(Γ1, 3), size(Γ2, 3)))) #LinearMapAA(func, func_adjoint, (dims1[1] * dims2[1], dims1[3] * dims2[3]);
-    #odim = (dims1[1], dims2[1]), idim = (dims1[3], dims2[3]), T = eltype(Γ1))
+    return TransferMatrix(f, fadj, promote_type(T, K), ((size(Γ1, 1), size(Γ2, 1)), (size(Γ1, 3), size(Γ2, 3))))
 end
 function _transfer_left_mpo(Γ1::GenericSite{T}) where {T}
     f(R) = __transfer_left_mpo(R, Γ1, Γ1)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ1)
     return TransferMatrix(f, fadj, T, ((size(Γ1, 1), size(Γ1, 1)), (size(Γ1, 3), size(Γ1, 3))))
-    #return LinearMapAA(func, func_adjoint, (dims1[1]^2, dims1[3]^2);
-    #    odim = (dims1[1], dims1[1]), idim = (dims1[3], dims1[3]), T = eltype(Γ1))
+end
+function _transfer_left_mpo(Γ1::GenericSite{T}, mpo::MPOsite) where {T}
+    f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ1)
+    fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ1)
+    return TransferMatrix(f, fadj, T, ((size(Γ1, 1), size(mpo, 1), size(Γ1, 1)), (size(Γ1, 3), size(mpo, 4), size(Γ1, 3))))
 end
 
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
@@ -288,18 +295,18 @@ function _transfer_left_gate(Γ, gate::AbstractSquareGate)
 end
 
 _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
-function _transfer_right_gate(Γ1::AbstractVector{<:SiteSum}, gate::GenericSquareGate, Γ2::AbstractVector{<:AbstractSite})
+function _transfer_right_gate(Γ1::AbstractVector{<:Union{SiteSum,AbstractSite}}, gate::GenericSquareGate, Γ2::AbstractVector{<:Union{SiteSum,AbstractSite}})
     n1 = length(sites(Γ1[1]))
     n2 = length(sites(Γ2[1]))
     Ts = [_transfer_right_gate_dense(getindex.(sites.(Γ1), k1), gate, getindex.(sites.(Γ2), k2)) for (k1, k2) in Base.product(1:n1, 1:n2)]
     return _apply_transfer_matrices(Ts)
 end
-function _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:SiteSum})
-    n1 = length(sites(Γ1[1]))
-    n2 = length(sites(Γ2[1]))
-    Ts = [_transfer_right_gate_dense(getindex.(sites.(Γ1), k1), gate, getindex.(sites.(Γ2), k2)) for (k1, k2) in Base.product(1:n1, 1:n2)]
-    return _apply_transfer_matrices(Ts)
-end
+# function _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:SiteSum})
+#     n1 = length(sites(Γ1[1]))
+#     n2 = length(sites(Γ2[1]))
+#     Ts = [_transfer_right_gate_dense(getindex.(sites.(Γ1), k1), gate, getindex.(sites.(Γ2), k2)) for (k1, k2) in Base.product(1:n1, 1:n2)]
+#     return _apply_transfer_matrices(Ts)
+# end
 
 function _transfer_right_gate(Γ1::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}}, gate::GenericSquareGate, Γ2::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}})
     _transfer_right_gate_dense(Γ1, gate, Γ2)
@@ -336,9 +343,9 @@ function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::G
 end
 
 #Sites 
-transfer_matrix(site::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix(tuple(site), dir)
+transfer_matrix(site::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix((site, site), dir)
 transfer_matrix(site1::AbstractSite, site2::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix((site1, site2), dir)
-transfer_matrix(site::AbstractSite, op::AbstractMPOsite, dir::Symbol = :left) = _local_transfer_matrix((site, op), dir)
+transfer_matrix(site::AbstractSite, op::AbstractMPOsite, dir::Symbol = :left) = _local_transfer_matrix((site, op, site), dir)
 transfer_matrix(site1::AbstractSite, op::AbstractMPOsite, site2::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix((site1, op, site2), dir)
 transfer_matrix(site::AbstractSite, op::ScaledIdentityGate, dir::Symbol = :left) = data(op) * transfer_matrix(site, dir)
 transfer_matrix(site1::AbstractSite, op::ScaledIdentityGate, site2::AbstractSite, dir::Symbol = :left) = data(op) * _local_transfer_matrix((site1, site2), dir)
@@ -448,7 +455,14 @@ transfer_matrices(sites::AbstractVector{<:AbstractSite}, direction::Symbol = :le
 
 
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
-    Ts = transfer_matrices(sites1, op, sites2, direction)
+    Ts = CompositeTransferMatrix.(transfer_matrices(sites1, op, sites2, direction))
+    N = length(Ts)
+    if N > 20
+        @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
+    end
+    # if direction == :right
+    #     Ts = reverse(Ts)
+    # end
     N = length(Ts)
     if N > 20
         @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
@@ -456,18 +470,26 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::Abs
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return foldr(*, Ts)::CompositeTransferMatrix #Products of many linear operators cause long compile times!
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
-    Ts = transfer_matrices(sites1, direction)
-    N = length(Ts)
+    #Ts = CompositeTransferMatrix.(transfer_matrices(sites1, direction))
+    N = length(sites1)
+    sites = direction == :left ? sites1[1:N] : reverse(sites1)
     if N > 20
         @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
     end
-    if direction == :right
-        Ts = @view Ts[N:-1:1]
-    end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+
+    # if direction == :right
+    #     Ts = reverse(Ts)
+    # end
+    #return prod(Ts)
+    #_local_transfer_matrix(tuple(site), direction) for site in sites
+
+    #Convert to CompositeTransferMatrix for type stability
+    #CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites
+    return mapfoldr(site -> CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites)::CompositeTransferMatrix
+    #return foldr(*, Ts)::CompositeTransferMatrix
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, op, direction)

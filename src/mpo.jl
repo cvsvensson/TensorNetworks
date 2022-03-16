@@ -36,21 +36,23 @@ Base.:*(site::MPOsite, x::K) where {K<:Number} = x * site
 Base.:/(site::MPOsite, x::K) where {K<:Number} = inv(x) * site
 Base.copy(site::MPOsite) = MPOsite(copy(data(site)))
 
+link(site::MPOsite, dir) = I
+
 abstract type AbstractMPO{T<:Number} <: AbstractVector{MPOsite{T}} end
 
 struct MPO{S,T<:Number} <: AbstractMPO{T}
     data::Vector{S}
     boundary::Vector{T}
-    function MPO(sites::Vector{S},boundary::Vector{T}) where {S<:AbstractMPOsite,T}
-        K = promote_type(eltype.(sites)...,T)
+    function MPO(sites::Vector{S}, boundary::Vector{T}) where {S<:AbstractMPOsite,T}
+        K = promote_type(eltype.(sites)..., T)
         new{S,K}(sites, boundary)
     end
 end
 function MPO(ss::Vector{S}) where {S<:AbstractMPOsite}
     T = promote_type(eltype.(ss)...)
-    MPO(ss, fill(one(T),length(sites(ss[1]))))
+    MPO(ss, fill(one(T), length(sites(ss[1]))))
 end
-Base.similar(mpo::MPO) = MPO(similar.(sites(mpo)),similar(mpo.boundary))
+Base.similar(mpo::MPO) = MPO(similar.(sites(mpo)), similar(mpo.boundary))
 sites(mpo::MPO) = mpo.data
 Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
 Base.size(mpo::AbstractMPO) = size(sites(mpo))
@@ -251,7 +253,7 @@ Base.:+(s1::MPOSum, s2::MPOSum) = MPOSum(tuple(s1.mpos..., s2.mpos...), vcat(s1.
 Base.:+(s1::MPOSiteSum, s2::MPOSiteSum) = MPOSiteSum(tuple(s1.sites..., s2.sites...))
 Base.:+(s1::MPOSiteSum, s2::MPOsite) = MPOSiteSum(tuple(s1.sites..., s2))
 Base.:+(s1::MPOsite, s2::MPOSiteSum) = s2 + s1
-Base.:+(s1::MPOsite, s2::MPOsite) = MPOSiteSum((s1,s2))
+Base.:+(s1::MPOsite, s2::MPOsite) = MPOSiteSum((s1, s2))
 
 Base.:*(x::Number, mpo::AbstractMPO) = MPSSum((mpo,), [x])
 Base.:*(mpo::AbstractMPO, x::Number) = MPSSum((mpo,), [x])
@@ -295,7 +297,7 @@ function dense(sitesum::MPOSiteSum{Tup,T}) where {Tup,T}
     return MPOsite(newsite)
 end
 
-dense(mpo::AbstractMPO) = MPO(dense.(mpo),boundary(mpo))
+dense(mpo::AbstractMPO) = MPO(dense.(mpo), boundary(mpo))
 function dense(mpo::MPOSum)
     sites = dense.(mpo)
     scalings = reshape(mpo.scalings, 1, length(mpo.scalings))
@@ -320,17 +322,17 @@ end
 
 function boundary(::OpenBoundary, mpo::MPOSum, side::Symbol)
     if side == :right
-        return [fill(one(eltype(mpo.scalings)), length(mpo.scalings)) for m in mpo.mpos]
+        return BlockBoundaryVector([fill(one(eltype(m.scalings)), length(m.scalings)) for m in mpo.mpos])
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return [m.scalings for m in mpo.mpos]
+        return BlockBoundaryVector([m.scalings for m in mpo.mpos])
     end
 end
 # boundary(mpos::MPOSum) = reduce(vcat, [s*boundary(mpo) for (mpo,s) in zip(mpos.mpos,mpos.scalings)])
 # boundary(mpo::MPO) = mpo.boundary
-boundary(::ScaledIdentityMPO{T}) where T = [one(T)]
+boundary(::ScaledIdentityMPO{T}) where {T} = [one(T)]
 
 """
 gives the mpo corresponding to a*mpo1 + b*mpo2.
@@ -372,13 +374,13 @@ function Base.:*(site1::MPOsite, site2::MPOsite)
     return MPOsite(reshape(temp, s1[1] * s2[1], s1[2], s2[3], s1[4] * s2[4]))
 end
 function Base.:*(site1::MPOSiteSum, site2::MPOSiteSum)
-    newsites = Array{MPOsite,2}(undef,length(sites(site1)),length(sites(site2)))
-    for (n1,s1) in enumerate(sites(site1))
-        for (n2,s2) in enumerate(sites(site2))
+    newsites = Array{MPOsite,2}(undef, length(sites(site1)), length(sites(site2)))
+    for (n1, s1) in enumerate(sites(site1))
+        for (n2, s2) in enumerate(sites(site2))
             size1 = size(s1)
             size2 = size(s2)
             @tensor temp[:] := data(s1)[-1, -3, 1, -5] * data(s2)[-2, 1, -4, -6]
-            newsites[n1,n2] = MPOsite(reshape(temp, size1[1] * size2[1], size1[2], size2[3], size1[4] * size2[4]))
+            newsites[n1, n2] = MPOsite(reshape(temp, size1[1] * size2[1], size1[2], size2[3], size1[4] * size2[4]))
         end
     end
     sum(newsites)
@@ -391,7 +393,7 @@ Base.copy(sitesum::MPOSiteSum) = MPOSiteSum(copy.(sitesum.sites))
 
 Naive multiplication of mpos. Multiplies the bond dimensions.
 """
-multiplyMPOs(mpo1::AbstractMPO, mpo2::AbstractMPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(mpo1),boundary(mpo2)))
+multiplyMPOs(mpo1::AbstractMPO, mpo2::AbstractMPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(OpenBoundary(), mpo1, :left), boundary(OpenBoundary(), mpo2, :left)))
 #multiplyMPOs(mpo1::MPOSum, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(mpo1.boundary,mpo2.boundary))
 transfer_matrix_bond(::AbstractMPOsite) = I
 # transfer_matrix_bond(mpo::MPOsite{T}) where T = IdentityTransferMatrix(T,(size(mpo,1),size(mpo,4)))

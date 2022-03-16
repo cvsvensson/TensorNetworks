@@ -15,7 +15,7 @@ end
 boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS, side) = tensor_product(boundary(bc, mps1, side), boundary(bc, mps2, side))
 boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO, side) = boundary(bc, mps, mpo, mps, side)
 boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = tensor_product(
-boundary(bc, mps1, side),boundary(bc, mpo, side), boundary(bc, mps2, side))
+    boundary(bc, mps1, side), boundary(bc, mpo, side), boundary(bc, mps2, side))
 
 boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps), mps, args...)
 
@@ -32,7 +32,7 @@ function boundary(::InfiniteBoundary, mps::AbstractMPS, mps2::AbstractMPS, side:
     return canonicalize_eigenoperator(rhos[1])
 end
 
-boundaryvec(args...) = copy(vec(boundary(args...)))
+#boundaryvec(args...) = copy(vec(boundary(args...)))
 
 
 function expectation_value(mps::AbstractMPS{GenericSite}, op, site::Integer)
