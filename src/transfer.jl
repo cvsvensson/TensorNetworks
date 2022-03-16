@@ -454,7 +454,7 @@ end
 transfer_matrices(sites::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = [_local_transfer_matrix(tuple(site), direction) for site in sites]
 
 
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) where T
     Ts = CompositeTransferMatrix.(transfer_matrices(sites1, op, sites2, direction))
     N = length(Ts)
     if N > 20
@@ -470,28 +470,31 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::Abs
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return foldr(*, Ts)::CompositeTransferMatrix #Products of many linear operators cause long compile times!
+    return CompositeTransferMatrix{T}(Tuple(Ts))
+    #return foldr(*, Ts)::CompositeTransferMatrix{<:NTuple{<:Any,AbstractTransferMatrix{T,<:Any}},T,<:NTuple{2,<:Any}} #Products of many linear operators cause long compile times!
 end
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
-    #Ts = CompositeTransferMatrix.(transfer_matrices(sites1, direction))
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::Symbol = :left) where T
+    Ts = transfer_matrices(sites1, direction)
     N = length(sites1)
-    sites = direction == :left ? sites1[1:N] : reverse(sites1)
+    # sites = direction == :left ? sites1[1:N] : reverse(sites1)
     if N > 20
         @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
     end
-
-    # if direction == :right
-    #     Ts = reverse(Ts)
-    # end
-    #return prod(Ts)
+    if direction == :right
+        Ts = reverse(Ts)
+    end
+    #init = IdentityTransferMatrix(T, ((1, 1), (1, 1)))
+    #return foldl(*,Ts, init = init)::CompositeTransferMatrix{_A,T,_B}
     #_local_transfer_matrix(tuple(site), direction) for site in sites
 
     #Convert to CompositeTransferMatrix for type stability
     #CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites
-    return mapfoldr(site -> CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites)::CompositeTransferMatrix
-    #return foldr(*, Ts)::CompositeTransferMatrix
+    return CompositeTransferMatrix{T}(Tuple(Ts))
+    #return mapfoldr(site -> CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites)::CompositeTransferMatrix{<:NTuple{<:Any,AbstractTransferMatrix{T,<:Any}},T,<:NTuple{2,<:Any}}
+    #return foldr(*, Ts)::CompositeTransferMatrix{_A,T,_B}
 end
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::Symbol = :left)
+
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op, direction::Symbol = :left) where T
     Ts = transfer_matrices(sites1, op, direction)
     N = length(Ts)
     if N > 20
@@ -500,5 +503,5 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return CompositeTransferMatrix{T}(Tuple(Ts)) #Products of many linear operators cause long compile times!
 end
