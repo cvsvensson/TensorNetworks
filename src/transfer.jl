@@ -1,25 +1,53 @@
-abstract type AbstractTransferMatrix{T} end
-struct TransferMatrixAdj{F<:Function,Fa<:Function,T} <: AbstractTransferMatrix{T}
+abstract type AbstractTransferMatrix{T,S} end
+struct TransferMatrixAdj{F<:Function,Fa<:Function,T,S} <: AbstractTransferMatrix{T,S}
     f::F
     fa::Fa
+    sizes::S
 end
-struct TransferMatrix{F<:Function,T} <: AbstractTransferMatrix{T}
+struct TransferMatrix{F<:Function,T,S} <: AbstractTransferMatrix{T,S}
     f::F
-    TransferMatrix(f::Function, T::DataType) = new{typeof(f),T}(f)
+    sizes::S
+    TransferMatrix(f::Function, T::DataType, s) = new{typeof(f),T,typeof(s)}(f, s)
 end
 #TransferMatrix(f::Function) = TransferMatrix{typeof(f)}(f)
-TransferMatrix(f::Function, fa::Function, T::DataType) = TransferMatrixAdj{typeof(f),typeof(fa),T}(f, fa)
+TransferMatrix(f::Function, fa::Function, T::DataType, s) = TransferMatrixAdj{typeof(f),typeof(fa),T,typeof(s)}(f, fa, s)
 
 Base.eltype(::AbstractTransferMatrix{T}) where {T} = T
+Base.size(T::AbstractTransferMatrix) = T.sizes
+Base.size(T::AbstractTransferMatrix, i) = T.sizes[i]
 Base.:*(T::AbstractTransferMatrix, v) = T.f(v)
-Base.conj(T::TransferMatrixAdj) = TransferMatrix(T.fa, T.f, eltype(T))
-Base.:*(x::Number, T::TransferMatrix) = TransferMatrix(y -> x * T.f(y), eltype(T))
-Base.:*(x::Number, T::TransferMatrixAdj) = TransferMatrix(y -> x * T.f(y), y -> conj(x) * T.fa(y), eltype(T))
+Base.adjoint(T::TransferMatrixAdj) = TransferMatrix(T.fa, T.f, eltype(T), (size(T, 2), size(T, 1)))
+Base.:*(x::Number, T::TransferMatrix) = TransferMatrix(y -> x * T.f(y), eltype(T), size(T))
+Base.:*(x::Number, T::TransferMatrixAdj) = TransferMatrix(y -> x * T.f(y), y -> conj(x) * T.fa(y), eltype(T), size(T))
 
-Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...))
-Base.:*(T1::TransferMatrixAdj, T2::TransferMatrixAdj) = TransferMatrix(T1.f ∘ T2.f, T2.f ∘ T1.f, promote_type(eltype.((T1, T2))...))
+Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
+Base.:*(T1::TransferMatrixAdj, T2::TransferMatrixAdj) = TransferMatrix(T1.f ∘ T2.f, T2.f ∘ T1.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
 
-IdentityTransferMatrix(T) = TransferMatrix(identity, identity, T)
+IdentityTransferMatrix(T, s) = TransferMatrix(identity, identity, T, s)
+function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Array{NTuple{N,Int},K}}}) where {Num,N,K}
+    s = size(T)
+    idim = sum(prod.(s[2]))
+    odim = sum(prod.(s[1]))
+    v = zeros(Num, idim)
+    v[1] = 1
+    m = zeros(Num, odim, idim)
+    for k in 1:idim
+        m[:, k] = vec(T * BlockBoundaryVector(v, s[2]))
+        v = circshift(v, 1)
+    end
+    return m
+end
+function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,NTuple{N,Int}}}) where {Num,N}
+    odims, idims = size(T)
+    v = vec(zeros(Num, idims))
+    v[1] = 1
+    m = zeros(Num, prod(odims), prod(idims))
+    for k in 1:prod(idims)
+        m[:, k] = vec(T * reshape(v, idims))
+        v = circshift(v, 1)
+    end
+    return m
+end
 function Matrix(T::AbstractTransferMatrix, out::Int, s::Array{NTuple{N,Int},K}) where {N,K}
     v = zeros(eltype(T), sum(prod.(s)))
     v[1] = 1
@@ -30,16 +58,16 @@ function Matrix(T::AbstractTransferMatrix, out::Int, s::Array{NTuple{N,Int},K}) 
     end
     return m
 end
-function blocksizes(dims::Vararg{Vector{Int},N}) where N
+function blocksizes(dims::Vararg{Vector{Int},N}) where {N}
     [dim for dim in Base.product(dims...)]
 end
-blocksizes(dims::Vararg{Int,N}) where N = blocksizes(([d] for d in dims)...)
+blocksizes(dims::Vararg{Int,N}) where {N} = blocksizes(([d] for d in dims)...)
 function Matrix(T::AbstractTransferMatrix, olength::Int, idims::Dims{2})
     v = vec(zeros(eltype(T), idims))
     v[1] = 1
     m = zeros(eltype(T), olength, prod(idims))
-    for k in 1:prod(idims[2])
-        m[:, k] = vec(T * reshape(v,idims))
+    for k in 1:prod(idims)
+        m[:, k] = vec(T * reshape(v, idims))
         v = circshift(v, 1)
     end
     return m
@@ -50,14 +78,49 @@ end
 # transfer_matrix_bond(mps1::AbstractMPS, mps2::AbstractMPS, site::Integer, dir::Symbol) = kron(transfer_matrix_bond(mps1, site, dir), transfer_matrix_bond(mps2, site, dir))
 # transfer_matrix_bond(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, site::Integer, dir::Symbol) = kron(transfer_matrix_bond(mps1, site, dir), transfer_matrix_bond(mpo, site, dir), transfer_matrix_bond(mps2, site, dir))
 
-Base.kron(a::UniformScaling, b::UniformScaling) = a * b
-Base.kron(a::UniformScaling, b::AbstractMatrix) = Diagonal(a, size(b, 1)) * b
-Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
+# Base.kron(a::UniformScaling, b::UniformScaling) = a * b
+# Base.kron(a::UniformScaling, b::AbstractMatrix) = Diagonal(a, size(b, 1)) * b
+# Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
 
-transfer_matrix_bond(site::OrthogonalLinkSite{T}) where {T} = TransferMatrix(v -> data(link(site, :left)) * v, T)
-transfer_matrix_bond_dense(site::OrthogonalLinkSite) = data(link(site, :left))
-transfer_matrix_bond_dense(site::GenericSite{T}) where {T} = Matrix(one(T)I, size(site, 1))
-transfer_matrix_bond(site::GenericSite{T}) where T = TransferMatrix(identity, identity,T)
+# transfer_matrix_bond(site::OrthogonalLinkSite{T}) where {T} = data(link(site, :left)) #TransferMatrix(v -> data(link(site, :left)) * v, T, (size(site, 1), size(site, 1)))
+# transfer_matrix_bond_dense(site::OrthogonalLinkSite) = data(link(site, :left))
+# transfer_matrix_bond_dense(site::GenericSite{T}) where {T} = Matrix(one(T)I, size(site, 1))
+# transfer_matrix_bond(site::GenericSite{T}) where {T} = I#TransferMatrix(identity, identity, T, (size(site, 1), size(site, 1)))
+
+# transfer_matrix_bond(sites...) = tensor_product(transfer_matrix_bond.(sites)...)
+
+# function transfer_matrix_bond(site::OrthogonalLinkSite{T})
+#     f(R) = _transfer_matrix_bond(data(link(site, :left)), R)
+#     diag = link(site, :left)
+#     @tensor out[:] := diag[-1, 1] * R[1, -2]
+#     #TransferMatrix(f,T,Tuple.(size(data(link(site,:left)))))
+# end
+function transfer_matrix_bond(sites::Vararg{Union{OrthogonalLinkSite,GenericSite,MPOsite,ScaledIdentityMPOsite},N}) where {N}
+    diags = data.(link.(sites, :left))
+    # scaling, diags2 = foldr(_filter_sites, diags, init = (1, ()))
+    f(R) = _transfer_matrix_bond(R, diags...)
+    TransferMatrix(f, promote_type(eltype.(diags)...), (size.(sites, 1), size.(sites, 1)))
+end
+# _filter_sites(s1::UniformScaling, (scaling, sites)) = (scaling * s1.λ, sites)
+# _filter_sites(s1::AbstractMatrix, (scaling, sites)) = (scaling, (s1, sites...))
+
+data(x::UniformScaling) = x.λ
+
+_transfer_matrix_bond(R::Array{<:Number,1}, diags::Vararg{AbstractMatrix,1}) = @tensor out[:] := diags[1][-1, 1] * R[1]
+_transfer_matrix_bond(R::Array{<:Number,2}, diags::Vararg{AbstractMatrix,2}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * R[1, 2]
+_transfer_matrix_bond(R::Array{<:Number,3}, diags::Vararg{AbstractMatrix,3}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * diags[3][-3, 3] * R[1, 2, 3]
+_transfer_matrix_bond(R::Array{<:Number,4}, diags::Vararg{AbstractMatrix,4}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * diags[3][-3, 3] * diags[4][-4, 4] * R[1, 2, 3, 4]
+
+_transfer_matrix_bond(R::Array{<:Number,N}, d1::Union{Number,Bool}) where N = d1 * R
+_transfer_matrix_bond(R::Array{<:Number,2}, d1::AbstractMatrix, d2::Union{Number,Bool}) = @tensor out[:] := d1[-1, 1] * d2 * R[1, -2]
+_transfer_matrix_bond(R::Array{<:Number,2}, d1::Union{Number,Bool}, d2::AbstractMatrix) = @tensor out[:] := d2[-2, 2] * d1 * R[-1, 2]
+_transfer_matrix_bond(R::Array{<:Number,3}, d1::Union{Number,Bool}, d2::AbstractMatrix, d3::AbstractMatrix) =
+    @tensor out[:] := d1 * d2[-2, 2] * d3[-3, 3] * R[-1, 2, 3]
+_transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::Union{Number,Bool}, d3::AbstractMatrix) =
+    @tensor out[:] := d1[-1, 1] * d2 * d3[-3, 3] * R[1, -2, 3]
+_transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::AbstractMatrix, d3::Union{Number,Bool}) =
+    @tensor out[:] := d1[-1, 1] * d2[-2, 2] * d3 * R[1, 2, -3]
+
 
 # %% Transfer Matrices
 """
@@ -89,13 +152,13 @@ __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,3}, Γ1::GenericSite, mpo::MP
 function _transfer_left_mpo(Γ1::GenericSite{T}, Γ2::GenericSite{K}) where {T,K}
     f(R) = __transfer_left_mpo(R, Γ1, Γ2)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ2)
-    return TransferMatrix(f, fadj,promote_type(T,K)) #LinearMapAA(func, func_adjoint, (dims1[1] * dims2[1], dims1[3] * dims2[3]);
+    return TransferMatrix(f, fadj, promote_type(T, K), ((size(Γ1, 1), size(Γ2, 1)), (size(Γ1, 3), size(Γ2, 3)))) #LinearMapAA(func, func_adjoint, (dims1[1] * dims2[1], dims1[3] * dims2[3]);
     #odim = (dims1[1], dims2[1]), idim = (dims1[3], dims2[3]), T = eltype(Γ1))
 end
-function _transfer_left_mpo(Γ1::GenericSite{T}) where T
+function _transfer_left_mpo(Γ1::GenericSite{T}) where {T}
     f(R) = __transfer_left_mpo(R, Γ1, Γ1)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ1)
-    return TransferMatrix(f, fadj,T)
+    return TransferMatrix(f, fadj, T, ((size(Γ1, 1), size(Γ1, 1)), (size(Γ1, 3), size(Γ1, 3))))
     #return LinearMapAA(func, func_adjoint, (dims1[1]^2, dims1[3]^2);
     #    odim = (dims1[1], dims1[1]), idim = (dims1[3], dims1[3]), T = eltype(Γ1))
 end
@@ -105,7 +168,7 @@ _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left
 function _transfer_left_mpo(Γ1::GenericSite{T1}, mpo::MPOsite{T2}, Γ2::GenericSite{T3}) where {T1,T2,T3}
     f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ2)
     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ2)
-    return TransferMatrix(f, fadj, promote_type(T1,T2,T3))
+    return TransferMatrix(f, fadj, promote_type(T1, T2, T3), ((size(Γ1, 1), size(mpo, 1), size(Γ2, 1)), (size(Γ1, 3), size(mpo, 4), size(Γ2, 3))))
 end
 
 #TODO Check performance vs ncon, or 'concatenated' versions. Ncon is slower. concatenated is faster
@@ -239,7 +302,7 @@ function _transfer_right_gate(Γ1::AbstractVector{<:AbstractSite}, gate::Generic
 end
 
 function _transfer_right_gate(Γ1::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}}, gate::GenericSquareGate, Γ2::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}})
-    _transfer_right_gate_dense(Γ1,gate,Γ2)
+    _transfer_right_gate_dense(Γ1, gate, Γ2)
 end
 
 # _transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate)
@@ -268,7 +331,7 @@ function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::G
         return vout
     end
     #TODO Define adjoint
-    return TransferMatrix(T_on_vec,T)#LinearMapAA(T_on_vec, (s_final1 * s_final2, s_start1 * s_start2);
+    return TransferMatrix(T_on_vec, T, ((s_final1, s_final2), (s_start1, s_start2)))#LinearMapAA(T_on_vec, (s_final1 * s_final2, s_start1 * s_start2);
     #odim = (s_final1, s_final2), idim = (s_start1, s_start2), T = T)
 end
 

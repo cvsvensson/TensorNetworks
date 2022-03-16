@@ -160,9 +160,9 @@ end
         @test z^(1/N)*idsite == zid[floor(Int, N/2)]
         D=5
         mps = randomOpenMPS(N,d,D);
-        T0 = Matrix(prod(transfer_matrices(mps)),1,blocksizes(1,1))
-        @test T0 == Matrix(prod(transfer_matrices(mps,id)),1,blocksizes(1,1))
-        @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)),1,blocksizes(1,1))
+        T0 = Matrix(prod(transfer_matrices(mps)))
+        @test T0 == Matrix(prod(transfer_matrices(mps,id)))
+        @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)))
     end
     test(2)
     test(3)
@@ -300,15 +300,16 @@ end
     LR = randomOrthogonalLinkSite(D,d,D);
     id = Matrix{ComplexF64}(I,D,D);
     idvec = vec(id);
-    @test idvec ≈ transfer_matrix(R)*idvec
-    @test idvec ≈ transfer_matrix(L,:right)*idvec
-    @test idvec ≈ transfer_matrix(LR,:right)*idvec
-    @test idvec ≈ transfer_matrix(LR,:left)*idvec
+    @test id ≈ transfer_matrix(R)*id
+    @test id ≈ transfer_matrix(L,:right)*id
+    @test id ≈ transfer_matrix(LR,:right)*id
+    @test id ≈ transfer_matrix(LR,:left)*id
     function testsite(site)
         D = size(site,1)
         d = size(site,2)
         T = transfer_matrix(site, :left)
-        @test size(T) == (D^2,D^2)
+
+        #@test size(T) == (D^2,D^2)
         @test Matrix(T') ≈ Matrix(T)'
         @test transpose(Matrix(T)) ≈ Matrix(transfer_matrix(site,:right))
 
@@ -344,7 +345,11 @@ end
     end
     site = randomGenericSite(D,d,D);
     testsite(site)
+    T = transfer_matrix(site, :left)
+    @test Matrix(T) ≈ Matrix(T,D^2,(D,D))
     testsite(site + site)
+    T = transfer_matrix(site+site, :left)
+    @test Matrix(T) ≈ Matrix(T,D^2,blocksizes([D,D],[D,D]))
 end
 
 @testset "Compression" begin

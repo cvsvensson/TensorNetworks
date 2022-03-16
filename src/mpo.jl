@@ -393,8 +393,10 @@ Naive multiplication of mpos. Multiplies the bond dimensions.
 """
 multiplyMPOs(mpo1::AbstractMPO, mpo2::AbstractMPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(mpo1),boundary(mpo2)))
 #multiplyMPOs(mpo1::MPOSum, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(mpo1.boundary,mpo2.boundary))
+transfer_matrix_bond(::AbstractMPOsite) = I
+# transfer_matrix_bond(mpo::MPOsite{T}) where T = IdentityTransferMatrix(T,(size(mpo,1),size(mpo,4)))
+# transfer_matrix_bond(mpo::MPOSiteSum{T}) where T = IdentityTransferMatrix(T,(blocksizes(size(mpo,1)),(blocksizes(size(mpo,4)))
 
-transfer_matrix_bond(mpo::AbstractMPO, site::Integer, dir) = I
 
 function Matrix(mpo::MPO)
     n = length(mpo)

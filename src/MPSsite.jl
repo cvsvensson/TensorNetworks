@@ -304,11 +304,15 @@ function to_right_orthogonal(M::Vector{GenericSite{T}}; method = :qr) where {T}
     return out, G
 end
 
-function GenericSite(site::OrthogonalLinkSite, direction = :left)
+function GenericSite(site::OrthogonalLinkSite, direction)
     if direction == :left
         return site.Λ1 * site.Γ
     elseif direction == :right
         return site.Γ * site.Λ2
+    elseif direction ==:both
+        return site.Λ1 * site.Γ* site.Λ2
+    else 
+        error("Choose :left, :right or :both when converting OrthogonalLinkSite to GenericSite")
     end
 end
 

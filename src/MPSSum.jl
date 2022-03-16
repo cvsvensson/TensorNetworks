@@ -2,7 +2,7 @@ struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
     sites::S
     function SiteSum(sites::Tuple)
         #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
-        new{typeof(sites), promote_type(eltype.(sites)...)}(copy.(sites))
+        new{typeof(sites),promote_type(eltype.(sites)...)}(copy.(sites))
     end
 end
 Base.similar(site::SiteSum) = SiteSum(similar.(site.sites))
@@ -11,19 +11,19 @@ Base.:*(x::Number, site::SiteSum) = SiteSum(x .* sites(site))
 #Base.setindex!(site::GenericSite, v, I::Vararg{Integer,3}) = (data(site)[I...] = v)
 function LinearAlgebra.mul!(w::SiteSum, v::SiteSum, x::Number)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([mul!(sw, sv, x) for (sv,sw) in zip(sites(v), sites(w))])
+    SiteSum([mul!(sw, sv, x) for (sv, sw) in zip(sites(v), sites(w))])
 end
 LinearAlgebra.rmul!(v::SiteSum, x::Number) = SiteSum([rmul!(sv, x) for sv in sites(v)])
 LinearAlgebra.norm(v::SiteSum) = norm(norm.(sites(v)))
-LinearAlgebra.dot(v::SiteSum,w::SiteSum) = sum([dot(sv,sw) for (sv,sw) in zip(sites(v),sites(w))])
+LinearAlgebra.dot(v::SiteSum, w::SiteSum) = sum([dot(sv, sw) for (sv, sw) in zip(sites(v), sites(w))])
 
 function LinearAlgebra.axpy!(x::Number, v::SiteSum, w::SiteSum)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([axpy!(x, sv, sw) for (sv,sw) in zip(sites(v),sites(w))])
+    SiteSum([axpy!(x, sv, sw) for (sv, sw) in zip(sites(v), sites(w))])
 end
 function LinearAlgebra.axpby!(x::Number, v::SiteSum, β::Number, w::SiteSum)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([axpby!(x, sv, β, sw) for (sv,sw) in zip(sites(v),sites(w))])
+    SiteSum([axpby!(x, sv, β, sw) for (sv, sw) in zip(sites(v), sites(w))])
 end
 
 Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
@@ -96,40 +96,41 @@ end
 
 # _transfer_left_mpo(Γ1::SiteSum, op::AbstractMPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
 _transfer_left_mpo(Γ1::SiteSum) = _transfer_left_mpo(Γ1, Γ1)
-_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite) = data(mpo)*_transfer_left_mpo(Γ1, Γ1)
-_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo)*_transfer_left_mpo(Γ1, Γ2)
-_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo)*_transfer_left_mpo(Γ1, Γ2)
-_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo)*_transfer_left_mpo(Γ1, Γ2)
+_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1, Γ1)
+_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
+_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
+_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
 
 
-function _transfer_left_mpo(Γ1::SiteSum, op, Γ2)
-    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
-function _transfer_left_mpo(Γ1::SiteSum, Γ2)
-    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
-function _transfer_left_mpo(Γ1, op, Γ2::SiteSum)
-    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
-function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
-    Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
-# function _transfer_left_mpo(Γ1::SiteSum, op::ScaledIdentityMPOsite, Γ2::SiteSum)
-#     Ts = [data(op)*_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+_transfer_left_mpo(ss::Vararg{Union{AbstractSite,SiteSum,MPOSiteSum},N}) where N = _apply_transfer_matrices([_transfer_left_mpo(ss...) for ss in Base.product(sites.(ss)...)])
+# function _transfer_left_mpo(Γ1::SiteSum, op, Γ2)
+#     Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
 #     return _apply_transfer_matrices(Ts)
 # end
-function _transfer_left_mpo(Γ1, Γ2::SiteSum)
-    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
-function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
-    Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
+# function _transfer_left_mpo(Γ1::SiteSum, Γ2)
+#     Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+#     return _apply_transfer_matrices(Ts)
+# end
+# function _transfer_left_mpo(Γ1, op, Γ2::SiteSum)
+#     Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
+#     return _apply_transfer_matrices(Ts)
+# end
+# function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
+#     Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
+#     return _apply_transfer_matrices(Ts)
+# end
+# # function _transfer_left_mpo(Γ1::SiteSum, op::ScaledIdentityMPOsite, Γ2::SiteSum)
+# #     Ts = [data(op)*_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+# #     return _apply_transfer_matrices(Ts)
+# # end
+# function _transfer_left_mpo(Γ1, Γ2::SiteSum)
+#     Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+#     return _apply_transfer_matrices(Ts)
+# end
+# function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
+#     Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
+#     return _apply_transfer_matrices(Ts)
+# end
 
 # function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
 #     N1 = length(Γ1)
@@ -215,12 +216,12 @@ end
 
 function boundary(::OpenBoundary, mps::MPSSum, side::Symbol)
     if side == :right
-        return fill(one(eltype(mps.scalings)), length(mps.scalings))
+        return BlockBoundaryVector([boundary(mps.states[k], :right) for k in 1:length(mps.states)])
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return mps.scalings
+        return BlockBoundaryVector([mps.scalings[k] * boundary(mps.states[k], :left) for k in 1:length(mps.states)])
     end
 end
 
@@ -296,18 +297,16 @@ end
 
 Base.vec(site::LinkSite) = vec(diag(data(site)))
 
-
-transfer_matrix_bond(mps::MPSSum, site::Integer) = transfer_matrix_bond(mps[site],dir)
-function transfer_matrix_bond(sites::SiteSum)
-    Λ1s = transfer_matrix_bond_dense.(sites.sites)
-    #println(Λ1s)
-    #println( reduce(vcat,vec.(Λ1s)))
-    return LinkSite(vec(reduce(vcat, Array.(Λ1s))))
-end
+# function transfer_matrix_bond(sites::SiteSum)
+#     Λ1s = transfer_matrix_bond_dense.(sites.sites)
+#     #println(Λ1s)
+#     #println( reduce(vcat,vec.(Λ1s)))
+#     return LinkSite(vec(reduce(vcat, Array.(Λ1s))))
+# end
 
 # transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer) where N = IdentityTransferMatrix
 #transfer_matrix_bond(mps::MPSSum{<:NTuple{<:Any,<:LCROpenMPS},<:Any}, site::Integer, dir::Symbol) = I
-transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},T}) where T = IdentityTransferMatrix(T)
-transfer_matrix_bond_dense(mps::SiteSum) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
+# transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},T}) where T = I #IdentityTransferMatrix(T)
+# transfer_matrix_bond_dense(mps::SiteSum) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
 
 iscanonical(sites::SiteSum) = all(iscanonical.(sites.sites))

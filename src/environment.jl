@@ -5,7 +5,7 @@
 # end
 # BoundaryVector(x::Number) = BoundaryVector([x])
 
-Base.vec(bv::BlockBoundaryVector) = reduce(vcat,vec.(bv.data))
+Base.vec(bv::BlockBoundaryVector) = reduce(vcat, vec.(bv.data))
 # Base.length(bv::Union{BoundaryVector}) = length(data(bv))
 # Base.length(bv::Union{BlockBoundaryVector}) = prod(length.(data(bv)))
 data(bv::Union{BlockBoundaryVector}) = bv.data
@@ -19,7 +19,7 @@ Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = inv(x) * v
 # Base.iterate(v::Union{BlockBoundaryVector,BoundaryVector}) = iterate(data(v))
 # Base.IteratorSize(v::Union{BlockBoundaryVector,BoundaryVector}) = Base.IteratorSize(data(v))
 Base.size(v::Union{BlockBoundaryVector}) = size(data(v))
-Base.size(v::Union{BlockBoundaryVector}, i) = size(data(v),i) #i == 1 ? length(v) : 1
+Base.size(v::Union{BlockBoundaryVector}, i) = size(data(v), i) #i == 1 ? length(v) : 1
 Base.eltype(::BlockBoundaryVector{T,N}) where {T,N} = Array{T,N}
 
 # Base.reshape(v::BoundaryVector, dims::Dims) = BoundaryVector(reshape(v.data,dims))
@@ -33,8 +33,8 @@ Base.eltype(::BlockBoundaryVector{T,N}) where {T,N} = Array{T,N}
 # Base.similar(v::BoundaryVector, ::Type{S}, dims::Dims) where S = BoundaryVector(similar(data(v), S, dims))
 Base.similar(v::BlockBoundaryVector) = BlockBoundaryVector(similar.(data(v)))
 # Base.similar(v::BlockBoundaryVector, dims::Dims) = BlockBoundaryVector(similar(data(v), dims))
-Base.similar(v::BlockBoundaryVector, ::Type{S}) where S = BlockBoundaryVector(similar(data(v), S))
-Base.similar(v::BlockBoundaryVector, ::Type{S}, dims::Dims) where S = BlockBoundaryVector(similar(data(v), S, dims))
+Base.similar(v::BlockBoundaryVector, ::Type{S}) where {S} = BlockBoundaryVector(similar(data(v), S))
+Base.similar(v::BlockBoundaryVector, ::Type{S}, dims::Dims) where {S} = BlockBoundaryVector(similar(data(v), S, dims))
 
 # Base.similar(v::B, ::Type{S}) where {S,B<:Union{BlockBoundaryVector,BoundaryVector}} = B(similar(data(v), S))
 # Base.similar(v::BoundaryVector, ::Type{S}) where S = BoundaryVector(similar(data(v), S))
@@ -60,13 +60,13 @@ LinearAlgebra.norm(v::BlockBoundaryVector) = sqrt(mapreduce(x -> norm(x)^2, +, v
 # LinearAlgebra.mul!(w::BoundaryVector, v::BoundaryVector, x::Number) = BoundaryVector(mul!(data(w), data(v),x))
 # LinearAlgebra.mul!(C::BoundaryVector, A, B, α, β) )
 # LinearAlgebra.rmul!(v::BoundaryVector, x::Number) = BoundaryVector(rmul!(data(v), x))
-LinearAlgebra.mul!(w::BlockBoundaryVector, v::BlockBoundaryVector, x::Number) = BlockBoundaryVector([mul!(ww, vv,x) for (ww,vv) in zip(data(w), data(v))])
+LinearAlgebra.mul!(w::BlockBoundaryVector, v::BlockBoundaryVector, x::Number) = BlockBoundaryVector([mul!(ww, vv, x) for (ww, vv) in zip(data(w), data(v))])
 LinearAlgebra.rmul!(v::BlockBoundaryVector, x::Number) = BlockBoundaryVector(rmul!(data(v), x))
 function LinearAlgebra.axpy!(x::Number, v::BlockBoundaryVector, w::BlockBoundaryVector)
-    BlockBoundaryVector([axpy!(x, sv, sw) for (sv,sw) in zip(data(v),data(w))])
+    BlockBoundaryVector([axpy!(x, sv, sw) for (sv, sw) in zip(data(v), data(w))])
 end
 function LinearAlgebra.axpby!(x::Number, v::BlockBoundaryVector, β::Number, w::BlockBoundaryVector)
-    BlockBoundaryVector([axpby!(x, sv, β, sw) for (sv,sw) in zip(data(v),data(w))])
+    BlockBoundaryVector([axpby!(x, sv, β, sw) for (sv, sw) in zip(data(v), data(w))])
 end
 
 ###
@@ -92,11 +92,13 @@ end
 # BoundaryVector(bvs::Vararg{Array,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
 # BlockBoundaryVector(bvs::Vararg{Array{T,N},N}) where {T<:Number,N} = BlockBoundaryVector(BlockBoundaryVector.(bvs)...)
 
-BlockBoundaryVector(v,s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVector(_split_vector(vec(v),s))
+BlockBoundaryVector(v, s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVector(_split_vector(vec(v), s))
 
 tensor_product(t1::AbstractArray) = t1
 tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1,T2} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
-tensor_product(tensors::Vararg{<:AbstractArray,N}) where {N} = reduce(tensor_product, tensors)
+tensor_product(tensors...) = reduce(tensor_product, tensors)
+tensor_product(t1::UniformScaling, t2::AbstractArray{T2,N2}) where {N2,T2} = t1.λ * t2
+tensor_product(t1::AbstractArray{T1,N1}, t2::UniformScaling) where {N1,T1} = t2.λ * t1
 
 struct FiniteEnvironment{V} <: AbstractFiniteEnvironment
     L::Vector{V}
@@ -110,7 +112,7 @@ end
 struct InfiniteEnvironment{V} <: AbstractInfiniteEnvironment
     L::Vector{V}
     R::Vector{V}
-    function InfiniteEnvironment(L::Vector{V}, R::Vector{V}) where V
+    function InfiniteEnvironment(L::Vector{V}, R::Vector{V}) where {V}
         new{V}(L, R)
     end
 end
@@ -152,11 +154,11 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
     return env
 end
 function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
-    T = numtype(mps1,mps2)
+    T = numtype(mps1, mps2)
     Ts = data(mpo) * transfer_matrices(mps1, mps2, reverse_direction(dir))
     V = boundary(mps1, mps2, dir)
     N = length(mps1)
-    env = Vector{eltype(V)}(undef, N)
+    env = Vector{typeof(V)}(undef, N)
     if dir == :left
         itr = 1:1:N
         s = 1
@@ -274,15 +276,16 @@ function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}
     # DR = sum(size.(Ts, 2))
     f(v::BlockBoundaryVector) = BlockBoundaryVector([T * t for (T, t) in zip(Ts, data(v))])
     f_adjoint(v::BlockBoundaryVector) = BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
-    
+
     # f(v) = _join_tensor([T * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes2))])
     # f_adjoint(v) = _join_tensor([T' * t for (T, t) in zip(Ts, _split_vector(vec(v), sizes1))])
     #tens = _split_vector(vec(v), sizes)
     #_join_tensor([T' * t for (T, t) in zip(Ts, tens)])
     # BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
     #end
-    return TransferMatrix(f,f_adjoint,promote_type(eltype.(Ts)...))#LinearMapAA(f, f_adjoint, (prod(size(Ts)), prod(size(Ts))); 
-        #T = Array{eltype(Ts[1]),N}, idim = (size(Ts)), odim = (size(Ts)))
+    sizes = 
+    return TransferMatrix(f, f_adjoint, promote_type(eltype.(Ts)...), ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))#LinearMapAA(f, f_adjoint, (prod(size(Ts)), prod(size(Ts))); 
+    #T = Array{eltype(Ts[1]),N}, idim = (size(Ts)), odim = (size(Ts)))
 end
 
 function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)
