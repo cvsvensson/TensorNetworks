@@ -40,8 +40,8 @@ function test_ldos()
     ham = TensorNetworks.KitaevMPO(N, 1, 1, 0.0, 3);
     states, energy = DMRG(ham, mps)
     println(energy)
-    ham2 = dense(-energy *TensorNetworks.DenseIdentityMPO(N,2) + ham;)
+    ham2 = -energy *TensorNetworks.DenseIdentityMPO(N,2) + ham;
     states2, energy2 = DMRG(ham2, mps)
     #op = MPOsite(sx + sy*im)
-    ldos(states, ham2, ham2, ham2)
+    TensorNetworks.ldos(states, ham2, ham2, ham2)
 end

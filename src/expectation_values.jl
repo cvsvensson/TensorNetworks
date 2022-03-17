@@ -17,7 +17,7 @@ function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = fa
         end
         Tc = transfer_matrix_bond(mps[site], mps[site])
         T = transfer_matrix(mps[site:site+n-1], op, :left)
-        return dot(L,Tc * (T * R))
+        return dot(L, Tc * (T * R))
     else
         return expectation_value(view(mps, site:site+n-1), op)
     end
@@ -29,11 +29,13 @@ function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     L = boundary(mps, mpo, :left)
     R = boundary(mps, mpo, :right)
     Ts = transfer_matrices(mps, mpo, :left)
-    Tc = transfer_matrix_bond(mps[1],mpo[1], mps[1])
-    for k in length(mps):-1:1
-        R = Ts[k] * R
-    end
-    return dot(R, Tc * L)
+    Tc = transfer_matrix_bond(mps[1], mpo[1], mps[1])
+    #println(typeof(Tc))
+    # println(size(Ts[1]))
+    # for k in length(mps):-1:1
+    #     R = Ts[k] * R
+    # end
+    return inner(foldr(*, Ts, init = R), Tc * L)
 end
 function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     @assert length(mps1) == operatorlength(mpo) == length(mps2) "Length of mps is not equal to length of mpo"
@@ -41,18 +43,19 @@ function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     L = boundary(mps1, mpo, mps2, :left)
     R = boundary(mps1, mpo, mps2, :right)
     Ts = transfer_matrices(mps1, mpo, mps2, :left)
-    Tc = transfer_matrix_bond(mps1[1],mpo[1], mps2[1])
-    for k in length(mps1):-1:1
-        R = Ts[k] * R
-    end
-    return dot(R , Tc * L)
+    Tc = transfer_matrix_bond(mps1[1], mpo[1], mps2[1])
+    # for k in length(mps1):-1:1
+    #     R = Ts[k] * R
+    # end
+    [println(size(x)) for x in [L,R,Ts[end],Tc]]
+    return inner(foldr(*, Ts, init = R), Tc * L)
 end
 
 function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string = IdentityMPOsite)
     n = operatorlength(op)
     K = numtype(mps1, mps2)
-    L::Vector{K} = boundary(mps1, mps2, :left)
-    R::Vector{K} = boundary(mps1, mps2, :right)
+    L = boundary(mps1, op, mps2, :left)
+    R = boundary(mps1, op, mps2, :right)
     for k in 1:site-1
         L = transfer_matrix(mps1[k], string, mps2[k], :right) * L
     end
@@ -60,8 +63,8 @@ function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer;
         R = transfer_matrix(mps1[k], mps2[k], :left) * R
     end
     T = transfer_matrix(view(mps1, site:site+n-1), op, view(mps2, site:site+n-1), :left)
-    Tc = transfer_matrix_bond(mps1[site], mps2[site])
-    return dot(L, Tc * (T * R))::K
+    Tc = transfer_matrix_bond(mps1[site], op, mps2[site])
+    return inner(L, Tc * (T * R))::K
 end
 
 function expectation_value2(mps::MPSSum, op, site::Integer; string = IdentityMPOsite)
@@ -101,7 +104,7 @@ function expectation_value(sites::Union{Vector{GenericSite{T}},Vector{Orthogonal
     DR = size(sites[end], 3)
     idL = Matrix{T}(I, DL, DL)
     idR = Matrix{T}(I, DR, DR)
-    return dot(idL, TΛ*(transfer * idR))
+    return dot(idL, TΛ * (transfer * idR))
 end
 # function expectation_value(sites::Vector{GenericSite{T}}, gate::AbstractSquareGate) where {T}
 #     @assert length(sites) == operatorlength(gate) "Error in 'expectation value': length(sites) != operatorlength(gate)"

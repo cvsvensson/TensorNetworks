@@ -71,13 +71,13 @@ function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec = 1
     #errorfunc(mps) = 1 - abs(scalar_product(target, mps)) #FIXME can save memory by using precomputed envuronments
     function errorfunc(mps,dir,env)
         if dir==:right
-            temp = transfer_matrix(mps[end],target[end],:right)*vec(env.L[end])
+            temp = transfer_matrix(mps[end],target[end],:right)*env.L[end]
             #@tensor overlap[:] := env.L[end-1][1,2] *conj(target[end][1,3,4])* mps[end][2,3,4]
         elseif dir==:left
-            temp = transfer_matrix(mps[1],target[1],:left)*vec(env.R[1])
+            temp = transfer_matrix(mps[1],target[1],:left)*env.R[1]
             #@tensor overlap[:] := env.R[2][1,2] *conj(target[1][4,3,1])* mps[1][4,3,2]
         end
-        overlap = boundary(target,mps,dir)'*temp
+        overlap = inner(boundary(mps,target,dir),temp)
         @assert length(overlap)==1
 
         #println(norm(mps))

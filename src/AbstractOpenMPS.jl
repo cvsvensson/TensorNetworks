@@ -12,12 +12,23 @@ function boundary(::OpenBoundary, mps::AbstractMPS{<:Union{<:GenericSite,<:Ortho
         return [one(eltype(mps[1]))]
     end
 end
+
 boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS, side) = tensor_product(boundary(bc, mps1, side), boundary(bc, mps2, side))
 boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO, side) = boundary(bc, mps, mpo, mps, side)
 boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = tensor_product(
-    boundary(bc, mps1, side), boundary(bc, mpo, side), boundary(bc, mps2, side))
+    Tuple(boundary(bc, m, side) for m in (mps1, mpo, mps2))...)
 
 boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps), mps, args...)
+
+
+# boundary(bc::OpenBoundary, mps1::LazyProduct, mps2::AbstractMPS, side) = tensor_product(Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mps2))...)
+# boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::LazyProduct, side) = tensor_product(Tuple(boundary(bc, m, side) for m in (mps1, mps2.mpo, mps2.mps))...)
+# boundary(bc::OpenBoundary, mps1::LazyProduct, mps2::LazyProduct, side) = tensor_product(Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mps2.mpo, mps2.mps))...)
+# boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::LazyProduct, side) = tensor_product(
+#     Tuple(boundary(bc, m, side) for m in (mps1, mpo, mps2.mpo, mps2.mps))...)
+# boundary(bc::OpenBoundary, mps1::LazyProduct, mpo::AbstractMPO, mps2::AbstractMPS, side) = tensor_product(
+#     Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mpo, mps2))...)
+
 
 function boundary(::InfiniteBoundary, mps::AbstractMPS, g::ScaledIdentityMPO, mps2::AbstractMPS, side::Symbol)
     _, rhos = transfer_spectrum(mps, mps2, reverse_direction(side), nev = 1)

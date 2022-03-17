@@ -398,18 +398,17 @@ function effective_hamiltonian(mps::UMPS{T}, mpo::AbstractMPO; direction = :left
     end
     rhoR[:, itr[end], :] = Matrix{T}(I, D, D)
     for k in Dmpo-1:-1:1
-        rhoR[:, itr[k], :] = reshape(TL * vec(rhoR), sR)[:, itr[k], :]
+        rhoR[:, itr[k], :] = reshape(TL * rhoR, sR)[:, itr[k], :]
     end
     C = rhoR[:, itr[1], :]
     rho = data(mps.Λ[1])^2
     @tensor e0[:] := C[1, 2] * rho[1, 2]
-    idvec = vec(Matrix{T}(I, D, D))
+    id = Matrix{T}(I, D, D)
     function TI(v)
         v = TIL * v
-        return (v - idvec * (vec(rho)' * v))
+        return (v - id * (rho' * v))
     end
-    linmap = LinearMap{ComplexF64}(TI, D^2)
-    hl, info = linsolve(linmap, vec(C) - e0[1] * idvec, 1, -1)
+    hl, info = linsolve(TI, C - e0[1] * id, 1, -1)
     rhoR[:, itr[1], :] = hl
     return e0[1], rhoR, info
 end

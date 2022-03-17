@@ -414,7 +414,7 @@ function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractS
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol = :left)
     n = operatorlength(op)
-    return [_local_transfer_matrix(sites1[k:k+n-1], op, direction) for k in 1:length(sites1)+1-n]
+    return [_local_transfer_matrix(sites1[k:k+n-1], op, sites1[k:k+n-1], direction) for k in 1:length(sites1)+1-n]
 end
 
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
@@ -422,7 +422,7 @@ function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractM
     return [_local_transfer_matrix((sites1[k], op, sites2[k]), direction) for k in 1:length(sites1)]
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, direction::Symbol = :left)
-    return [_local_transfer_matrix((sites1[k], op, direction), direction) for k in 1:length(sites1)]
+    return [_local_transfer_matrix((sites1[k], op,sites1[k], direction), direction) for k in 1:length(sites1)]
 end
 
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
@@ -436,7 +436,7 @@ function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::Abstract
     N = length(sites1)
     # Ts = LinearMap{numtype(sites1)}[]
     ns = operatorlength.(ops)
-    return [_local_transfer_matrix(sites1[k:k+ns[k]-1], op, direction) for (k, op) in enumerate(ops) if !(k + ns[k] - 1 > N)]
+    return [_local_transfer_matrix(sites1[k:k+ns[k]-1], op,sites1[k:k+ns[k]-1], direction) for (k, op) in enumerate(ops) if !(k + ns[k] - 1 > N)]
 end
 
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::Union{AbstractMPO,AbstractVector{<:MPOsite}}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
@@ -445,7 +445,7 @@ function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::Union{Abs
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::Union{AbstractMPO,AbstractVector{<:MPOsite}}, direction::Symbol = :left)
     @assert length(sites1) == length(op)
-    return [_local_transfer_matrix(so, direction) for so in zip(sites1, op)]
+    return [_local_transfer_matrix(so, direction) for so in zip(sites1, op, sites1)]
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     @assert length(sites1) == length(sites2)
@@ -474,7 +474,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op, sites2::
     #return foldr(*, Ts)::CompositeTransferMatrix{<:NTuple{<:Any,AbstractTransferMatrix{T,<:Any}},T,<:NTuple{2,<:Any}} #Products of many linear operators cause long compile times!
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::Symbol = :left) where T
-    Ts = transfer_matrices(sites1, direction)
+    Ts = transfer_matrices(sites1,sites1, direction)
     N = length(sites1)
     # sites = direction == :left ? sites1[1:N] : reverse(sites1)
     if N > 20
@@ -495,7 +495,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::S
 end
 
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op, direction::Symbol = :left) where T
-    Ts = transfer_matrices(sites1, op, direction)
+    Ts = transfer_matrices(sites1, op,sites1, direction)
     N = length(Ts)
     if N > 20
         @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"

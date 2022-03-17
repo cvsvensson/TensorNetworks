@@ -100,7 +100,7 @@ BlockBoundaryVector(v, s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVec
 
 tensor_product(t1::AbstractArray) = t1
 tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1<:Number,T2<:Number} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
-tensor_product(tensors::Vararg{AbstractArray{<:Number,K}}) where K = foldl(tensor_product, tensors)
+tensor_product(tensors::Vararg{AbstractArray{<:Number,K}}) where {K} = foldl(tensor_product, tensors)
 tensor_product(t1::UniformScaling, t2::AbstractArray{T2,N2}) where {N2,T2} = t1.λ * t2
 tensor_product(t1::AbstractArray{T1,N1}, t2::UniformScaling) where {N1,T1} = t2.λ * t1
 
@@ -253,24 +253,22 @@ local_mul(envL, envR, site::OrthogonalLinkSite) = local_mul(envL, envR, site.Λ1
 
 #Only works for certain environs
 function local_mul(envL, envR, sitesum::SiteSum)
-    # println(size(envL))
-    # println(size(envR))
-    # println(size.(sites(sitesum)))
-    # leftsizes = size.(sites(sitesum), 1)
-    # leftsizematrix = collect(Base.product(leftsizes, leftsizes))
-    # lefttensors = _split_vector(vec(envL), leftsizematrix)
-    # rightsizematrix = collect(Base.product(size.(sites(sitesum), 3), size.(sites(sitesum), 3)))
-    # righttensors = _split_vector(vec(envR), rightsizematrix)
-    # @assert length(lefttensors) == length(righttensors) == length(sites(sitesum))^2
-    # arrays = sum([data(local_mul(lefttensors[n1, n2], righttensors[n1, n2], sites(sitesum)[n2])) for (n1, n2) in Base.product(1:length(sites(sitesum)), 1:length(sites(sitesum)))], dims = 2)
-    arrays = sum([data(local_mul(data(envL)[n1, n2], data(envR)[n1, n2], sites(sitesum)[n2])) for (n1, n2) in Base.product(1:length(sites(sitesum)), 1:length(sites(sitesum)))], dims = 2)
-
+    @assert size(data(envL)) == size(data(envR)) "Error: Left and right environments have different dimensions"
+    itr = Base.product(1:size(data(envL), 1), 1:size(data(envL), 2))
+    arrays = sum([data(local_mul(data(envL)[n1, n2], data(envR)[n1, n2], sites(sitesum)[n2])) for (n1, n2) in itr], dims = 2)
     SiteSum(Tuple(GenericSite.(arrays, ispurification(sitesum))))
+end
 
-    #SiteSum(map((L,R,s) -> local_mul(L, R, s), lefttensors, righttensors, sites(sitesum)))
-
-    #SiteSum(Tuple(local_mul(L, R, s) for (L,s,R) in zip(lefttensors,sites(sitesum),righttensors)))
-    #FIXME: Test if this works
+function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site::SiteSum) where {T}
+    @assert size(data(envL)) == size(data(envR)) "Error: Left and right environments have different dimensions"
+    sizes = size(data(envL))
+    itr = Base.product((1:s for s in sizes)...)
+    arrays = sum([data(local_mul(data(envL)[ns...], data(envR)[ns...], sites(mpo)[ns[2]], sites(site)[ns[3]])) for ns in itr], dims = 2:3)
+    SiteSum(Tuple(GenericSite.(arrays, ispurification(site))))
+end
+function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site::GenericSite) where {T}
+    outsite= local_mul(envL,envR,mpo,SiteSum(site))
+    GenericSite(outsite)
 end
 
 function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}

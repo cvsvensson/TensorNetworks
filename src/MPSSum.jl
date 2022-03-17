@@ -8,6 +8,8 @@ end
 Base.similar(site::SiteSum) = SiteSum(similar.(site.sites))
 Base.copy(site::SiteSum) = SiteSum(copy.(site.sites))
 Base.:*(x::Number, site::SiteSum) = SiteSum(x .* sites(site))
+Base.:*(site::SiteSum, x::Number) = x*site
+Base.:/(site::SiteSum, x::Number) = inv(x)*site
 #Base.setindex!(site::GenericSite, v, I::Vararg{Integer,3}) = (data(site)[I...] = v)
 function LinearAlgebra.mul!(w::SiteSum, v::SiteSum, x::Number)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
@@ -27,7 +29,6 @@ function LinearAlgebra.axpby!(x::Number, v::SiteSum, β::Number, w::SiteSum)
 end
 
 Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
-
 
 struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
     states::MPSs
@@ -70,10 +71,10 @@ Base.:+(s1::MPSSum, s2::MPSSum) = MPSSum(tuple(s1.states..., s2.states...), vcat
 Base.:+(s1::AbstractSite, s2::AbstractSite) = SiteSum((s1, s2))
 
 Base.:*(x::Number, mps::AbstractMPS) = MPSSum((mps,), [x])
-Base.:*(mps::AbstractMPS, x::Number) = MPSSum((mps,), [x])
+Base.:*(mps::AbstractMPS, x::Number) = x * mps
 Base.:*(x::Number, mps::MPSSum) = MPSSum(mps.states, x * mps.scalings)
-Base.:*(mps::MPSSum, x::Number) = MPSSum(mps.states, x * mps.scalings)
-Base.:/(mps::MPSSum, x::Number) = MPSSum(mps.states, inv(x) * mps.scalings)
+Base.:*(mps::MPSSum, x::Number) = x * mps
+Base.:/(mps::MPSSum, x::Number) = inv(x) * mps
 Base.:-(mps::AbstractMPS) = (-1) * mps
 Base.:-(mps::AbstractMPS, mps2::AbstractMPS) = mps + (-1) * mps2
 
@@ -216,8 +217,8 @@ function boundaryconditions(mps::MPSSum)
     @assert length(union(bcs)) == 1
     return bcs[1]
 end
-
-function boundary(::OpenBoundary, mps::MPSSum, side::Symbol)
+#,LazyProduct{<:Any,<:Any,<:MPOSum}
+function boundary(::OpenBoundary, mps::Union{MPSSum}, side::Symbol)
     if side == :right
         return BlockBoundaryVector([boundary(mps.states[k], :right) for k in 1:length(mps.states)])
     else
@@ -280,7 +281,8 @@ function dense(sitesum::SiteSum{Tup,T}) where {Tup,T}
     end
     return GenericSite(newsite, ispurification(sitesum))
 end
-
+convert(::Type{<:GenericSite}, site::SiteSum) = dense(site)
+GenericSite(s::SiteSum) = dense(s)
 dense(s::GenericSite) = s
 
 function dense(sitesum::SiteSum{<:NTuple{<:Any,OrthogonalLinkSite},T}) where {T}
