@@ -281,7 +281,7 @@ function dense(sitesum::SiteSum{Tup,T}) where {Tup,T}
     end
     return GenericSite(newsite, ispurification(sitesum))
 end
-convert(::Type{<:GenericSite}, site::SiteSum) = dense(site)
+Base.convert(::Type{<:GenericSite}, site::SiteSum) = dense(site)
 GenericSite(s::SiteSum) = dense(s)
 dense(s::GenericSite) = s
 
