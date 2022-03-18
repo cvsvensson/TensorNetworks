@@ -13,12 +13,25 @@ function boundary(::OpenBoundary, mps::AbstractMPS{<:Union{<:GenericSite,<:Ortho
     end
 end
 
-boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS, side) = tensor_product(boundary(bc, mps1, side), boundary(bc, mps2, side))
-boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO, side) = boundary(bc, mps, mpo, mps, side)
-boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = tensor_product(
-    Tuple(boundary(bc, m, side) for m in (mps1, mpo, mps2))...)
+# boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::AbstractMPS, side) = tensor_product(boundary(bc, mps1, side), boundary(bc, mps2, side))
+# boundary(bc::OpenBoundary, mps::AbstractMPS, mpo::AbstractMPO, side) = boundary(bc, mps, mpo, mps, side)
+# boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, side) = tensor_product(
+#     (boundary(bc, m, side) for m in (mps1, mpo, mps2))...)
 
-boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps), mps, args...)
+# boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps), mps, args...)
+
+boundary(bc::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = tensor_product(
+    (conj(boundary(OpenBoundary(), cm, side)) for cm in cmpss)..., (boundary(OpenBoundary(), m, side) for m in mpss)...)
+
+function boundary(csites::Tuple, sites::Tuple, side::Symbol)
+    K = promote_type(numtype.(sites)...)
+    newcsites2 = foldl(_split_lazy, csites, init = ())
+    newsites2 = foldr(_split_lazy, sites, init = ())
+    newcsites3, cscale = foldl(_remove_identity, newcsites2, init = (one(K), ()))
+    scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K),()))
+    T = (scale * cscale) * boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
+    return T::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any}}
+end
 
 
 # boundary(bc::OpenBoundary, mps1::LazyProduct, mps2::AbstractMPS, side) = tensor_product(Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mps2))...)

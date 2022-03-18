@@ -171,6 +171,8 @@ end
 # numtype(::OpenMPS{T}) where {T} = T
 numtype(ms::Vararg{AbstractVector{<:AbstractSite},<:Any}) = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
+numtype(::AbstractVector{<:AbstractMPOsite{T}}) where {T} = T
+
 sites(mps::LCROpenMPS) = mps.Γ
 sites(mps::UMPS) = mps.Γ
 sites(mps::CentralUMPS) = mps.Γ

@@ -202,7 +202,6 @@ function Base.:*(op::MPOsite, site::GenericSite)
     @tensor out[:] := data(op)[-1, -3, 1, -4] * data(site)[-2, 1, -5]
     GenericSite(reshape(out, sop[1] * ss[1], sop[2], sop[4] * ss[3]), site.purification)
 end
-Base.:*(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([o*site for o in sites(op)]))
 # %% TODO: make dense and Lazy mpo sums
 struct MPOSiteSum{S<:Tuple,T} <: AbstractMPOsite{T}
     sites::S
@@ -213,6 +212,7 @@ end
 
 sites(opsite::MPOsite) = [opsite]
 sites(opsite::MPOSiteSum) = opsite.sites
+Base.:*(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([o*site for o in sites(op)]))
 
 struct MPOSum{MPOs<:Tuple,Num} <: AbstractMPO{Num}
     mpos::MPOs

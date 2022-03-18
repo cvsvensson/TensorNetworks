@@ -7,15 +7,15 @@ Return the expectation value of the gate starting at `site`
 function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = false, string = IdentityMPOsite(0))
     n = operatorlength(op)
     if !iscanonical || string != IdentityMPOsite(0)
-        L = boundary(mps, mps, :left)
-        R = boundary(mps, mps, :right)
+        L = boundary(:left, (mps,), (mps,))
+        R = boundary(:right, (mps,), (mps,))
         for k in 1:site-1
             L = transfer_matrix(mps[k], string, :right) * L
         end
         for k in length(mps):-1:site+n
             R = transfer_matrix(mps[k], :left) * R
         end
-        Tc = transfer_matrix_bond(mps[site], mps[site])
+        Tc = transfer_matrix_bond((mps[site],), (mps[site],))
         T = transfer_matrix(mps[site:site+n-1], op, :left)
         return dot(L, Tc * (T * R))
     else
@@ -26,10 +26,10 @@ end
 function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     @assert length(mps) == operatorlength(mpo) "Length of mps is not equal to length of mpo"
     #K = numtype(mps)
-    L = boundary(mps, mpo, :left)
-    R = boundary(mps, mpo, :right)
-    Ts = transfer_matrices(mps, mpo, :left)
-    Tc = transfer_matrix_bond(mps[1], mpo[1], mps[1])
+    L = boundary((mps,), (mpo, mps), :left)
+    R = boundary((mps,), (mpo, mps), :right)
+    Ts = transfer_matrices((mps,), (mpo, mps), :left)
+    Tc = transfer_matrix_bond((mps[1],), (mpo[1], mps[1]))
     #println(typeof(Tc))
     # println(size(Ts[1]))
     # for k in length(mps):-1:1
@@ -40,30 +40,31 @@ end
 function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     @assert length(mps1) == operatorlength(mpo) == length(mps2) "Length of mps is not equal to length of mpo"
     #K = numtype(mps)
-    L = boundary(mps1, mpo, mps2, :left)
-    R = boundary(mps1, mpo, mps2, :right)
-    Ts = transfer_matrices(mps1, mpo, mps2, :left)
-    Tc = transfer_matrix_bond(mps1[1], mpo[1], mps2[1])
+
+    L = boundary(:left, (mps1,), (mpo, mps2))
+    R = boundary(:right, (mps1,), (mpo, mps2))
+    Ts = transfer_matrices((mps1,), (mpo, mps2),:left)
+    Tc = transfer_matrix_bond((mps1[1],), (mpo[1], mps2[1]))
     # for k in length(mps1):-1:1
     #     R = Ts[k] * R
     # end
-    [println(size(x)) for x in [L,R,Ts[end],Tc]]
+    #[println(size(x)) for x in [L, R, Ts[end], Tc]]
     return inner(foldr(*, Ts, init = R), Tc * L)
 end
 
 function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string = IdentityMPOsite)
     n = operatorlength(op)
     K = numtype(mps1, mps2)
-    L = boundary(mps1, op, mps2, :left)
-    R = boundary(mps1, op, mps2, :right)
+    L = boundary((mps1,), (mps2,),:left)
+    R = boundary((mps1,), (mps2,),:right)
     for k in 1:site-1
-        L = transfer_matrix(mps1[k], string, mps2[k], :right) * L
+        L = transfer_matrix((mps1[k],), (string, mps2[k]),:right) * L
     end
     for k in length(mps1):-1:site+n
-        R = transfer_matrix(mps1[k], mps2[k], :left) * R
+        R = transfer_matrix((mps1[k],), (mps2[k],),:left) * R
     end
     T = transfer_matrix(view(mps1, site:site+n-1), op, view(mps2, site:site+n-1), :left)
-    Tc = transfer_matrix_bond(mps1[site], op, mps2[site])
+    Tc = transfer_matrix_bond((mps1[site],), (op, mps2[site]))
     return inner(L, Tc * (T * R))::K
 end
 

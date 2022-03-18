@@ -130,8 +130,8 @@ infinite_environment(L::Vector{V}, R::Vector{V}) where {V} = InfiniteEnvironment
 
 function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, dir::Symbol)
     T = numtype(mps1, mps2)
-    Ts = transfer_matrices(mps1, mpo, mps2, reverse_direction(dir))
-    V = boundary(mps1, mpo, mps2, dir)
+    Ts = transfer_matrices((mps1,), (mpo, mps2), reverse_direction(dir))
+    V = boundary((mps1,), (mpo, mps2), dir)
     N = length(mps1)
     env = Vector{typeof(V)}(undef, N)
     if dir == :left
@@ -159,7 +159,7 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
 end
 function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
     T = numtype(mps1, mps2)
-    Ts = data(mpo) * transfer_matrices(mps1, mps2, reverse_direction(dir))
+    Ts = data(mpo) * transfer_matrices(reverse_direction(dir), (mps1,), (mps2,))
     V = boundary(mps1, mps2, dir)
     N = length(mps1)
     env = Vector{typeof(V)}(undef, N)
@@ -267,7 +267,7 @@ function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3
     SiteSum(Tuple(GenericSite.(arrays, ispurification(site))))
 end
 function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site::GenericSite) where {T}
-    outsite= local_mul(envL,envR,mpo,SiteSum(site))
+    outsite = local_mul(envL, envR, mpo, SiteSum(site))
     GenericSite(outsite)
 end
 
