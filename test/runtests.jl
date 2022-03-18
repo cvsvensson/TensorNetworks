@@ -615,3 +615,21 @@ end
     @test scalar_product(lp, mps) ≈ TensorNetworks.matrix_element(mps, mpo, mps)
     @test lp[1] ≈ mposite * mps[1]
 end
+
+@testset "LazyProduct" begin
+    site = randomGenericSite(5,2,5,ComplexF64)
+    mposite = MPOsite(sz)
+    lp = mposite*site
+    @test typeof(lp) == TensorNetworks.LazySiteProduct{ComplexF64,3,typeof(site),typeof((mposite,))}
+    @test lp.site == site
+    @test lp.ops[1] == mposite
+    lp2 = mposite*lp
+    @test typeof(l2p) == TensorNetworks.LazySiteProduct{ComplexF64,3,typeof(site),typeof((mposite,mposite))}
+    @test lp2.site == site
+    @test all(lp2.ops .== (mposite,mposite))
+
+    lpd = TensorNetworks.dense(lp)
+    @test lpd == TensorNetworks.multiply(mposite,site)
+    lpd2 = TensorNetworks.dense(lp2)
+    @test lpd2 == TensorNetworks.multiply(mposite,lpd)
+end

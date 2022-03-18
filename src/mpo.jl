@@ -181,7 +181,7 @@ struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPO<:AbstractMPO} <: Abst
     mpo::MPO
     mps::MPS
 end
-Base.:*(mpo::MPO, mps::AbstractMPS{S}) where {MPO<:AbstractMPO,S<:AbstractSite} = LazyProduct{typeof(mps),typeof(mpo[1]*mps[1]),MPO}(mpo, mps)
+Base.:*(mpo::MPO, mps::AbstractMPS{S}) where {MPO<:AbstractMPO,S<:AbstractSite} = LazyProduct{typeof(mps),typeof(mpo[1] * mps[1]),MPO}(mpo, mps)
 truncation(lp::LazyProduct) = truncation(lp.mps)
 Base.length(lp::LazyProduct) = length(lp.mps)
 Base.eltype(lp::LazyProduct) = eltype(lp.mps)
@@ -196,7 +196,26 @@ function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
     LCROpenMPS(Γ, truncation = truncation(lp), error = error(lp))
 end
 
-function Base.:*(op::MPOsite, site::GenericSite)
+struct LazySiteProduct{T,N,S,O} <: AbstractSite{T,N}
+    site::S
+    ops::O
+    function LazySiteProduct(site::AbstractSite{T,N}, ops::Vararg{O,<:Any}) where {O<:AbstractMPOsite,T,N}
+        new{T,N,typeof(site),typeof(ops)}(site, ops)
+    end
+end
+Base.show(io::IO, lp::LazySiteProduct) =
+    print(io,"LazySiteProduct\nSite: ", typeof(lp.site), "\nOps: ", typeof.(lp.ops))
+Base.show(io::IO, m::MIME"text/plain", lp::LazySiteProduct) = show(io, lp)
+
+Base.eltype(::LazySiteProduct{T,<:Any,<:Any,<:Any}) where {T} = T
+
+Base.:*(o::AbstractMPOsite, s::AbstractSite) = LazySiteProduct(s, o)
+Base.:*(o::AbstractMPOsite, lp::LazySiteProduct) = LazySiteProduct(lp.site, o, lp.ops...)
+
+function dense(lp::LazySiteProduct)
+    foldr(multiply, lp.ops, init = lp.site)
+end
+function multiply(op::MPOsite, site::GenericSite)
     sop = size(op)
     ss = size(site)
     @tensor out[:] := data(op)[-1, -3, 1, -4] * data(site)[-2, 1, -5]
@@ -210,6 +229,7 @@ struct MPOSiteSum{S<:Tuple,T} <: AbstractMPOsite{T}
     end
 end
 
+multiply(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([multiply(o, site) for o in sites(op)]))
 sites(opsite::MPOsite) = [opsite]
 sites(opsite::MPOSiteSum) = opsite.sites
 Base.:*(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([o*site for o in sites(op)]))
@@ -367,13 +387,13 @@ function addmpos(mpo1, mpo2, a, b, Dmax, tol = 0) #FIXME
 end
 
 
-function Base.:*(site1::MPOsite, site2::MPOsite)
+function multiply(site1::MPOsite, site2::MPOsite)
     s1 = size(site1)
     s2 = size(site2)
     @tensor temp[:] := data(site1)[-1, -3, 1, -5] * data(site2)[-2, 1, -4, -6]
     return MPOsite(reshape(temp, s1[1] * s2[1], s1[2], s2[3], s1[4] * s2[4]))
 end
-function Base.:*(site1::MPOSiteSum, site2::MPOSiteSum)
+function multiply(site1::MPOSiteSum, site2::MPOSiteSum)
     newsites = Array{MPOsite,2}(undef, length(sites(site1)), length(sites(site2)))
     for (n1, s1) in enumerate(sites(site1))
         for (n2, s2) in enumerate(sites(site2))
@@ -394,7 +414,7 @@ Base.copy(sitesum::MPOSiteSum) = MPOSiteSum(copy.(sitesum.sites))
 Naive multiplication of mpos. Multiplies the bond dimensions.
 """
 multiplyMPOs(mpo1::MPO, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(OpenBoundary(), mpo1, :left), boundary(OpenBoundary(), mpo2, :left)))
-multiplyMPOs(mpo1::MPOSum, mpo2::MPOSum) = MPOSum(Tuple([multiplyMPOs(m1,m2) for (m1,m2) in Base.product(mpo1.mpos,mpo2.mpos)]), vec([s1*s2 for (s1,s2) in Base.product(mpo1.scalings,mpo2.scalings)]))
+multiplyMPOs(mpo1::MPOSum, mpo2::MPOSum) = MPOSum(Tuple([multiplyMPOs(m1, m2) for (m1, m2) in Base.product(mpo1.mpos, mpo2.mpos)]), vec([s1 * s2 for (s1, s2) in Base.product(mpo1.scalings, mpo2.scalings)]))
 #multiplyMPOs(mpo1::MPOSum, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(mpo1.boundary,mpo2.boundary))
 transfer_matrix_bond(::AbstractMPOsite) = I
 # transfer_matrix_bond(mpo::MPOsite{T}) where T = IdentityTransferMatrix(T,(size(mpo,1),size(mpo,4)))
