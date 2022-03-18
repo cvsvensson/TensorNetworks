@@ -20,7 +20,9 @@ end
 # function MPOsite(op::Array{<:Number,4})
 #     return MPOsite(op, norm(op - conj(permutedims(op,[1,3,2,4]))) ≈ 0)
 
+numtype(::AbstractVector{<:AbstractMPOsite{T}}) where {T} = T
 data(site::MPOsite) = site.data
+data(site::MPOsite, dir::Symbol) = data(site)
 Base.eltype(::MPOsite{T}) where {T} = T
 # LinearAlgebra.ishermitian(site::MPOsite) = site.ishermitian
 # isunitary(site::MPOsite) = site.isunitary
@@ -181,7 +183,7 @@ struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPO<:AbstractMPO} <: Abst
     mpo::MPO
     mps::MPS
 end
-Base.:*(mpo::MPO, mps::AbstractMPS{S}) where {MPO<:AbstractMPO,S<:AbstractSite} = LazyProduct{typeof(mps),typeof(mpo[1] * mps[1]),MPO}(mpo, mps)
+Base.:*(mpo::MPO, mps::AbstractMPS{S}) where {MPO<:AbstractMPO,S<:AbstractSite} = LazyProduct{typeof(mps),typeof(multiply(mpo[1], mps[1])),MPO}(mpo, mps)
 truncation(lp::LazyProduct) = truncation(lp.mps)
 Base.length(lp::LazyProduct) = length(lp.mps)
 Base.eltype(lp::LazyProduct) = eltype(lp.mps)
@@ -196,24 +198,23 @@ function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
     LCROpenMPS(Γ, truncation = truncation(lp), error = error(lp))
 end
 
-struct LazySiteProduct{T,N,S,O} <: AbstractSite{T,N}
-    site::S
-    ops::O
-    function LazySiteProduct(site::AbstractSite{T,N}, ops::Vararg{O,<:Any}) where {O<:AbstractMPOsite,T,N}
-        new{T,N,typeof(site),typeof(ops)}(site, ops)
+struct LazySiteProduct{T,S}
+    sites::S
+    function LazySiteProduct(sites::Vararg{<:Any,<:Any})
+        new{promote_type(eltype.(sites)...),typeof(sites)}(sites)
     end
 end
 Base.show(io::IO, lp::LazySiteProduct) =
-    print(io,"LazySiteProduct\nSite: ", typeof(lp.site), "\nOps: ", typeof.(lp.ops))
+    print(io, "LazySiteProduct\nSites: ", typeof.(lp.sites))
 Base.show(io::IO, m::MIME"text/plain", lp::LazySiteProduct) = show(io, lp)
 
-Base.eltype(::LazySiteProduct{T,<:Any,<:Any,<:Any}) where {T} = T
+Base.eltype(::LazySiteProduct{T,<:Any}) where {T} = T
 
-Base.:*(o::AbstractMPOsite, s::AbstractSite) = LazySiteProduct(s, o)
-Base.:*(o::AbstractMPOsite, lp::LazySiteProduct) = LazySiteProduct(lp.site, o, lp.ops...)
+Base.:*(o::AbstractMPOsite, s::Union{AbstractSite,AbstractMPOsite}) = LazySiteProduct(o, s)
+Base.:*(o::AbstractMPOsite, lp::LazySiteProduct) = LazySiteProduct(o, lp.sites...)
 
 function dense(lp::LazySiteProduct)
-    foldr(multiply, lp.ops, init = lp.site)
+    foldr(multiply, lp.sites)
 end
 function multiply(op::MPOsite, site::GenericSite)
     sop = size(op)
@@ -232,7 +233,7 @@ end
 multiply(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([multiply(o, site) for o in sites(op)]))
 sites(opsite::MPOsite) = [opsite]
 sites(opsite::MPOSiteSum) = opsite.sites
-Base.:*(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([o*site for o in sites(op)]))
+Base.:*(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([o * site for o in sites(op)]))
 
 struct MPOSum{MPOs<:Tuple,Num} <: AbstractMPO{Num}
     mpos::MPOs
@@ -409,12 +410,12 @@ end
 Base.copy(sitesum::MPOSiteSum) = MPOSiteSum(copy.(sitesum.sites))
 
 """
-    multiplyMPOs(mpo1,mpo2)
+    multiply(mpo1,mpo2)
 
 Naive multiplication of mpos. Multiplies the bond dimensions.
 """
-multiplyMPOs(mpo1::MPO, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(OpenBoundary(), mpo1, :left), boundary(OpenBoundary(), mpo2, :left)))
-multiplyMPOs(mpo1::MPOSum, mpo2::MPOSum) = MPOSum(Tuple([multiplyMPOs(m1, m2) for (m1, m2) in Base.product(mpo1.mpos, mpo2.mpos)]), vec([s1 * s2 for (s1, s2) in Base.product(mpo1.scalings, mpo2.scalings)]))
+multiply(mpo1::MPO, mpo2::MPO) = MPO([multiply(s1, s2) for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(OpenBoundary(), mpo1, :left), boundary(OpenBoundary(), mpo2, :left)))
+multiply(mpo1::MPOSum, mpo2::MPOSum) = MPOSum(Tuple([multiply(m1, m2) for (m1, m2) in Base.product(mpo1.mpos, mpo2.mpos)]), vec([s1 * s2 for (s1, s2) in Base.product(mpo1.scalings, mpo2.scalings)]))
 #multiplyMPOs(mpo1::MPOSum, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(mpo1.boundary,mpo2.boundary))
 transfer_matrix_bond(::AbstractMPOsite) = I
 # transfer_matrix_bond(mpo::MPOsite{T}) where T = IdentityTransferMatrix(T,(size(mpo,1),size(mpo,4)))

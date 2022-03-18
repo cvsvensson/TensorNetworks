@@ -38,10 +38,10 @@ end
 data(site::GenericSite) = site.Γ
 data(site::VirtualSite) = site.Λ
 data(site::LinkSite) = site.Λ
-data(site::GenericSite, dir) = site.Γ
+data(site::GenericSite, dir) = data(site)
 data(site::OrthogonalLinkSite, dir) = data(GenericSite(site, dir))
-data(site::VirtualSite, dir) = site.Λ
-data(site::LinkSite, dir) = site.Λ
+data(site::VirtualSite, dir) = data(site)
+data(site::LinkSite, dir) = data(site)
 data(site::OrthogonalLinkSite) = data(site.Λ1 * site.Γ * site.Λ2)
 
 MPOsite(site::GenericSite) = (s = size(site); MPOsite(reshape(data(site), s[1], s[2], 1, s[3])))

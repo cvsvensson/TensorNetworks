@@ -1,5 +1,5 @@
 #TransferMatrix(f::Function) = TransferMatrix{typeof(f)}(f)
-TransferMatrix(f::Function, fa::Function, T::DataType, s) = TransferMatrix{typeof(f),typeof(fa),T,typeof(s)}(f, fa, s)
+TransferMatrix(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, T::DataType, s) = TransferMatrix{typeof(f),typeof(fa),T,typeof(s)}(f, fa, s)
 
 Base.eltype(::AbstractTransferMatrix{T}) where {T} = T
 Base.size(T::AbstractTransferMatrix) = T.sizes
@@ -7,10 +7,10 @@ Base.size(T::AbstractTransferMatrix, i) = T.sizes[i]
 Base.:*(T::TransferMatrix, v) = T.f(v)
 Base.:*(T::CompositeTransferMatrix, v) = foldr(*, T.maps, init = v)
 Base.adjoint(T::TransferMatrix) = TransferMatrix(T.fa, T.f, eltype(T), (size(T, 2), size(T, 1)))
-Base.adjoint(T::CompositeTransferMatrix) = CompositeTransferMatrix(reverse(adjoint.(T.maps)))
+Base.adjoint(T::CompositeTransferMatrix{<:Any,K,S}) where {K,S} = CompositeTransferMatrix{K,S}(reverse(adjoint.(T.maps)))
 
 # Base.:*(x::Number, T::TransferMatrix) = TransferMatrix(y -> x * T.f(y), eltype(T), size(T))
-Base.:*(x::K, T::AbstractTransferMatrix) where {K<:Number} = TransferMatrix(v -> x * v, K, (size(T, 1), size(T, 1))) * T
+Base.:*(x::K, T::AbstractTransferMatrix) where {K<:Number} = TransferMatrix(v -> x * v, v -> conj(x) * v, K, (size(T, 1), size(T, 1))) * T
 # Base.:*(x::Number, T::TransferMatrixAdj) = TransferMatrix(y -> x * T.f(y), y -> conj(x) * T.fa(y), eltype(T), size(T))
 
 # Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
@@ -104,6 +104,7 @@ end
 # _filter_sites(s1::AbstractMatrix, (scaling, sites)) = (scaling, (s1, sites...))
 
 data(x::UniformScaling) = x.λ
+data(x::UniformScaling, ::Symbol) = data(x)
 
 _transfer_matrix_bond(R::Array{<:Number,1}, diags::Vararg{AbstractMatrix,1}) = @tensor out[:] := diags[1][-1, 1] * R[1]
 _transfer_matrix_bond(R::Array{<:Number,2}, diags::Vararg{AbstractMatrix,2}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * R[1, 2]
@@ -121,23 +122,23 @@ _transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::Union{Number
 _transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::AbstractMatrix, d3::Union{Number,Bool}) =
     @tensor out[:] := d1[-1, 1] * d2[-2, 2] * d3 * R[1, 2, -3]
 
-function transfer_matrix_bond(csites::Tuple, sites::Tuple)
+function transfer_matrix_bond(csites::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}}, sites::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
     K = promote_type(eltype.(sites)...)
     newcsites2 = foldl(_split_lazy, csites, init = ())
     newsites2 = foldr(_split_lazy, sites, init = ())
-    newcsites3, cscale = foldl(_remove_identity, newcsites2, init = (one(K), ()))
+    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
     scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
-    f(R) = (scale * cscale) * _transfer_matrix_bond(R, data.(link.(newcsites3, :left)), data.(link.(newsites3, :left)))
-    odims = tuple((size(x, 1) for x in csites)..., (size(x, 1) for x in sites)...)
-    idims = tuple((size(x)[end] for x in csites)..., (size(x)[end] for x in sites)...)
-    return TransferMatrix(f, K, (odims, idims))
+    f(R) = (scale * cscale) * _transfer_matrix_bond(R, data.(link.(newcsites3, :left))..., data.(link.(newsites3, :left))...)
+    odims = tuple((size(x, 1) for x in newcsites3)..., (size(x, 1) for x in newsites3)...)
+    idims = tuple((size(x)[end] for x in newcsites3)..., (size(x)[end] for x in newsites3)...)
+    return TransferMatrix(f, f, K, (odims, idims))
 end
-function transfer_matrix_bond(sites::Vararg{Union{OrthogonalLinkSite,GenericSite,MPOsite,ScaledIdentityMPOsite},N}) where {N}
-    diags = data.(link.(sites, :left))
-    # scaling, diags2 = foldr(_filter_sites, diags, init = (1, ()))
-    f(R) = _transfer_matrix_bond(R, diags...)
-    TransferMatrix(f, promote_type(eltype.(diags)...), (size.(sites, 1), size.(sites, 1)))
-end
+# function transfer_matrix_bond(sites::Vararg{Union{OrthogonalLinkSite,GenericSite,MPOsite,ScaledIdentityMPOsite},N}) where {N}
+#     diags = data.(link.(sites, :left))
+#     # scaling, diags2 = foldr(_filter_sites, diags, init = (1, ()))
+#     f(R) = _transfer_matrix_bond(R, diags...)
+#     TransferMatrix(f, f, promote_type(eltype.(diags)...), (size.(sites, 1), size.(sites, 1)))
+# end
 
 # %% Transfer Matrices
 """
@@ -148,10 +149,10 @@ Returns the left transfer matrix of a single site
 See also: [`transfer_right`](@ref)
 """
 
-_transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s2, :right))
-_transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s1, :right))
-_transfer_left_mpo(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), GenericSite(s2, :right))
-_transfer_left_mpo(s::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s, :right))
+# _transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s2, :right))
+# _transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s1, :right))
+# _transfer_left_mpo(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), GenericSite(s2, :right))
+# _transfer_left_mpo(s::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s, :right))
 
 # __transfer_left_mpo(R::AbstractVector,Γ1::GenericSite, Γ2::GenericSite) = __transfer_left_mpo(reshape(R,size(\Gamma)  )))
 # __transfer_left_mpo(R::AbstractArray{<:Any,2}, Γ1::GenericSite, Γ2::GenericSite) = (@tensoropt (t1, b1, -1, -2) temp[:] := R[t1, b1] * conj(data(Γ1)[-1, c1, t1]) * data(Γ2)[-2, c1, b1])
@@ -174,10 +175,12 @@ __transfer_left_mpo(R::AbstractArray{<:Any,3}, Γ1::Array{<:Any,3}, mpo::Array{<
 __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,3}, Γ1::Array{<:Any,3}, mpo::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
     @tensoropt (bl, tl, -1, -3) temp[:] := L[tl, cl, bl] * Γ1[tl, u, -1] * mpo[cl, u, d, -2] * Γ2[bl, d, -3]
 
-function _transfer_left_mpo(Γ1::Tuple, Γ2::Tuple)
+function _transfer_left_mpo(Γ1::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite}}, Γ2::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite}})
     K = promote_type(eltype.(Γ1)..., eltype.(Γ2)...)
-    f(R) = __transfer_left_mpo(R, conj.(data.(Γ1))..., data.(Γ2)...)
-    fadj(L) = __transfer_left_mpo_adjoint(L, (data.(Γ1))..., conj.(data.(Γ2))...)
+    g1 = data.(Γ1, :right)
+    g2 = data.(Γ2, :right)
+    f(R) = __transfer_left_mpo(R, conj.(g1)..., g2...)
+    fadj(L) = __transfer_left_mpo_adjoint(L, g1..., conj.(g2)...)
     odims = tuple((size(x, 1) for x in Γ1)..., (size(x, 1) for x in Γ2)...)
     idims = tuple((size(x)[end] for x in Γ1)..., (size(x)[end] for x in Γ2)...)
     return TransferMatrix(f, fadj, K, (odims, idims))
@@ -201,11 +204,11 @@ end
 
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1)
-function _transfer_left_mpo(Γ1::GenericSite{T1}, mpo::MPOsite{T2}, Γ2::GenericSite{T3}) where {T1,T2,T3}
-    f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ2)
-    fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ2)
-    return TransferMatrix(f, fadj, promote_type(T1, T2, T3), ((size(Γ1, 1), size(mpo, 1), size(Γ2, 1)), (size(Γ1, 3), size(mpo, 4), size(Γ2, 3))))
-end
+# function _transfer_left_mpo(Γ1::GenericSite{T1}, mpo::MPOsite{T2}, Γ2::GenericSite{T3}) where {T1,T2,T3}
+#     f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ2)
+#     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ2)
+#     return TransferMatrix(f, fadj, promote_type(T1, T2, T3), ((size(Γ1, 1), size(mpo, 1), size(Γ2, 1)), (size(Γ1, 3), size(mpo, 4), size(Γ2, 3))))
+# end
 
 #TODO Check performance vs ncon, or 'concatenated' versions. Ncon is slower. concatenated is faster
 function __transfer_left_mpo(mposites::NTuple{N,MPOsite}) where {N}
@@ -361,7 +364,6 @@ function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::G
             sv = size(v)
             v = reshape(v, prod(sv[1:3]), sv[4], sv[5])
         end
-        #return transpose(opvec)*reshape(v,size(v,1),size(v,2)*size(v,3))
         @tensor vout[:] := v[1, -1, -2] * opvec[1]
         # @tullio vout[a,b] := v[c,a,b] * opvec[c]
         return vout
@@ -391,7 +393,7 @@ function _local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol)
     newcsites2 = foldl(_split_lazy, newcsites, init = ())
     newsites2 = foldr(_split_lazy, newsites, init = ())
     #scaling = prod([(data(site)) for site in sites if site isa ScaledIdentityMPOsite], init = one(K))
-    newcsites3, cscale = foldl(_remove_identity, newcsites2, init = (one(K), ()))
+    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
     scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
     # return (scaling*__local_transfer_matrix(newsites,direction))::LinearMap{K}
     T = (scale * cscale) * __local_transfer_matrix(newcsites3, newsites3, direction)
@@ -399,13 +401,14 @@ function _local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol)
 end
 _split_lazy(s, ss::Tuple) = (s, ss...)
 _split_lazy(ss::Tuple, s) = (ss..., s)
-_split_lazy(s::LazyProduct, ss::Tuple) = (s.mpo, s.mps, ss...)
-_split_lazy(ss::Tuple, s::LazyProduct) = (ss..., s.mps, s.mpo)
+_split_lazy(s::LazySiteProduct, ss::Tuple) = (s.sites..., ss...)
+_split_lazy(ss::Tuple, s::LazySiteProduct) = (ss..., s.sites...)
 
 _remove_identity(s, (x, ss)::Tuple{<:Number,Tuple}) = (x, (s, ss...))
-_remove_identity((x, ss)::Tuple{<:Number,Tuple}, s) = ((ss..., s), x)
 _remove_identity(s::ScaledIdentityMPOsite, (x, ss)::Tuple{<:Number,Tuple}) = (data(s) * x, ss)
-_remove_identity((x, ss)::Tuple{<:Number,Tuple}, s::ScaledIdentityMPOsite) = (ss, conj(data(s)) * x,)
+
+_remove_identity((x, ss)::Tuple{<:Number,Tuple}, s) = (x, (ss..., s))
+_remove_identity((x, ss)::Tuple{<:Number,Tuple}, s::ScaledIdentityMPOsite) = (conj(data(s)) * x, ss)
 
 function __local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol = :left)
     if direction == :left
@@ -418,8 +421,8 @@ function __local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol 
     end
 end
 
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol = :left) = data(op) * prod(transfer_matrices(site1, direction))
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * prod(transfer_matrices(site1, site2, direction))
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol = :left) = data(op) * transfer_matrix(site1, direction)
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * transfer_matrix(site1, site2, direction)
 function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     @assert length(site1) == length(site2) == operatorlength(op)
     if ispurification(site1[1])
@@ -512,10 +515,10 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op, sites2::
     # if direction == :right
     #     Ts = reverse(Ts)
     # end
-    N = length(Ts)
-    if N > 20
-        @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
-    end
+    # N = length(Ts)
+    # if N > 20
+    #     @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
+    # end
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
@@ -543,8 +546,33 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::S
     #return foldr(*, Ts)::CompositeTransferMatrix{_A,T,_B}
 end
 
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op, direction::Symbol = :left) where {T}
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, sites2::AbstractVector{<:AbstractSite{T}}, direction::Symbol = :left) where {T}
+    Ts = transfer_matrices((sites1,), (sites2,), direction)
+    N = length(sites1)
+    # sites = direction == :left ? sites1[1:N] : reverse(sites1)
+    if N > 20
+        @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
+    end
+    if direction == :right
+        Ts = reverse(Ts)
+    end
+    return CompositeTransferMatrix{T}(Tuple(Ts))
+end
+
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractMPO, direction::Symbol = :left) where {T}
     Ts = transfer_matrices((sites1,), (op, sites1), direction)
+    N = length(Ts)
+    if N > 20
+        @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
+    end
+    if direction == :right
+        Ts = @view Ts[N:-1:1]
+    end
+    return CompositeTransferMatrix{T}(Tuple(Ts)) #Products of many linear operators cause long compile times!
+end
+
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractSquareGate, direction::Symbol = :left) where {T}
+    Ts = transfer_matrices(sites1, op, sites1, direction)
     N = length(Ts)
     if N > 20
         @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"

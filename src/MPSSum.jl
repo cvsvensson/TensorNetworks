@@ -8,8 +8,8 @@ end
 Base.similar(site::SiteSum) = SiteSum(similar.(site.sites))
 Base.copy(site::SiteSum) = SiteSum(copy.(site.sites))
 Base.:*(x::Number, site::SiteSum) = SiteSum(x .* sites(site))
-Base.:*(site::SiteSum, x::Number) = x*site
-Base.:/(site::SiteSum, x::Number) = inv(x)*site
+Base.:*(site::SiteSum, x::Number) = x * site
+Base.:/(site::SiteSum, x::Number) = inv(x) * site
 #Base.setindex!(site::GenericSite, v, I::Vararg{Integer,3}) = (data(site)[I...] = v)
 function LinearAlgebra.mul!(w::SiteSum, v::SiteSum, x::Number)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
@@ -96,15 +96,15 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
 end
 
 # _transfer_left_mpo(Γ1::SiteSum, op::AbstractMPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
-_transfer_left_mpo(Γ1::SiteSum) = _transfer_left_mpo(Γ1, Γ1)
-_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1, Γ1)
-_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
-_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
-_transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
+# _transfer_left_mpo(Γ1::SiteSum) = _transfer_left_mpo(Γ1, Γ1)
+# _transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1, Γ1)
+# _transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
+# _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
+# _transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
 
 
-_transfer_left_mpo(ss::Vararg{Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum},N}) where N = _apply_transfer_matrices([_transfer_left_mpo(ss...) for ss in Base.product(sites.(ss)...)])
-transfer_matrix_bond(ss::Vararg{Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum},N}) where N = _apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
+_transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
+transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
 
 # function _transfer_left_mpo(Γ1::SiteSum, op, Γ2)
 #     Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
@@ -204,7 +204,7 @@ function _split_vector(v, s::Array{NTuple{N,Int},K}) where {N,K}
     end
     return tens
 end
-_split_vector(v,s::Dims) = reshape(v,s...)
+_split_vector(v, s::Dims) = reshape(v, s...)
 
 function _join_tensor(tens)
     reduce(vcat, tens)

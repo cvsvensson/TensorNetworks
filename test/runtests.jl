@@ -160,9 +160,9 @@ end
         @test z^(1 / N) * idsite == zid[floor(Int, N / 2)]
         D = 5
         mps = randomOpenMPS(N, d, D)
-        T0 = Matrix(prod(transfer_matrices(mps)))
-        @test T0 == Matrix(prod(transfer_matrices(mps, id)))
-        @test z * T0 ≈ Matrix(prod(transfer_matrices(mps, zid)))
+        T0 = Matrix(transfer_matrix(mps))
+        @test T0 == Matrix(transfer_matrix(mps, id))
+        @test z * T0 ≈ Matrix(transfer_matrix(mps, zid))
     end
     test(2)
     test(3)
@@ -183,7 +183,7 @@ end
     env = environment(mps)
     site = randomGenericSite(D, d, D)
     mid = floor(Int, N / 2)
-    update_environment!(env, mid, site, site)
+    update_environment!(env, site, mid)
     TL = transfer_matrix(site, :left)
     TR = transfer_matrix(site, :right)
     @test env.R[mid-1] ≈ TL * env.R[mid]
@@ -194,7 +194,7 @@ end
     env = environment(mps2, mps)
     @test length(env.R[mid]) == D2 * D == length(env.L[mid])
     site2 = randomGenericSite(D2, d, D2)
-    update_environment!(env, mid, site2, site)
+    update_environment!(env, site2, site, mid)
     TL = transfer_matrix(site2, site, :left)
     TR = transfer_matrix(site2, site, :right)
     @test env.R[mid-1] ≈ TL * env.R[mid]
@@ -204,7 +204,7 @@ end
     Dmpo = size(mpo[mid], 4)
     env = environment(mps2, mpo, mps)
     @test length(env.R[mid]) == D2 * D * Dmpo == length(env.L[mid])
-    update_environment!(env, mid, site2, mpo[mid], site)
+    update_environment!(env, site2, mpo[mid], site, mid)
     TL = transfer_matrix(site2, mpo[mid], site, :left)
     TR = transfer_matrix(site2, mpo[mid], site, :right)
     @test env.R[mid-1] ≈ TL * env.R[mid]
@@ -299,7 +299,7 @@ end
     L = randomLeftOrthogonalSite(D, d, D)
     LR = randomOrthogonalLinkSite(D, d, D)
     id = Matrix{ComplexF64}(I, D, D)
-    idvec = vec(id)
+    #idvec = vec(id)
     @test id ≈ transfer_matrix(R) * id
     @test id ≈ transfer_matrix(L, :right) * id
     @test id ≈ transfer_matrix(LR, :right) * id
@@ -617,19 +617,18 @@ end
 end
 
 @testset "LazyProduct" begin
-    site = randomGenericSite(5,2,5,ComplexF64)
+    site = randomGenericSite(5, 2, 5, ComplexF64)
     mposite = MPOsite(sz)
-    lp = mposite*site
-    @test typeof(lp) == TensorNetworks.LazySiteProduct{ComplexF64,3,typeof(site),typeof((mposite,))}
-    @test lp.site == site
-    @test lp.ops[1] == mposite
-    lp2 = mposite*lp
-    @test typeof(l2p) == TensorNetworks.LazySiteProduct{ComplexF64,3,typeof(site),typeof((mposite,mposite))}
-    @test lp2.site == site
-    @test all(lp2.ops .== (mposite,mposite))
+    lp = mposite * site
+    sites = (mposite, site)
+    @test typeof(lp) == TensorNetworks.LazySiteProduct{ComplexF64,typeof(sites)}
+    @test lp.sites == sites
+    lp2 = mposite * lp
+    @test typeof(lp2) == TensorNetworks.LazySiteProduct{ComplexF64,typeof((mposite, sites...))}
+    @test lp2.sites == (mposite, sites...)
 
     lpd = TensorNetworks.dense(lp)
-    @test lpd == TensorNetworks.multiply(mposite,site)
+    @test lpd == TensorNetworks.multiply(mposite, site)
     lpd2 = TensorNetworks.dense(lp2)
-    @test lpd2 == TensorNetworks.multiply(mposite,lpd)
+    @test lpd2 == TensorNetworks.multiply(mposite, lpd)
 end

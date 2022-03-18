@@ -159,8 +159,8 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
 end
 function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
     T = numtype(mps1, mps2)
-    Ts = data(mpo) * transfer_matrices(reverse_direction(dir), (mps1,), (mps2,))
-    V = boundary(mps1, mps2, dir)
+    Ts = data(mpo) * transfer_matrices((mps1,), (mps2,), reverse_direction(dir))
+    V = boundary((mps1,), (mps2,), dir)
     N = length(mps1)
     env = Vector{typeof(V)}(undef, N)
     if dir == :left
@@ -207,31 +207,32 @@ environment(mps::AbstractMPS) = environment(mps, IdentityMPO(length(mps)), mps)
 #     return 
 # end
 
-function update_left_environment!(env::AbstractFiniteEnvironment, j::Integer, sites::Vararg{Union{AbstractSite,AbstractMPOsite},N}) where {N}
+function update_left_environment!(env::AbstractFiniteEnvironment, j::Integer, csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}}, sites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}})
     # sl = [size(site)[end] for site in sites]
     # sl = map(s -> size(s)[end], sites)
-    j == length(env) || (env.L[j+1] = _local_transfer_matrix(sites, :right) * env.L[j])
+    j == length(env) || (env.L[j+1] = _local_transfer_matrix(csites, sites, :right) * env.L[j])
     return
 end
-function update_right_environment!(env::AbstractFiniteEnvironment, j::Integer, sites::Vararg{Union{AbstractSite,AbstractMPOsite},N}) where {N}
+function update_right_environment!(env::AbstractFiniteEnvironment, j::Integer, csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}}, sites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}})
     #sr = [size(site)[1] for site in sites]
     sr = size.(sites, 1)
     if j > 1
-        env.R[j-1] = _local_transfer_matrix(sites, :left) * env.R[j]
+        env.R[j-1] = _local_transfer_matrix(csites, sites, :left) * env.R[j]
     end
     return
 end
-function update_environment!(env::AbstractFiniteEnvironment, j::Integer, sites::Vararg{Union{AbstractSite,AbstractMPOsite},N}) where {N}
+function update_environment!(env::AbstractFiniteEnvironment, j::Integer, csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}}, sites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}})
     # sl = map(s -> size(s)[end], sites)
     # sr = size.(sites, 1)
-    j == length(env) || (env.L[j+1] = _local_transfer_matrix(sites, :right) * env.L[j])
-    j == 1 || (env.R[j-1] = _local_transfer_matrix(sites, :left) * env.R[j])
+    j == length(env) || (env.L[j+1] = _local_transfer_matrix(csites, sites, :right) * env.L[j])
+    j == 1 || (env.R[j-1] = _local_transfer_matrix(csites, sites, :left) * env.R[j])
     return
 end
 
-update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mps2::AbstractSite, site::Integer) = update_environment!(env, site, mps1, mps2)
-update_environment!(env::AbstractFiniteEnvironment, mps::AbstractSite, mpo::AbstractMPOsite, site::Integer) = update_environment!(env, site, mps, mpo, mps)
-update_environment!(env::AbstractFiniteEnvironment, mps::AbstractSite, site::Integer) = update_environment!(env, site, mps, mps)
+update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mps2::AbstractSite, site::Integer) = update_environment!(env, site, (mps1,), (mps2,))
+update_environment!(env::AbstractFiniteEnvironment, mps::AbstractSite, mpo::AbstractMPOsite, site::Integer) = update_environment!(env, site, (mps,), (mpo, mps))
+update_environment!(env::AbstractFiniteEnvironment, mps::AbstractSite, site::Integer) = update_environment!(env, site, (mps,), (mps,))
+update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::AbstractMPOsite, mps2::AbstractSite, site::Integer) = update_environment!(env, site, (mps1,), (mpo, mps2))
 
 # function update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::ScaledIdentityMPOsite, mps2::AbstractSite, site::Integer)
 #     env.L[site+1] = reshape(transfer_matrix(mps1, mpo, mps2, :right)*vec(env.L[site]), size(mps1,3), size(mps2,3))

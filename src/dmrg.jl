@@ -17,8 +17,9 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
     direction = :right
     Henv = environment(mps, mpo)
     orthenv = [environment(mps, state) for state in orth]
-    Hsquared = multiplyMPOs(mpo, mpo)
-    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+    #Hsquared = mpo*mpo#multiply(mpo, mpo)
+    println(norm(mpo*mps))
+    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), norm(mpo*mps)#real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
     count = 1
@@ -27,7 +28,7 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
         mps = sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
         mps = canonicalize(mps, center = center(mps))
         direction = reverse_direction(direction)
-        E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+        E, H2 = real(expectation_value(mps, mpo)), norm(mpo*mps)#real(expectation_value(mps, Hsquared))
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
             E, H2 = real(E), real(H2)

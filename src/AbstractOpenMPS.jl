@@ -27,8 +27,8 @@ function boundary(csites::Tuple, sites::Tuple, side::Symbol)
     K = promote_type(numtype.(sites)...)
     newcsites2 = foldl(_split_lazy, csites, init = ())
     newsites2 = foldr(_split_lazy, sites, init = ())
-    newcsites3, cscale = foldl(_remove_identity, newcsites2, init = (one(K), ()))
-    scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K),()))
+    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
+    scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
     T = (scale * cscale) * boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
     return T::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any}}
 end

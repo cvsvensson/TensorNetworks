@@ -169,9 +169,8 @@ end
 # numtype(::UMPS{T}) where {T} = T
 # numtype(::CentralUMPS{T}) where {T} = T
 # numtype(::OpenMPS{T}) where {T} = T
-numtype(ms::Vararg{AbstractVector{<:AbstractSite},<:Any}) = promote_type(numtype.(ms)...)
+numtype(ms...) = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
-numtype(::AbstractVector{<:AbstractMPOsite{T}}) where {T} = T
 
 sites(mps::LCROpenMPS) = mps.Γ
 sites(mps::UMPS) = mps.Γ
@@ -241,6 +240,11 @@ function CompositeTransferMatrix{T}(maps::Maps) where {Maps,T}
 end
 function CompositeTransferMatrix(map::TransferMatrix{<:Any,<:Any,T,S}) where {T,S}
     CompositeTransferMatrix{typeof(tuple(map)),T,S}(tuple(map),size(map))
+end
+function CompositeTransferMatrix{T,S}(maps::Maps) where {Maps,T,S}
+    s1 = size(maps[1],1)
+    s2 = size(maps[end],2)
+    CompositeTransferMatrix{Maps,T,S}(maps,(s1,s2))
 end
 # struct TransferMatrix{F<:Function,Fa,T,S} <: AbstractTransferMatrix{T,S}
 #     f::F
