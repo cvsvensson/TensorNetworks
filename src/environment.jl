@@ -14,7 +14,7 @@ Base.conj(bv::BlockBoundaryVector) = BlockBoundaryVector(conj(data(bv)))
 data(bv::Union{BlockBoundaryVector}) = bv.data
 # BlockBoundaryVector(v::Array{T,N}) where {T,N} = BlockBoundaryVector(v)
 
-Base.:*(x::Number, v::T) where {T<:Union{BlockBoundaryVector}} = T(x * data(v))
+Base.:*(x::Number, v::T) where {T<:Union{BlockBoundaryVector}} = BlockBoundaryVector(x * data(v))
 Base.:*(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = x * v
 Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = inv(x) * v
 
@@ -23,7 +23,7 @@ Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = inv(x) * v
 # Base.IteratorSize(v::Union{BlockBoundaryVector,BoundaryVector}) = Base.IteratorSize(data(v))
 Base.size(v::Union{BlockBoundaryVector}) = size(data(v))
 Base.size(v::Union{BlockBoundaryVector}, i) = size(data(v), i) #i == 1 ? length(v) : 1
-Base.eltype(::BlockBoundaryVector{T,N}) where {T,N} = Array{T,N}
+# Base.eltype(::BlockBoundaryVector{T,N}) where {T,N} = Array{T,N}
 
 # Base.reshape(v::BoundaryVector, dims::Dims) = BoundaryVector(reshape(v.data,dims))
 
@@ -73,11 +73,7 @@ function LinearAlgebra.axpby!(x::Number, v::BlockBoundaryVector, β::Number, w::
 end
 
 ###
-function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
-    bv = Array{Array{T,N},N}(undef, (1 for k in 1:N)...)
-    bv[1] = v
-    return BlockBoundaryVector(bv)
-end
+
 # function BoundaryVector(array::Array{T,N})
 #     a = Array{T,N}(undef,1,1,1)
 # end

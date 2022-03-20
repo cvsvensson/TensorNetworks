@@ -196,15 +196,19 @@ __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,4}, Γ1::Array{<:Any,3}, mpo1
     @tensoropt (bl, tl, -1, -4) temp[:] := L[tl, cl1, cl2, bl] * Γ1[tl, u, -1] * mpo1[cl1, u, c, -2] * mpo2[cl2, c, d, -3] * Γ2[bl, d, -4]
 
 
-function _transfer_left_mpo(Γ1::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite}}, Γ2::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite}})
+function _transfer_left_mpo(Γ1::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct,ScaledIdentityMPOsite}}, Γ2::NTuple{<:Any,Union{ScaledIdentityMPOsite,GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
     K = promote_type(eltype.(Γ1)..., eltype.(Γ2)...)
-    g1 = data.(Γ1, :right)
-    g2 = data.(Γ2, :right)
+    Γ12 = foldl(_split_lazy, Γ1, init = ())
+    Γ22 = foldr(_split_lazy, Γ2, init = ())
+    cscale, Γ13 = foldl(_remove_identity, Γ12, init = (one(K), ()))
+    scale, Γ23 = foldr(_remove_identity, Γ22, init = (one(K), ()))
+    g1 = data.(Γ13, :right)
+    g2 = data.(Γ23, :right)
     f(R) = __transfer_left_mpo(R, conj.(g1)..., g2...)
     fadj(L) = __transfer_left_mpo_adjoint(L, g1..., conj.(g2)...)
-    odims = tuple((size(x, 1) for x in Γ1)..., (size(x, 1) for x in Γ2)...)
-    idims = tuple((size(x)[end] for x in Γ1)..., (size(x)[end] for x in Γ2)...)
-    return TransferMatrix(f, fadj, K, (odims, idims))
+    odims = tuple((size(x, 1) for x in Γ13)..., (size(x, 1) for x in Γ23)...)
+    idims = tuple((size(x)[end] for x in Γ13)..., (size(x)[end] for x in Γ23)...)
+    return (cscale * scale)TransferMatrix(f, fadj, K, (odims, idims))
 end
 
 # function _transfer_left_mpo(Γ1::Tuple{GenericSite{T}}, Γ2::Tuple{GenericSite{K}}) where {T,K}
@@ -223,8 +227,8 @@ end
 #     return TransferMatrix(f, fadj, T, ((size(Γ1, 1), size(mpo, 1), size(Γ1, 1)), (size(Γ1, 3), size(mpo, 4), size(Γ1, 3))))
 # end
 
-_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
-_transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1)
+# _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
+# _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1)
 # function _transfer_left_mpo(Γ1::GenericSite{T1}, mpo::MPOsite{T2}, Γ2::GenericSite{T3}) where {T1,T2,T3}
 #     f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ2)
 #     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ2)
@@ -409,12 +413,12 @@ function _local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol)
     purify::Bool = any(([ispurification(site) for site in sites if site isa AbstractSite])) || any(([ispurification(site) for site in csites if site isa AbstractSite]))
     newsites = _purify_site.(sites, purify)
     newcsites = _purify_site.(csites, purify)
-    newcsites2 = foldl(_split_lazy, newcsites, init = ())
-    newsites2 = foldr(_split_lazy, newsites, init = ())
-    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
-    scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
-    T = (scale * cscale) * __local_transfer_matrix(newcsites3, newsites3, direction)
-    return T#::CompositeTransferMatrix
+    # newcsites2 = foldl(_split_lazy, newcsites, init = ())
+    # newsites2 = foldr(_split_lazy, newsites, init = ())
+    # cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
+    # scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
+    # T = (scale * cscale) * __local_transfer_matrix(newcsites3, newsites3, direction)
+    return __local_transfer_matrix(newcsites, newsites, direction) #T#::CompositeTransferMatrix
 end
 _split_lazy(s, ss::Tuple) = (s, ss...)
 _split_lazy(ss::Tuple, s) = (ss..., s)

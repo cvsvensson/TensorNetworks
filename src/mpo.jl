@@ -80,7 +80,7 @@ struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
 end
 data(site::ScaledIdentityMPOsite) = site.data
 IdentityMPOsite(d) = ScaledIdentityMPOsite(true, d)
-
+sites(s::ScaledIdentityMPOsite) = [s]
 # MPOsite(s::ScaledIdentityMPOsite) = s
 # MPOsite{K}(s::ScaledIdentityMPOsite) where {K} = ScaledIdentityMPOsite{K}(data(s))
 #Base.length(mpo::ScaledIdentityMPOsite) = 1
@@ -192,6 +192,7 @@ Base.size(lp::LazyProduct) = size(lp.mps)
 #boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
 boundaryconditions(mps::LazyProduct) = boundaryconditions(mps.mps)
 Base.error(lp::LazyProduct) = error(lp.mps)
+Base.copy(lp::LazyProduct) = LazyProduct(copy(lp.mpo), copy(lp.mps))
 
 function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
     Γ = to_left_right_orthogonal(lp[1:end], center = center, method = method)
@@ -207,8 +208,9 @@ end
 Base.show(io::IO, lp::LazySiteProduct) =
     print(io, "LazySiteProduct\nSites: ", typeof.(lp.sites))
 Base.show(io::IO, m::MIME"text/plain", lp::LazySiteProduct) = show(io, lp)
-
+Base.copy(lp::LazySiteProduct) = LazySiteProduct(copy.(lp.sites)...)
 Base.eltype(::LazySiteProduct{T,<:Any}) where {T} = T
+ispurification(lp::LazySiteProduct) = any([ispurification(s) for s in lp.sites if s isa AbstractSite])
 
 Base.:*(o::AbstractMPOsite, s::Union{AbstractSite,AbstractMPOsite}) = LazySiteProduct(o, s)
 Base.:*(o::AbstractMPOsite, lp::LazySiteProduct) = LazySiteProduct(o, lp.sites...)

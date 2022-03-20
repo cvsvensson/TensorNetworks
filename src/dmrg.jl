@@ -74,36 +74,37 @@ LinearAlgebra.dot(site1::Union{GenericSite,SiteSum}, site2::Union{GenericSite,Si
 
 
 const BigNumber = Union{ComplexDF64,ComplexDF32,ComplexDF16,Double64,Double32,Double16,BigFloat,Complex{BigFloat}}
-function eigs(heff::LinearMap, x0, nev, prec)
-    if prod(size(heff)) < 100
-        evals, evecs = _eigs_small(Matrix(heff))
-    else
-        evals, evecs = _eigs_large(heff, x0, nev, prec)
-    end
-    T = eltype(heff)
-    return evals::Vector{eltype(heff)}, evecs::Matrix{eltype(heff)}
-end
-function _eigs_small(heff)
-    T = eltype(heff)
-    vals, vecs = eigen(heff)
-    return T.(vals)::Vector{T}, vecs::Matrix{T}
-end
-function _eigs_large(heff::LinearMap, x0, nev, prec)
-    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
-    evecsvec::Matrix{eltype(heff)} = reduce(hcat, evecs)
-    return evals, evecsvec
-end
-function _eigs_large(heff::LinearMap{<:BigNumber}, x0, nev, prec)
-    vals, vecs = partialeigen(partialschur(heff, nev = nev, which = SR(), tol = prec)[1])
-    return vals::Vector{eltype(heff)}, vecs::Matrix{eltype(heff)}
-end
-function eigensite(site::S, mposite, hl, hr, orthvecs, prec) where {S<:AbstractSite{BigNumber}}
+# function eigs(heff::LinearMap, x0, nev, prec)
+#     if prod(size(heff)) < 100
+#         evals, evecs = _eigs_small(Matrix(heff))
+#     else
+#         evals, evecs = _eigs_large(heff, x0, nev, prec)
+#     end
+#     T = eltype(heff)
+#     return evals::Vector{eltype(heff)}, evecs::Matrix{eltype(heff)}
+# end
+# function _eigs_small(heff)
+#     T = eltype(heff)
+#     vals, vecs = eigen(heff)
+#     return T.(vals)::Vector{T}, vecs::Matrix{T}
+# end
+# function _eigs_large(heff::LinearMap, x0, nev, prec)
+#     evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
+#     evecsvec::Matrix{eltype(heff)} = reduce(hcat, evecs)
+#     return evals, evecsvec
+# end
+# function _eigs_large(heff::LinearMap{<:BigNumber}, x0, nev, prec)
+#     vals, vecs = partialeigen(partialschur(heff, nev = nev, which = SR(), tol = prec)[1])
+#     return vals::Vector{eltype(heff)}, vecs::Matrix{eltype(heff)}
+# end
+function eigensite(site::S, mposite, hl, hr, orthvecs, prec) where {S<:AbstractSite{<:BigNumber}}
     szmps = size(site)
     heff = effective_hamiltonian(mposite, hl, hr, orthvecs)
-    heff2(v) = vec(heff(S(reshape(v, szmps))))
+    heff2(v) = vec(heff(S(Array(reshape(v, szmps)), ispurification(site))))
     lh = LinearMap{eltype(site)}(heff2, prod(szmps))
-    vals, vecs = partialeigen(partialschur(lh, nev = nev, which = SR(), tol = prec)[1])
-    return S(vecs[1]) / norm(vecs[1]), real(vals[1])
+    vals, vecs = partialeigen(partialschur(lh, nev = 1, which = SR(), tol = prec)[1])
+    vecmin = vecs[:, 1]
+    return S(reshape(vecmin, szmps), ispurification(site)) / norm(vecmin), real(vals[1])
 
     # evals, evecs = eigsolve(heff, site, 1, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
     # e::eltype(site) = evals[1]

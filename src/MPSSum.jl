@@ -95,63 +95,9 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
     return v
 end
 
-# _transfer_left_mpo(Γ1::SiteSum, op::AbstractMPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
-# _transfer_left_mpo(Γ1::SiteSum) = _transfer_left_mpo(Γ1, Γ1)
-# _transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1, Γ1)
-# _transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
-# _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
-# _transfer_left_mpo(Γ1::SiteSum, mpo::ScaledIdentityMPOsite, Γ2::SiteSum) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
 
-
-_transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
-transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,MPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
-
-# function _transfer_left_mpo(Γ1::SiteSum, op, Γ2)
-#     Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1::SiteSum, Γ2)
-#     Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1, op, Γ2::SiteSum)
-#     Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
-#     Ts = [_transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
-#     return _apply_transfer_matrices(Ts)
-# end
-# # function _transfer_left_mpo(Γ1::SiteSum, op::ScaledIdentityMPOsite, Γ2::SiteSum)
-# #     Ts = [data(op)*_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-# #     return _apply_transfer_matrices(Ts)
-# # end
-# function _transfer_left_mpo(Γ1, Γ2::SiteSum)
-#     Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
-#     Ts = [_transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-#     return _apply_transfer_matrices(Ts)
-# end
-
-# function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
-#     N1 = length(Γ1)
-#     N2 = length(Γ2)
-#     Ts = [_transfer_left_mpo(Γ1[n1], op, Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
-#     N1 = length(Γ1)
-#     N2 = length(Γ2)
-#     Ts = [_transfer_left_mpo(Γ1[n1], Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1::SiteSum)
-#     N1 = length(Γ1)
-#     Ts = [_transfer_left_mpo(Γ1[n1], Γ1[n2]) for n1 in 1:N1, n2 in 1:N1]
-#     return _apply_transfer_matrices(Ts)
-# end
+_transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
+transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
 
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
