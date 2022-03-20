@@ -89,7 +89,7 @@ BlockBoundaryVector(bv::BlockBoundaryVector) = bv
 # function tensor_product(vecs::Vararg{BlockBoundaryVector,N}) where {N}
 #     BlockBoundaryVector([tensor_product(bvs...) for bvs in Base.product(data.(vecs)...)])
 # end
-function tensor_product(vecs::Vararg{Union{BlockBoundaryVector,AbstractArray{<:Number,K}},N}) where {N,K}
+function tensor_product(vecs::Vararg{Union{BlockBoundaryVector,AbstractArray{<:Number,<:Any}},N}) where {N}
     BlockBoundaryVector([tensor_product(bvs...) for bvs in Base.product(data.(BlockBoundaryVector.(vecs))...)])
 end
 # BoundaryVector(bvs::Vararg{Array,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
@@ -99,7 +99,7 @@ BlockBoundaryVector(v, s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVec
 
 tensor_product(t1::AbstractArray) = t1
 tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1<:Number,T2<:Number} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
-tensor_product(tensors::Vararg{AbstractArray{<:Number,K},N}) where {K,N} = foldl(tensor_product, tensors)
+tensor_product(tensors::Vararg{AbstractArray{<:Number,<:Any},N}) where {N} = foldl(tensor_product, tensors)
 tensor_product(t1::UniformScaling, t2::AbstractArray{T2,N2}) where {N2,T2} = t1.λ * t2
 tensor_product(t1::AbstractArray{T1,N1}, t2::UniformScaling) where {N1,T1} = t2.λ * t1
 

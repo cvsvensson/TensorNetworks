@@ -41,7 +41,7 @@ function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     # for k in length(mps):-1:1
     #     R = Ts[k] * R
     # end
-    return inner(foldr(*, Ts, init = R), Tc * L)
+    return inner(apply_transfer_matrices(Ts, R), Tc * L)
 end
 function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     @assert length(mps1) == operatorlength(mpo) == length(mps2) "Length of mps is not equal to length of mpo"
@@ -55,7 +55,7 @@ function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     #     R = Ts[k] * R
     # end
     #[println(size(x)) for x in [L, R, Ts[end], Tc]]
-    return inner(foldr(*, Ts, init = R), Tc * L)
+    return inner(apply_transfer_matrices(Ts, R), Tc * L)
 end
 
 function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string = IdentityMPOsite)

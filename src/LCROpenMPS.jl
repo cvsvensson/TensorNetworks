@@ -9,9 +9,10 @@ function Base.setindex!(mps::LCROpenMPS, v, i::Integer)
         @assert isrightcanonical(v) "Error in setindex!: site not right canonical"
     end
     mps.Γ[i] = v
+    return v
 end
 Base.copy(mps::LCROpenMPS) = LCROpenMPS(copy(mps.Γ), truncation = copy(mps.truncation), error = copy(mps.error))
-center(mps::LCROpenMPS) = mps.center::Int
+center(mps::LCROpenMPS) = mps.center
 
 #TODO Iterative compression as in https://arxiv.org/abs/1008.3477 
 

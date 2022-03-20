@@ -25,7 +25,7 @@ function shift_center!(mps, j, dir, ::ShiftCenter; kwargs...)
 end
 
 function shift_center!(mps, j, dir, SE::SubspaceExpand; mpo, env, kwargs...)
-    newmin = inner(transfer_matrix(mps[j], mpo[j], mps[j]) * env.R[j], env.L[j])
+    newmin = inner(_local_transfer_matrix((mps[j],), (mpo[j], mps[j]),:left) * env.R[j], env.L[j])
     if SE.alpha < mps.truncation.tol
         shift_center!(mps, j, dir, ShiftCenter(); mpo, env)
         return SE.oldmin

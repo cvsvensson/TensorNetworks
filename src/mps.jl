@@ -21,7 +21,7 @@ function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
     # vr = foldr(*,Ts,init=vr)    # println(size(vr))
     # println(size(Ts[end]))
     # println(Ts[end]*vr)
-    return inner(vl, foldr(*, Ts, init = vr))
+    return inner(vl, apply_transfer_matrices(Ts,vr))
 end
 inner(v::AbstractArray{<:Number,N}, w::AbstractArray{<:Number,N}) where {N} = mapreduce(prod, +, zip(v, w))
 inner(v::BlockBoundaryVector{<:Number,N}, w::BlockBoundaryVector{<:Number,N}) where {N} = mapreduce(inner, +, data(v), data(w))

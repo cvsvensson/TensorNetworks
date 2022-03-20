@@ -3,29 +3,34 @@
 
 Use DMRG to calculate the lowest energy eigenstate orthogonal to `orth`
 """
-function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
-    ### input: canonical random mps
-    ### output: ground state mps, ground state energy
-    precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
-    maxsweeps::Int = get(kwargs, :maxsweeps, 5)
-
-    mps = canonicalize(copy(mps_input))
-    set_center!(mps, 1)
+function DMRG(mpo, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T<:Number}
+    #L = length(mps_input)
+    @assert (norm(mps_input) ≈ 1 && length(mps_input) == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
+    
+    #::LCROpenMPS{T}
+    mps = canonicalize(copy(mps_input),center=1)
+    #set_center!(mps, 1)
     #canonicalize!(mps)
-    L = length(mps_input)
-    @assert (norm(mps_input) ≈ 1 && L == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
     direction = :right
-    Henv = environment(mps, mpo)
-    orthenv = [environment(mps, state) for state in orth]
+    Henv::FiniteEnvironment{Array{T,3}} = environment(mps, mpo)
+    orthenv::Vector{FiniteEnvironment{Matrix{T}}} = [environment(mps, state) for state in orth]
     #Hsquared = mpo*mpo#multiply(mpo, mpo)
     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), norm(mpo * mps)^2#real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
-    count = 1
+    #count = 1
+    mpsout, Eout = do_sweep(mps,mpo,Henv,orthenv,direction,orth,E;kwargs...)
+    return mpsout::LCROpenMPS{T}, Eout
+end
+function do_sweep(mps,mpo,Henv,orthenv,direction,orth,E; kwargs...)
+    precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
+    maxsweeps::Int = get(kwargs, :maxsweeps, 5)
+    count=1
     while count <= maxsweeps #TODO make maxcount choosable
         Eprev = E
-        mps = sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
-        mps = canonicalize(mps, center = center(mps))
+        sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
+        c::Int = center(mps)
+        mps = canonicalize(mps, center = c)
         direction = reverse_direction(direction)
         E, H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)^2#real(expectation_value(mps, Hsquared))
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
@@ -41,10 +46,8 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
             break
         end
     end
-
-    return mps::LCROpenMPS{T}, E
+    return mps, E
 end
-
 
 function effective_hamiltonian(mposite, hl, hr, orthvecs)
     szmps = (size(hl, 3), size(mposite, 3), size(hr, 3))
@@ -74,29 +77,29 @@ LinearAlgebra.dot(site1::Union{GenericSite,SiteSum}, site2::Union{GenericSite,Si
 
 
 const BigNumber = Union{ComplexDF64,ComplexDF32,ComplexDF16,Double64,Double32,Double16,BigFloat,Complex{BigFloat}}
-# function eigs(heff::LinearMap, x0, nev, prec)
-#     if prod(size(heff)) < 100
-#         evals, evecs = _eigs_small(Matrix(heff))
-#     else
-#         evals, evecs = _eigs_large(heff, x0, nev, prec)
-#     end
-#     T = eltype(heff)
-#     return evals::Vector{eltype(heff)}, evecs::Matrix{eltype(heff)}
-# end
-# function _eigs_small(heff)
-#     T = eltype(heff)
-#     vals, vecs = eigen(heff)
-#     return T.(vals)::Vector{T}, vecs::Matrix{T}
-# end
-# function _eigs_large(heff::LinearMap, x0, nev, prec)
-#     evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
-#     evecsvec::Matrix{eltype(heff)} = reduce(hcat, evecs)
-#     return evals, evecsvec
-# end
-# function _eigs_large(heff::LinearMap{<:BigNumber}, x0, nev, prec)
-#     vals, vecs = partialeigen(partialschur(heff, nev = nev, which = SR(), tol = prec)[1])
-#     return vals::Vector{eltype(heff)}, vecs::Matrix{eltype(heff)}
-# end
+function eigs(heff::LinearMap, x0, nev, prec)
+    if prod(size(heff)) < 100
+        evals, evecs = _eigs_small(Matrix(heff))
+    else
+        evals, evecs = _eigs_large(heff, x0, nev, prec)
+    end
+    T = eltype(heff)
+    return evals::Vector{eltype(heff)}, evecs::Matrix{eltype(heff)}
+end
+function _eigs_small(heff)
+    T = eltype(heff)
+    vals, vecs = eigen(heff)
+    return T.(vals)::Vector{T}, vecs::Matrix{T}
+end
+function _eigs_large(heff::LinearMap, x0, nev, prec)
+    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
+    evecsvec::Matrix{eltype(heff)} = reduce(hcat, evecs)
+    return evals, evecsvec
+end
+function _eigs_large(heff::LinearMap{<:BigNumber}, x0, nev, prec)
+    vals, vecs = partialeigen(partialschur(heff, nev = nev, which = SR(), tol = prec)[1])
+    return vals::Vector{eltype(heff)}, vecs::Matrix{eltype(heff)}
+end
 function eigensite(site::S, mposite, hl, hr, orthvecs, prec) where {S<:AbstractSite{<:BigNumber}}
     szmps = size(site)
     heff = effective_hamiltonian(mposite, hl, hr, orthvecs)
@@ -114,12 +117,12 @@ function eigensite(site::S, mposite, hl, hr, orthvecs, prec) where {S<:AbstractS
     # end
     # return vecmin / norm(vecmin), real(e)
 end
-function eigensite(site::AbstractSite, mposite, hl, hr, orthvecs, prec)
+function eigensite(site::S, mposite, hl, hr, orthvecs, prec) where S
     #szmps = size(site)
     heff = effective_hamiltonian(mposite, hl, hr, orthvecs)
     evals, evecs = eigsolve(heff, site, 1, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
     e::eltype(site) = evals[1]
-    vecmin = evecs[1] #::Vector{eltype(hl)}
+    vecmin::S = evecs[1] #::Vector{eltype(hl)}
     if !(isapprox(e, real(e), atol = prec))
         error("ERROR: complex eigenvalues: $e")
     end
@@ -127,7 +130,7 @@ function eigensite(site::AbstractSite, mposite, hl, hr, orthvecs, prec)
 end
 
 """ sweeps from left to right in the DMRG algorithm """
-function sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
+function sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir::Symbol, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
     L::Int = length(mps)
     shifter = get(kwargs, :shifter, ShiftCenter())
     precision = get(kwargs, :precision, DEFAULT_DMRG_precision)
@@ -325,10 +328,10 @@ end
 function twosite_mpo_application(hl, hr, mpol, mpor, twosite)
     #@tensoropt (lm,dc,rd,-1,-4) out[-1,-2,-3,-4] := hl[-1,lm,ld] * mpol[lm,-2,msl,c] * mpor[c,-3,msr,rm] * sitel[ld, msl, dc]*siter[dc,msr,rd] * hr[-4,rm,rd] 
     # println.(size.([hl,mpol,mpor,twosite,hr]))
-    @tensoropt (lm, rd, -1, -4) out[-1, -2, -3, -4] := hl[-1, lm, ld] * mpol[lm, -2, msl, c] * mpor[c, -3, msr, rm] * twosite[ld, msl, msr, rd] * hr[-4, rm, rd]
+    @tensoropt (lm, rd, -1, -4) out[:] := hl[-1, lm, ld] * mpol[lm, -2, msl, c] * mpor[c, -3, msr, rm] * twosite[ld, msl, msr, rd] * hr[-4, rm, rd]
 end
 function twosite_orthvec(L, R, sl, sr)
-    @tensoropt (lm, dc, rd, -1, -4) out[-1, -2, -3, -4] := L[-1, ld] * sl[ld, -2, dc] * sr[dc, -3, rd] * R[-4, rd]
+    @tensoropt (lm, dc, rd, -1, -4) out[:] := L[-1, ld] * sl[ld, -2, dc] * sr[dc, -3, rd] * R[-4, rd]
     return vec(out)
 end
 
