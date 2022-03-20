@@ -220,12 +220,12 @@ end
 #,LazyProduct{<:Any,<:Any,<:MPOSum}
 function boundary(::OpenBoundary, mps::Union{MPSSum}, side::Symbol)
     if side == :right
-        return BlockBoundaryVector([boundary(mps.states[k], :right) for k in 1:length(mps.states)])
+        return BlockBoundaryVector([boundary(OpenBoundary(), mps.states[k], :right) for k in 1:length(mps.states)])
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return BlockBoundaryVector([mps.scalings[k] * boundary(mps.states[k], :left) for k in 1:length(mps.states)])
+        return BlockBoundaryVector([mps.scalings[k] * boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)])
     end
 end
 

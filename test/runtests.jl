@@ -167,6 +167,9 @@ end
     test(2)
     test(3)
     @test TensorNetworks.DenseIdentityMPO(10, 2) == TensorNetworks.dense(IdentityMPO(10, 2))
+
+
+    #LCROpenMPS()
 end
 
 
@@ -607,13 +610,13 @@ end
     mpo = MPO([mposite, mposite])
     lp = mpo * mps
     @test scalar_product(lp, mps) ≈ scalar_product(mps, mps) ≈ scalar_product(lp, lp)
-    @test lp[1] ≈ mps[1]
+    @test TensorNetworks.dense(lp[1]) ≈ mps[1]
 
     mposite = MPOsite(sz)
     mpo = MPO([mposite, mposite])
     lp = mpo * mps
     @test scalar_product(lp, mps) ≈ TensorNetworks.matrix_element(mps, mpo, mps)
-    @test lp[1] ≈ mposite * mps[1]
+    @test TensorNetworks.dense(lp[1]) ≈ TensorNetworks.dense(mposite * mps[1])
 end
 
 @testset "LazyProduct" begin

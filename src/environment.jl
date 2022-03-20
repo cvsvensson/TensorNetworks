@@ -6,6 +6,9 @@
 # BoundaryVector(x::Number) = BoundaryVector([x])
 
 Base.vec(bv::BlockBoundaryVector) = reduce(vcat, vec.(bv.data))
+Base.conj(bv::BlockBoundaryVector) = BlockBoundaryVector(conj(data(bv)))
+#Base.convert(::Type{BlockBoundaryVector{T,N}},m::Array{<:Any,N}) where {T,N} = BlockBoundaryVector(m)
+
 # Base.length(bv::Union{BoundaryVector}) = length(data(bv))
 # Base.length(bv::Union{BlockBoundaryVector}) = prod(length.(data(bv)))
 data(bv::Union{BlockBoundaryVector}) = bv.data
@@ -100,7 +103,7 @@ BlockBoundaryVector(v, s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVec
 
 tensor_product(t1::AbstractArray) = t1
 tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1<:Number,T2<:Number} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
-tensor_product(tensors::Vararg{AbstractArray{<:Number,K}}) where {K} = foldl(tensor_product, tensors)
+tensor_product(tensors::Vararg{AbstractArray{<:Number,K},N}) where {K,N} = foldl(tensor_product, tensors)
 tensor_product(t1::UniformScaling, t2::AbstractArray{T2,N2}) where {N2,T2} = t1.λ * t2
 tensor_product(t1::AbstractArray{T1,N1}, t2::UniformScaling) where {N1,T1} = t2.λ * t1
 

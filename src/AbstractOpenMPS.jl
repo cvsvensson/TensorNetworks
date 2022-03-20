@@ -20,7 +20,7 @@ end
 
 # boundary(mps::AbstractMPS, args::Vararg) = boundary(boundaryconditions(mps), mps, args...)
 
-boundary(bc::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = tensor_product(
+boundary(::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = tensor_product(
     (conj(boundary(OpenBoundary(), cm, side)) for cm in cmpss)..., (boundary(OpenBoundary(), m, side) for m in mpss)...)
 
 function boundary(csites::Tuple, sites::Tuple, side::Symbol)
@@ -43,21 +43,25 @@ end
 #     Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mpo, mps2))...)
 
 
-function boundary(::InfiniteBoundary, mps::AbstractMPS, g::ScaledIdentityMPO, mps2::AbstractMPS, side::Symbol)
-    _, rhos = transfer_spectrum(mps, mps2, reverse_direction(side), nev = 1)
-    return (data(g) ≈ 1 ? 1 : 0) * rhos[1]
-end
-function boundary(::InfiniteBoundary, mps::AbstractMPS, side::Symbol)
-    _, rhos = transfer_spectrum(mps, reverse_direction(side), nev = 1)
+# function boundary(::InfiniteBoundary, mps::AbstractMPS, g::ScaledIdentityMPO, mps2::AbstractMPS, side::Symbol)
+#     _, rhos = transfer_spectrum((mps,), (mps2,), reverse_direction(side), nev = 1)
+#     return (data(g) ≈ 1 ? 1 : 0) * rhos[1]
+# end
+function boundary(::InfiniteBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol)
+    _, rhos = transfer_spectrum(cmpss, mpss, reverse_direction(side), nev = 1)
     return canonicalize_eigenoperator(rhos[1])
 end
-function boundary(::InfiniteBoundary, mps::AbstractMPS, mps2::AbstractMPS, side::Symbol)
-    _, rhos = transfer_spectrum(mps, mps2, reverse_direction(side), nev = 1)
-    return canonicalize_eigenoperator(rhos[1])
-end
+
+# function boundary(::InfiniteBoundary, mps::AbstractMPS, side::Symbol)
+#     _, rhos = transfer_spectrum((mps,), (mps,), reverse_direction(side), nev = 1)
+#     return canonicalize_eigenoperator(rhos[1])
+# end
+# function boundary(::InfiniteBoundary, mps::AbstractMPS, mps2::AbstractMPS, side::Symbol)
+#     _, rhos = transfer_spectrum((mps,), (mps2,), reverse_direction(side), nev = 1)
+#     return canonicalize_eigenoperator(rhos[1])
+# end
 
 #boundaryvec(args...) = copy(vec(boundary(args...)))
-
 
 function expectation_value(mps::AbstractMPS{GenericSite}, op, site::Integer)
     mps = set_center(mps, site)

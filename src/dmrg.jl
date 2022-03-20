@@ -18,8 +18,7 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
     Henv = environment(mps, mpo)
     orthenv = [environment(mps, state) for state in orth]
     #Hsquared = mpo*mpo#multiply(mpo, mpo)
-    println(norm(mpo*mps))
-    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), norm(mpo*mps)#real(expectation_value(mps, Hsquared))
+    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), norm(mpo * mps)#real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
     count = 1
@@ -28,7 +27,7 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
         mps = sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
         mps = canonicalize(mps, center = center(mps))
         direction = reverse_direction(direction)
-        E, H2 = real(expectation_value(mps, mpo)), norm(mpo*mps)#real(expectation_value(mps, Hsquared))
+        E, H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)#real(expectation_value(mps, Hsquared))
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
             E, H2 = real(E), real(H2)
@@ -70,7 +69,7 @@ naivesum(site1::SiteSum, site2::SiteSum) = SiteSum(Tuple([naivesum(s1, s2) for (
 naivesum(site1::GenericSite, site2::SiteSum) = SiteSum(Tuple([naivesum(s1, s2) for (s1, s2) in zip(sites(site1), sites(site2))]))
 naivesum(site1::SiteSum, site2::GenericSite) = SiteSum(Tuple([naivesum(s1, s2) for (s1, s2) in zip(sites(site1), sites(site2))]))
 
-LinearAlgebra.dot(site1::GenericSite, site2::GenericSite) = dot(data(site1),data(site2))
+LinearAlgebra.dot(site1::GenericSite, site2::GenericSite) = dot(data(site1), data(site2))
 LinearAlgebra.dot(site1::Union{GenericSite,SiteSum}, site2::Union{GenericSite,SiteSum}) = mapreduce(dot, +, sites(site1), sites(site2))
 
 
@@ -136,12 +135,12 @@ function sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnviron
 
         shift_center!(mps, j, dir, shifter; mpo = mpo, env = Henv)
         update! = dir == :right ? update_left_environment! : update_right_environment!
-        update!(Henv, j, mps[j], mpo[j], mps[j])
+        update!(Henv, j, (mps[j],), (mpo[j], mps[j]))
         # for k in 1:N_orth
         #     update!(orthenv[k],j, orth[k][j], mps[j])
         # end
         for (oe, o) in zip(orthenv, orth)
-            update!(oe, j, mps[j], o[j])
+            update!(oe, j, (mps[j],), (o[j],))
         end
     end
     return mps::LCROpenMPS{T}
@@ -234,8 +233,8 @@ function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} =
     direction = :right
     Henv = environment(mps, mpo)
     orthenv = [environment(state, mps) for state in orth]
-    Hsquared = multiplyMPOs(mpo, mpo)
-    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+    # Hsquared = multiplyMPOs(mpo, mpo)
+    E::real(T), H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
     count = 1
@@ -248,7 +247,7 @@ function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} =
         mps = twosite_sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
         #mps = canonicalize(mps)
         direction = reverse_direction(direction)
-        E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+        E, H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
             E, H2 = real(E), real(H2)
@@ -296,10 +295,10 @@ function twosite_sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFinit
             mps[j] = A * Λ
             mps[j+1] = B
         end
-        update!(Henv, j1, mps[j1], mpo[j1], mps[j1])
+        update!(Henv, j1, (mps[j1],), (mpo[j1], mps[j1]))
         # update!(Henv,j2,mps[j2],mpo[j2],mps[j2])
         for (oe, o) in zip(orthenv, orth)
-            update!(oe, j1, o[j1], mps[j1])
+            update!(oe, j1, (o[j1],), (mps[j1],))
             # update!(oe,j2,o[j2],mps[j2])
         end
     end
