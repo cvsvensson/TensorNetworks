@@ -1,10 +1,4 @@
-struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
-    sites::S
-    function SiteSum(sites::Tuple)
-        #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
-        new{typeof(sites),promote_type(eltype.(sites)...)}(copy.(sites))
-    end
-end
+
 Base.similar(site::SiteSum) = SiteSum(similar.(site.sites))
 Base.copy(site::SiteSum) = SiteSum(copy.(site.sites))
 Base.:*(x::Number, site::SiteSum) = SiteSum(x .* sites(site))
@@ -29,17 +23,8 @@ function LinearAlgebra.axpby!(x::Number, v::SiteSum, β::Number, w::SiteSum)
 end
 
 Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
+multiply(op::MPOsite, site::SiteSum) = SiteSum(Tuple([multiply(op, s) for s in sites(site)]))
 
-struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
-    states::MPSs
-    scalings::Vector{Num}
-    function MPSSum(mpss::Tuple, scalings::Vector{Num}) where {Num}
-        new{typeof(mpss),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
-    end
-end
-function MPSSum(mpss::Tuple)
-    MPSSum(mpss, fill(one(numtype(mpss...)), length(mpss)))
-end
 #TODO: change vector argument to tuple arguments.
 #MPSSum(sites::NTuple{<:Any,<:AbstractMPS}) = MPSSum([sites...])
 #MPSSum(sites::NTuple{<:Any,<:AbstractMPS},s) = MPSSum([sites...],s)
@@ -171,6 +156,13 @@ function boundary(::OpenBoundary, mps::Union{MPSSum}, side::Symbol)
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
+        # v=[mps.scalings[k] .* boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)]
+        # println.(typeof.(v))
+        # println("ASD")
+        # bvs = BlockBoundaryVector.(v)
+        # println.(bvs)
+        # println.(eltype.(BlockBoundaryVector.(v)))
+        # println(BlockBoundaryVector(v))
         return BlockBoundaryVector([mps.scalings[k] * boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)])
     end
 end

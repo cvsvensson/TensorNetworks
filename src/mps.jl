@@ -18,7 +18,9 @@ function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
     # for k in length(mps1):-1:1
     #     vr = Ts[k] * vr
     # end
-    # vr = foldr(*,Ts,init=vr)
+    # vr = foldr(*,Ts,init=vr)    # println(size(vr))
+    # println(size(Ts[end]))
+    # println(Ts[end]*vr)
     return inner(vl, foldr(*, Ts, init = vr))
 end
 inner(v::AbstractArray{<:Number,N}, w::AbstractArray{<:Number,N}) where {N} = mapreduce(prod, +, zip(v, w))

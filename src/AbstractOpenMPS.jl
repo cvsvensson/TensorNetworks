@@ -23,25 +23,31 @@ end
 boundary(::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = tensor_product(
     (conj(boundary(OpenBoundary(), cm, side)) for cm in cmpss)..., (boundary(OpenBoundary(), m, side) for m in mpss)...)
 
+boundary(::OpenBoundary, lp::LazyProduct, side::Symbol) = tensor_product((boundary(OpenBoundary(), mp, side) for mp in (lp.mpos..., lp.mps))...)
+
+# function boundary(csites::NTuple{<:Any,Union{<:AbstractMPS,MPSSum,MPOSum}}, sites::NTuple{<:Any,Union{<:AbstractMPS,MPSSum,MPOSum}}, side::Symbol)
+    
+#     BlockBoundaryVector([boundary(cs, ss,site) for (cs, ss) in Base.product(Base.product(states.(csites)...), Base.product(states.(s)...))])
+#     if side == :right
+#         return tensor_product(BlockBoundaryVector.([boundary(OpenBoundary(), mps.states[k], :right) for k in 1:length(mps.states)...])...)::BlockBoundaryVector
+#     else
+#         if side !== :left
+#             @warn "No direction chosen for the boundary vector. Defaulting to :left"
+#         end
+#         return tensor_product(BlockBoundaryVector.([mps.scalings[k] .* boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)])...)::BlockBoundaryVector
+#     end
+# end
+
 function boundary(csites::Tuple, sites::Tuple, side::Symbol)
     K = promote_type(numtype.(sites)...)
     newcsites2 = foldl(_split_lazy, csites, init = ())
     newsites2 = foldr(_split_lazy, sites, init = ())
     cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
     scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
+    #println.(typeof.(newcsites3))
     T = (scale * cscale) * boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
-    return T::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any}}
+    return T#::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any,<:Any}}
 end
-
-
-# boundary(bc::OpenBoundary, mps1::LazyProduct, mps2::AbstractMPS, side) = tensor_product(Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mps2))...)
-# boundary(bc::OpenBoundary, mps1::AbstractMPS, mps2::LazyProduct, side) = tensor_product(Tuple(boundary(bc, m, side) for m in (mps1, mps2.mpo, mps2.mps))...)
-# boundary(bc::OpenBoundary, mps1::LazyProduct, mps2::LazyProduct, side) = tensor_product(Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mps2.mpo, mps2.mps))...)
-# boundary(bc::OpenBoundary, mps1::AbstractMPS, mpo::AbstractMPO, mps2::LazyProduct, side) = tensor_product(
-#     Tuple(boundary(bc, m, side) for m in (mps1, mpo, mps2.mpo, mps2.mps))...)
-# boundary(bc::OpenBoundary, mps1::LazyProduct, mpo::AbstractMPO, mps2::AbstractMPS, side) = tensor_product(
-#     Tuple(boundary(bc, m, side) for m in (mps1.mps, mps1.mpo, mpo, mps2))...)
-
 
 # function boundary(::InfiniteBoundary, mps::AbstractMPS, g::ScaledIdentityMPO, mps2::AbstractMPS, side::Symbol)
 #     _, rhos = transfer_spectrum((mps,), (mps2,), reverse_direction(side), nev = 1)

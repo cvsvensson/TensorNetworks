@@ -1,11 +1,5 @@
 #TODO compress MPO https://arxiv.org/pdf/1611.02498.pdf
-abstract type AbstractMPOsite{T} <: AbstractArray{T,4} end
 
-struct MPOsite{T} <: AbstractMPOsite{T}
-    data::Array{T,4}
-    # ishermitian::Bool
-    # isunitary::Bool
-end
 Base.getindex(g::MPOsite, I::Vararg{Int,4}) = getindex(data(g), I...)
 operatorlength(::AbstractMPOsite) = 1
 Base.similar(g::MPOsite) = MPOsite(similar(g.data))
@@ -40,16 +34,6 @@ Base.copy(site::MPOsite) = MPOsite(copy(data(site)))
 
 link(site::MPOsite, dir) = I
 
-abstract type AbstractMPO{T<:Number} <: AbstractVector{MPOsite{T}} end
-
-struct MPO{S,T<:Number} <: AbstractMPO{T}
-    data::Vector{S}
-    boundary::Vector{T}
-    function MPO(sites::Vector{S}, boundary::Vector{T}) where {S<:AbstractMPOsite,T}
-        K = promote_type(eltype.(sites)..., T)
-        new{S,K}(sites, boundary)
-    end
-end
 function MPO(ss::Vector{S}) where {S<:AbstractMPOsite}
     T = promote_type(eltype.(ss)...)
     MPO(ss, fill(one(T), length(sites(ss[1]))))
@@ -179,20 +163,28 @@ auxillerate(mpo::MPO) = MPO(auxillerate.(mpo.data))
 #auxillerate(mpo::HermitianMPO) = HermitianMPO(auxillerate.(mpo.data))
 
 #TODO add density matrix compression of LazyProduct: https://tensornetwork.org/mps/algorithms/denmat_mpo_mps/
-struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPO<:AbstractMPO} <: AbstractMPS{SITE}
-    mpo::MPO
+struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPOs<:NTuple{<:Any,<:AbstractMPO}} <: AbstractMPS{SITE}
+    mpos::MPOs
     mps::MPS
+    function LazyProduct(mpos::NTuple{<:Any,<:AbstractMPO}, mps::AbstractMPS)
+        new{typeof(mps),typeof(mapfoldr(x -> x[1], multiply, mpos, init = mps[1])),typeof(mpos)}(mpos, mps)
+    end
 end
-Base.:*(mpo::MPO, mps::AbstractMPS{S}) where {MPO<:AbstractMPO,S<:AbstractSite} = LazyProduct{typeof(mps),typeof(multiply(mpo[1], mps[1])),MPO}(mpo, mps)
+
+Base.:*(mpo::MPO, mps::MPSSum) where {MPO<:AbstractMPO} = mapreduce(k -> mps.scalings[k] * mpo * mps.states[k], +, 1:length(mps.states))
+Base.:*(mpo::MPO, mps::AbstractMPS) where {MPO<:AbstractMPO} = LazyProduct((mpo,), mps)
+Base.:*(mpo::MPO, mps::LazyProduct) where {MPO<:AbstractMPO} = LazyProduct((mpo, mps.mpos...), mps)
+Base.:*(mpo::MPOSum, mps::AbstractMPS) = mapreduce(sm -> sm[1] * (sm[2] * mps), +, zip(mpo.mpos, mpo.scalings))
+
 truncation(lp::LazyProduct) = truncation(lp.mps)
 Base.length(lp::LazyProduct) = length(lp.mps)
 Base.eltype(lp::LazyProduct) = eltype(lp.mps)
-Base.getindex(lp::LazyProduct, i::Integer) = lp.mpo[i] * lp.mps[i]
+Base.getindex(lp::LazyProduct, i::Integer) = mapfoldr(x -> x[i], *, lp.mpos, init = lp.mps[i])
 Base.size(lp::LazyProduct) = size(lp.mps)
 #boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
 boundaryconditions(mps::LazyProduct) = boundaryconditions(mps.mps)
 Base.error(lp::LazyProduct) = error(lp.mps)
-Base.copy(lp::LazyProduct) = LazyProduct(copy(lp.mpo), copy(lp.mps))
+Base.copy(lp::LazyProduct) = LazyProduct(copy.(lp.mpos), copy(lp.mps))
 
 function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
     Γ = to_left_right_orthogonal(lp[1:end], center = center, method = method)
@@ -214,6 +206,8 @@ ispurification(lp::LazySiteProduct) = any([ispurification(s) for s in lp.sites i
 
 Base.:*(o::AbstractMPOsite, s::Union{AbstractSite,AbstractMPOsite}) = LazySiteProduct(o, s)
 Base.:*(o::AbstractMPOsite, lp::LazySiteProduct) = LazySiteProduct(o, lp.sites...)
+Base.:*(o::AbstractMPOsite, lp::SiteSum) = mapreduce(s -> o * s, +, lp.sites)
+Base.:*(o::MPOSiteSum, site::Union{AbstractSite,AbstractMPOsite}) = mapreduce(s -> o * s, +, sites(site))
 
 function dense(lp::LazySiteProduct)
     foldr(multiply, lp.sites)
@@ -225,27 +219,13 @@ function multiply(op::MPOsite, site::GenericSite)
     GenericSite(reshape(out, sop[1] * ss[1], sop[2], sop[4] * ss[3]), site.purification)
 end
 # %% TODO: make dense and Lazy mpo sums
-struct MPOSiteSum{S<:Tuple,T} <: AbstractMPOsite{T}
-    sites::S
-    function MPOSiteSum(sites::Tuple)
-        new{typeof(sites),promote_type(eltype.(sites)...)}(sites)
-    end
-end
 
-multiply(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([multiply(o, site) for o in sites(op)]))
+
+multiply(op::AbstractMPOsite, site::LazySiteProduct) = foldr(multiply, (op, site.sites...))
+multiply(op::MPOSiteSum, site::AbstractSite) = SiteSum(Tuple([multiply(o, s) for (o, s) in Base.product(sites(op), sites(site))]))
 sites(opsite::MPOsite) = [opsite]
 sites(opsite::MPOSiteSum) = opsite.sites
 Base.:*(op::MPOSiteSum, site::GenericSite) = SiteSum(Tuple([o * site for o in sites(op)]))
-
-struct MPOSum{MPOs<:Tuple,Num} <: AbstractMPO{Num}
-    mpos::MPOs
-    scalings::Vector{Num}
-    function MPOSum(mpos::Tuple, scalings::Vector{Num}) where {Num}
-        @assert all(length.(mpos) .== length(mpos[1])) "Length of mpos is not the same"
-        @assert length(mpos) == length(scalings) "Number of mpos don't match the numver of scale factors."
-        new{typeof(mpos),Num}(mpos, scalings)
-    end
-end
 function MPOSum(mpos::Tuple)
     Num = promote_type(eltype.(eltype.(mpos))...)
     MPOSum(mpos, fill(one(Num), length(mpos)))

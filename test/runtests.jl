@@ -350,9 +350,15 @@ end
     testsite(site)
     T = transfer_matrix(site, :left)
     @test Matrix(T) ≈ Matrix(T, D^2, (D, D))
+
     testsite(site + site)
-    #T = transfer_matrix(site + site, :left)
+    T = transfer_matrix(site + site, :left)
     #@test Matrix(T) ≈ Matrix(T, 4 * D^2, blocksizes([D, D], [D, D])) #This test fails when using test, but not in the REPL
+
+    site = randomGenericSite(50, d, 50)
+    testsite(site)
+    T = transfer_matrix(site, :left)
+    @test Matrix(T) ≈ Matrix(T, 50^2, (50, 50))
 end
 
 @testset "Compression" begin
@@ -634,4 +640,12 @@ end
     @test lpd == TensorNetworks.multiply(mposite, site)
     lpd2 = TensorNetworks.dense(lp2)
     @test lpd2 == TensorNetworks.multiply(mposite, lpd)
+
+    mps = randomLCROpenMPS(5,2,5);
+    mpo = IsingMPO(5,1,1,1.0)
+    lp = mpo*mps
+    @test typeof(lp) <: TensorNetworks.LazyProduct
+    @test lp.mpos == (mpo,)
+    @test lp.mps == mps
+    @test typeof(lp[1]) <: TensorNetworks.LazySiteProduct
 end

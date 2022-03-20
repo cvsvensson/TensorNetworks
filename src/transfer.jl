@@ -195,6 +195,11 @@ __transfer_left_mpo(R::AbstractArray{<:Any,4}, Γ1::Array{<:Any,3}, mpo1::Array{
 __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,4}, Γ1::Array{<:Any,3}, mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
     @tensoropt (bl, tl, -1, -4) temp[:] := L[tl, cl1, cl2, bl] * Γ1[tl, u, -1] * mpo1[cl1, u, c, -2] * mpo2[cl2, c, d, -3] * Γ2[bl, d, -4]
 
+__transfer_left_mpo(R::AbstractArray{<:Any,5}, Γ1::Array{<:Any,3}, mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
+    @tensoropt (tr, br, -1, -5) temp[:] := Γ1[-1, u, tr] * mpo1[-2, u, c1, cr1] * mpo2[-3, c1, c2, cr2] * mpo3[-4, c2, d, cr3] * Γ2[-5, d, br] * R[tr, cr1, cr2, cr3, br]
+__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,5}, Γ1::Array{<:Any,3}, mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
+    @tensoropt (bl, tl, -1, -4) temp[:] := L[tl, cl1, cl2, cl3, bl] * Γ1[tl, u, -1] * mpo1[cl1, u, c1, -2] * mpo2[cl2, c1, c2, -3] * mpo3[cl3, c2, d, -4] * Γ2[bl, d, -5]
+
 
 function _transfer_left_mpo(Γ1::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct,ScaledIdentityMPOsite}}, Γ2::NTuple{<:Any,Union{ScaledIdentityMPOsite,GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
     K = promote_type(eltype.(Γ1)..., eltype.(Γ2)...)
@@ -424,8 +429,8 @@ _split_lazy(s, ss::Tuple) = (s, ss...)
 _split_lazy(ss::Tuple, s) = (ss..., s)
 _split_lazy(s::LazySiteProduct, ss::Tuple) = (s.sites..., ss...)
 _split_lazy(ss::Tuple, s::LazySiteProduct) = (ss..., reverse(s.sites)...)
-_split_lazy(s::LazyProduct, ss::Tuple) = (s.mpo, s.mps, ss...)
-_split_lazy(ss::Tuple, s::LazyProduct) = (ss..., s.mps, s.mpo)
+_split_lazy(s::LazyProduct, ss::Tuple) = (s.mpos..., s.mps, ss...)
+_split_lazy(ss::Tuple, s::LazyProduct) = (ss..., s.mps, s.mpos...)
 
 _remove_identity(s, (x, ss)::Tuple{<:Number,Tuple}) = (x, (s, ss...))
 _remove_identity(s::Union{ScaledIdentityMPOsite,ScaledIdentityMPO}, (x, ss)::Tuple{<:Number,Tuple}) = (data(s) * x, ss)
