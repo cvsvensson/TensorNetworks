@@ -12,8 +12,8 @@ function DMRG(mpo, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROp
     #set_center!(mps, 1)
     #canonicalize!(mps)
     direction = :right
-    Henv::FiniteEnvironment{Array{T,3}} = environment(mps, mpo)
-    orthenv::Vector{FiniteEnvironment{Matrix{T}}} = [environment(mps, state) for state in orth]
+    Henv = environment(mps, mpo)
+    orthenv = [environment(mps, state) for state in orth]
     #Hsquared = mpo*mpo#multiply(mpo, mpo)
     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), norm(mpo * mps)^2#real(expectation_value(mps, Hsquared))
     var = H2 - E^2

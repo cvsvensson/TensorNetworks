@@ -19,7 +19,11 @@ Base.:*(T1::TransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promot
 Base.:*(T1::TransferMatrix, T2::CompositeTransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1, T2.maps...))
 Base.:*(T1::CompositeTransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1.maps..., T2))
 
-function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,Array{NTuple{N,Int},N}}}}, v) where {T,N}
+function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix}, v)
+    out = foldr(*, Ts, init = v)
+    return out
+end
+function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,Array{NTuple{K,Int},N}}}}, v) where {T,N,K}
     out = foldr(*, Ts, init = v)
     return out::BlockBoundaryVector{T,N}
 end
@@ -198,8 +202,42 @@ __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,4}, Γ1::Array{<:Any,3}, mpo1
 __transfer_left_mpo(R::AbstractArray{<:Any,5}, Γ1::Array{<:Any,3}, mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
     @tensoropt (tr, br, -1, -5) temp[:] := Γ1[-1, u, tr] * mpo1[-2, u, c1, cr1] * mpo2[-3, c1, c2, cr2] * mpo3[-4, c2, d, cr3] * Γ2[-5, d, br] * R[tr, cr1, cr2, cr3, br]
 __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,5}, Γ1::Array{<:Any,3}, mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
-    @tensoropt (bl, tl, -1, -4) temp[:] := L[tl, cl1, cl2, cl3, bl] * Γ1[tl, u, -1] * mpo1[cl1, u, c1, -2] * mpo2[cl2, c1, c2, -3] * mpo3[cl3, c2, d, -4] * Γ2[bl, d, -5]
+    @tensoropt (bl, tl, -1, -5) temp[:] := L[tl, cl1, cl2, cl3, bl] * Γ1[tl, u, -1] * mpo1[cl1, u, c1, -2] * mpo2[cl2, c1, c2, -3] * mpo3[cl3, c2, d, -4] * Γ2[bl, d, -5]
 
+__transfer_left_mpo(R::AbstractArray{<:Any,6}, Γ1::Array{<:Any,3}, mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, mpo4::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
+    @tensoropt (tr, br, -1, -6) temp[:] := Γ1[-1, u, tr] * mpo1[-2, u, c1, cr1] * mpo2[-3, c1, c2, cr2] * mpo3[-4, c2, c3, cr3] * mpo4[-5, c3, d, cr4] * Γ2[-6, d, br] * R[tr, cr1, cr2, cr3, cr4, br]
+__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,6}, Γ1::Array{<:Any,3}, mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, mpo4::Array{<:Any,4}, Γ2::Array{<:Any,3}) =
+    @tensoropt (bl, tl, -1, -6) temp[:] := L[tl, cl1, cl2, cl3, cl4, bl] * Γ1[tl, u, -1] * mpo1[cl1, u, c1, -2] * mpo2[cl2, c1, c2, -3] * mpo3[cl3, c2, c3, -4] * mpo4[cl4, c3, d, -5] * Γ2[bl, d, -6]
+
+__transfer_left_mpo(R::AbstractArray{<:Any,7}, Γ1::Array{<:Any,3},
+    mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, mpo4::Array{<:Any,4}, mpo5::Array{<:Any,4},
+    Γ2::Array{<:Any,3}) =
+    @tensoropt (tr, br, -1, -7) temp[:] := Γ1[-1, u, tr] *
+                                           mpo1[-2, u, c1, cr1] * mpo2[-3, c1, c2, cr2] * mpo3[-4, c2, c3, cr3] *
+                                           mpo4[-5, c3, c4, cr4] * mpo5[-6, c4, d, cr5] *
+                                           Γ2[-7, d, br] * R[tr, cr1, cr2, cr3, cr4, cr5, br]
+__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,7}, Γ1::Array{<:Any,3},
+    mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, mpo4::Array{<:Any,4}, mpo5::Array{<:Any,4},
+    Γ2::Array{<:Any,3}) =
+    @tensoropt (bl, tl, -1, -7) temp[:] := L[tl, cl1, cl2, cl3, cl4, cl5, bl] * Γ1[tl, u, -1] *
+                                           mpo1[cl1, u, c1, -2] * mpo2[cl2, c1, c2, -3] * mpo3[cl3, c2, c3, -4] *
+                                           mpo4[cl4, c3, c4, -5] * mpo5[cl5, c4, d, -5] *
+                                           Γ2[bl, d, -7]
+
+__transfer_left_mpo(R::AbstractArray{<:Any,8}, Γ1::Array{<:Any,3},
+    mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, mpo4::Array{<:Any,4}, mpo5::Array{<:Any,4}, mpo6::Array{<:Any,4},
+    Γ2::Array{<:Any,3}) =
+    @tensoropt (tr, br, -1, -8) temp[:] := Γ1[-1, u, tr] *
+                                           mpo1[-2, u, c1, cr1] * mpo2[-3, c1, c2, cr2] * mpo3[-4, c2, c3, cr3] *
+                                           mpo4[-5, c3, c4, cr4] * mpo5[-6, c4, c5, cr5] * mpo6[-7, c5, d, cr6] *
+                                           Γ2[-8, d, br] * R[tr, cr1, cr2, cr3, cr4, cr5, cr6, br]
+__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,8}, Γ1::Array{<:Any,3},
+    mpo1::Array{<:Any,4}, mpo2::Array{<:Any,4}, mpo3::Array{<:Any,4}, mpo4::Array{<:Any,4}, mpo5::Array{<:Any,4}, mpo6::Array{<:Any,4},
+    Γ2::Array{<:Any,3}) =
+    @tensoropt (bl, tl, -1, -8) temp[:] := L[tl, cl1, cl2, cl3, cl4, cl5, cl6, bl] * Γ1[tl, u, -1] *
+                                           mpo1[cl1, u, c1, -2] * mpo2[cl2, c1, c2, -3] * mpo3[cl3, c2, c3, -4] *
+                                           mpo4[cl4, c3, c4, -5] * mpo5[cl5, c4, c5, -5] * mpo6[cl6, c5, d, -6] *
+                                           Γ2[bl, d, -8]
 
 function _transfer_left_mpo(Γ1::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct,ScaledIdentityMPOsite}}, Γ2::NTuple{<:Any,Union{ScaledIdentityMPOsite,GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
     K = promote_type(eltype.(Γ1)..., eltype.(Γ2)...)

@@ -172,7 +172,7 @@ struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPOs<:NTuple{<:Any,<:Abst
 end
 
 Base.:*(mpo::MPO, mps::AbstractMPS) where {MPO<:AbstractMPO} = LazyProduct((mpo,), mps)
-Base.:*(mpo::MPO, mps::LazyProduct) where {MPO<:AbstractMPO} = LazyProduct((mpo, mps.mpos...), mps)
+Base.:*(mpo::MPO, mps::LazyProduct) where {MPO<:AbstractMPO} = LazyProduct((mpo, mps.mpos...), mps.mps)
 Base.:*(mpo::MPO, mps::MPSSum) where {MPO<:AbstractMPO} = mapreduce(k -> mps.scalings[k] * mpo * mps.states[k], +, 1:length(mps.states))
 Base.:*(mpo::MPOSum, mps::AbstractMPS) = mapreduce(sm -> sm[1] * (sm[2] * mps), +, zip(mpo.mpos, mpo.scalings))
 Base.:*(mpo::MPOSum, mps::MPSSum) = mapreduce(os -> os[1][1]*os[2][1] * (os[1][2] * os[2][2]), +, Base.product(zip(mpo.mpos, mpo.scalings),zip(mps.states,mps.scalings)))
@@ -189,7 +189,7 @@ Base.error(lp::LazyProduct) = error(lp.mps)
 Base.copy(lp::LazyProduct) = LazyProduct(copy.(lp.mpos), copy(lp.mps))
 
 function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
-    Γ = to_left_right_orthogonal(lp[1:end], center = center, method = method)
+    Γ = to_left_right_orthogonal(dense.(lp[1:end]), center = center, method = method)
     LCROpenMPS(Γ, truncation = truncation(lp), error = error(lp))
 end
 
