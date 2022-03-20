@@ -18,7 +18,7 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
     Henv = environment(mps, mpo)
     orthenv = [environment(mps, state) for state in orth]
     #Hsquared = mpo*mpo#multiply(mpo, mpo)
-    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), norm(mpo * mps)#real(expectation_value(mps, Hsquared))
+    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), norm(mpo * mps)^2#real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
     count = 1
@@ -27,7 +27,7 @@ function DMRG(mpo::AbstractMPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMP
         mps = sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
         mps = canonicalize(mps, center = center(mps))
         direction = reverse_direction(direction)
-        E, H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)#real(expectation_value(mps, Hsquared))
+        E, H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)^2#real(expectation_value(mps, Hsquared))
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
             E, H2 = real(E), real(H2)
@@ -96,6 +96,22 @@ end
 function _eigs_large(heff::LinearMap{<:BigNumber}, x0, nev, prec)
     vals, vecs = partialeigen(partialschur(heff, nev = nev, which = SR(), tol = prec)[1])
     return vals::Vector{eltype(heff)}, vecs::Matrix{eltype(heff)}
+end
+function eigensite(site::S, mposite, hl, hr, orthvecs, prec) where {S<:AbstractSite{BigNumber}}
+    szmps = size(site)
+    heff = effective_hamiltonian(mposite, hl, hr, orthvecs)
+    heff2(v) = vec(heff(S(reshape(v, szmps))))
+    lh = LinearMap{eltype(site)}(heff2, prod(szmps))
+    vals, vecs = partialeigen(partialschur(lh, nev = nev, which = SR(), tol = prec)[1])
+    return S(vecs[1]) / norm(vecs[1]), real(vals[1])
+
+    # evals, evecs = eigsolve(heff, site, 1, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
+    # e::eltype(site) = evals[1]
+    # vecmin = evecs[1] #::Vector{eltype(hl)}
+    # if !(isapprox(e, real(e), atol = prec))
+    #     error("ERROR: complex eigenvalues: $e")
+    # end
+    # return vecmin / norm(vecmin), real(e)
 end
 function eigensite(site::AbstractSite, mposite, hl, hr, orthvecs, prec)
     #szmps = size(site)
@@ -234,7 +250,7 @@ function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} =
     Henv = environment(mps, mpo)
     orthenv = [environment(state, mps) for state in orth]
     # Hsquared = multiplyMPOs(mpo, mpo)
-    E::real(T), H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)
+    E::real(T), H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)^2
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
     count = 1
@@ -247,7 +263,7 @@ function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} =
         mps = twosite_sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
         #mps = canonicalize(mps)
         direction = reverse_direction(direction)
-        E, H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)
+        E, H2 = real(expectation_value(mps, mpo)), norm(mpo * mps)^2
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
             E, H2 = real(E), real(H2)
