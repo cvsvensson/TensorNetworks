@@ -54,3 +54,16 @@ function test_ldos()
     @time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d)
     return mus1, mus2
 end
+
+function jacksonkernel(M)
+    [((M-n+1)cos(π*n/(M+1)) + sin(π*n/(M+1))cot(π/(M+1)))/(M+1) for n in 0:M]
+end
+
+using Polynomials
+
+function chebyshev(mus, gammas)
+    coeffs = 2*mus .* gammas
+    coeffs[1] /= 2
+    p = ChebyshevT(coeffs)
+    return x-> p(x)/ (pi*sqrt(1-x^2))
+end
