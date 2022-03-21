@@ -137,6 +137,7 @@ function LCROpenMPS(
 ) where {K}
     LCROpenMPS{K}(Γ; truncation = truncation, error = error)
 end
+LCROpenMPS(mps::LCROpenMPS) = mps
 mutable struct UMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     #In gamma-lambda notation
     Γ::Vector{GenericSite{T}}

@@ -630,10 +630,10 @@ end
     mposite = MPOsite(sz)
     lp = mposite * site
     sites = (mposite, site)
-    @test typeof(lp) == TensorNetworks.LazySiteProduct{ComplexF64,typeof(sites)}
+    @test typeof(lp) == TensorNetworks.LazySiteProduct{ComplexF64,typeof(sites),3}
     @test lp.sites == sites
     lp2 = mposite * lp
-    @test typeof(lp2) == TensorNetworks.LazySiteProduct{ComplexF64,typeof((mposite, sites...))}
+    @test typeof(lp2) == TensorNetworks.LazySiteProduct{ComplexF64,typeof((mposite, sites...)),3}
     @test lp2.sites == (mposite, sites...)
 
     lpd = TensorNetworks.dense(lp)

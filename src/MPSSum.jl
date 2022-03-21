@@ -1,4 +1,3 @@
-
 Base.similar(site::SiteSum) = SiteSum(similar.(site.sites))
 Base.copy(site::SiteSum) = SiteSum(copy.(site.sites))
 Base.:*(x::Number, site::SiteSum) = SiteSum(x .* sites(site))
@@ -64,7 +63,9 @@ Base.:-(mps::AbstractMPS) = (-1) * mps
 Base.:-(mps::AbstractMPS, mps2::AbstractMPS) = mps + (-1) * mps2
 
 Base.IndexStyle(::Type{<:MPSSum}) = IndexLinear()
-Base.getindex(sum::MPSSum, i::Integer) = SiteSum(Tuple(state[i] for state in sum.states))
+SiteSum(sites...) = SiteSum(sites)
+Base.getindex(sum::MPSSum, i::Integer) = SiteSum((state[i] for state in sum.states)...)
+Base.getindex(sum::MPSSum, I...) = (mapfoldr(mps -> mps[I...], .+ , sum.states))
 
 #Base.getindex(sum::SiteSum, i::Integer) = sum.sites[i]
 #Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
@@ -173,14 +174,14 @@ function dense(mpss::MPSSum{<:NTuple{<:Any,<:LCROpenMPS{T}},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
 end
 
 function LCROpenMPS(mpss::MPSSum{<:Any,<:AbstractSite{T},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
 end
 
 # function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}
@@ -203,7 +204,7 @@ end
 
 function dense(sitesum::SiteSum{Tup,T}) where {Tup,T}
     sites = dense.(sitesum.sites)
-    sizes = size.(sitesum.sites)
+    sizes = size.(sites)
     d = sizes[1][2] #Maybe check that all sites have the same physical dim?
     DL = sum([s[1] for s in sizes])
     DR = sum([s[3] for s in sizes])

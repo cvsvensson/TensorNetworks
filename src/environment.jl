@@ -251,7 +251,13 @@ local_mul(envL, envR, site::OrthogonalLinkSite) = local_mul(envL, envR, site.Λ1
 
 #local_mul(envL, envR, site::SiteSum) = local_mul(envL, envR, dense(site))
 
-#Only works for certain environs
+function local_mul(envL, envR, mpo, lp::LazySiteProduct)
+    local_mul(envL, envR, mpo, lp.sites...)
+end
+function local_mul(envL, envR, lp::LazySiteProduct)
+    local_mul(envL, envR, lp.sites...)
+end
+
 function local_mul(envL, envR, sitesum::SiteSum)
     @assert size(data(envL)) == size(data(envR)) "Error: Left and right environments have different dimensions"
     itr = Base.product(1:size(data(envL), 1), 1:size(data(envL), 2))

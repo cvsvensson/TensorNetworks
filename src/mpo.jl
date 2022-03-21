@@ -140,8 +140,8 @@ Base.size(mposite::MPOsite) = size(data(mposite))
 # Base.length(mpo::MPOsite) = 1
 # Base.length(mpo::MPO) = length(data(mpo))
 # Base.IndexStyle(::Type{<:MPOsite}) = IndexLinear()
-Base.@propagate_inbounds Base.getindex(mpo::MPOsite, i::Integer) = mpo.data[i]
-Base.@propagate_inbounds Base.getindex(mpo::AbstractMPO, i::Integer) = mpo.data[i]
+Base.getindex(mpo::MPOsite, i::Integer) = mpo.data[i]
+Base.getindex(mpo::AbstractMPO, i::Integer) = mpo.data[i]
 #Base.setindex!(mpo::MPOsite, v, I::Vararg{Integer,4}) = (mpo.data[I] = v)
 #Base.setindex!(mpo::AbstractMPO, v, I::Vararg{Integer,N}) where {N} = (mpo.data[I] = v)
 
@@ -182,6 +182,8 @@ truncation(lp::LazyProduct) = truncation(lp.mps)
 Base.length(lp::LazyProduct) = length(lp.mps)
 Base.eltype(lp::LazyProduct) = eltype(lp.mps)
 Base.getindex(lp::LazyProduct, i::Integer) = mapfoldr(x -> x[i], *, lp.mpos, init = lp.mps[i])
+Base.getindex(lp::LazyProduct, I...) = mapfoldr(x -> x[I...], .*, lp.mpos, init = lp.mps[I...])
+
 Base.size(lp::LazyProduct) = size(lp.mps)
 #boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
 boundaryconditions(mps::LazyProduct) = boundaryconditions(mps.mps)
@@ -193,10 +195,10 @@ function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
     LCROpenMPS(Γ, truncation = truncation(lp), error = error(lp))
 end
 
-struct LazySiteProduct{T,S}
+struct LazySiteProduct{T<:Number,S,N} <: AbstractSite{T,N}
     sites::S
-    function LazySiteProduct(sites::Vararg{<:Any,<:Any})
-        new{promote_type(eltype.(sites)...),typeof(sites)}(sites)
+    function LazySiteProduct(sites...)
+        new{promote_type(eltype.(sites)...),typeof(sites), length(size(sites[end]))}(sites)
     end
 end
 Base.show(io::IO, lp::LazySiteProduct) =
@@ -205,6 +207,7 @@ Base.show(io::IO, m::MIME"text/plain", lp::LazySiteProduct) = show(io, lp)
 Base.copy(lp::LazySiteProduct) = LazySiteProduct(copy.(lp.sites)...)
 Base.eltype(::LazySiteProduct{T,<:Any}) where {T} = T
 ispurification(lp::LazySiteProduct) = any([ispurification(s) for s in lp.sites if s isa AbstractSite])
+reverse_direction(lp::LazySiteProduct) = LazySiteProduct(reverse_direction.(lp.sites)...)
 
 Base.:*(o::AbstractMPOsite, s::Union{AbstractSite,AbstractMPOsite}) = LazySiteProduct(o, s)
 Base.:*(o::AbstractMPOsite, lp::LazySiteProduct) = LazySiteProduct(o, lp.sites...)
@@ -262,7 +265,7 @@ Base.:+(s1::MPOsite, s2::MPOsite) = MPOSiteSum((s1, s2))
 
 Base.:*(x::Number, mpo::AbstractMPO) = MPSSum((mpo,), [x])
 Base.:*(mpo::AbstractMPO, x::Number) = MPSSum((mpo,), [x])
-Base.:*(x::Number, mpo::MPOSum) = MPOSum(mpo.mpos, x * mps.scalings)
+Base.:*(x::Number, mpo::MPOSum) = MPOSum(mpo.mpos, x * mpo.scalings)
 Base.:*(mpo::MPOSum, x::Number) = x * mpo
 Base.:/(mpo::MPOSum, x::Number) = inv(x) * mpo
 Base.:-(mpo::AbstractMPO) = (-1) * mpo
@@ -270,8 +273,10 @@ Base.:-(mpo::AbstractMPO, mpo2::AbstractMPO) = mpo + (-1) * mpo2
 
 Base.IndexStyle(::Type{<:MPOSum}) = IndexLinear()
 Base.getindex(sum::MPOSum, i::Integer) = MPOSiteSum(map(mpo -> mpo[i], sum.mpos))
+Base.getindex(sum::MPOSum, I...) = (mapfoldr(mpo -> mpo[I...], .+ , sum.mpos))
 
 Base.getindex(sum::MPOSiteSum, i::Integer) = sum.sites[i]
+
 Base.IndexStyle(::Type{<:MPOSiteSum}) = IndexLinear()
 reverse_direction(sitesum::MPOSiteSum) = MPOSiteSum(reverse_direction.(sitesum.sites))
 
