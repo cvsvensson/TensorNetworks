@@ -1,7 +1,7 @@
 module TensorNetworks
 using LinearAlgebra
 using TensorOperations
-using LinearMaps
+using LinearMaps#, LinearMapsAA
 # using DataFrames
 using KrylovKit
 using DoubleFloats
@@ -35,6 +35,7 @@ export entanglement_entropy, IdentityGate, data, compress, qubit
 export randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, randomGenericSite
 export IdentityMPOsite, environment, update_environment!
 export ShiftCenter, SubspaceExpand, getindex, setindex!, kron, repeatedgate, *, +, vec
+export blocksizes
 
 include("types.jl")
 include("pauli.jl")

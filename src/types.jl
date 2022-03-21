@@ -71,7 +71,7 @@ struct OrthogonalLinkSite{T} <: AbstractCenterSite{T}
         new{T}(Γ, Λ1, Λ2)
     end
 end
-Base.similar(site::OrthogonalLinkSite) = OrthogonalLinkSite(similar(site.Λ1),similar(site.Γ),similar(site.Λ2), check=false)
+Base.similar(site::OrthogonalLinkSite) = OrthogonalLinkSite(similar(site.Λ1), similar(site.Γ), similar(site.Λ2), check = false)
 
 abstract type AbstractMPS{T<:AbstractCenterSite} <: AbstractVector{T} end
 
@@ -137,6 +137,7 @@ function LCROpenMPS(
 ) where {K}
     LCROpenMPS{K}(Γ; truncation = truncation, error = error)
 end
+LCROpenMPS(mps::LCROpenMPS) = mps
 mutable struct UMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     #In gamma-lambda notation
     Γ::Vector{GenericSite{T}}
@@ -169,8 +170,9 @@ end
 # numtype(::UMPS{T}) where {T} = T
 # numtype(::CentralUMPS{T}) where {T} = T
 # numtype(::OpenMPS{T}) where {T} = T
-numtype(ms::Vararg{AbstractVector{<:AbstractSite},<:Any}) = promote_type(numtype.(ms)...)
+numtype(ms...) = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
+
 sites(mps::LCROpenMPS) = mps.Γ
 sites(mps::UMPS) = mps.Γ
 sites(mps::CentralUMPS) = mps.Γ
@@ -211,3 +213,109 @@ boundaryconditions(mps::UMPS) = InfiniteBoundary()
 #         new{T}(Γ, Λ, truncation, error, center)
 #     end
 # end
+
+abstract type AbstractEnvironment end
+abstract type AbstractInfiniteEnvironment <: AbstractEnvironment end
+abstract type AbstractFiniteEnvironment <: AbstractEnvironment end
+
+# struct BoundaryVector{T,N} <: AbstractArray{T,N}
+#     data::Array{T,N}
+# end
+struct BlockBoundaryVector{T,N,B} #<: AbstractArray{Array{T,N},N}
+    data::B
+    function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
+        bv = Array{Array{T,N},N}(undef, (1 for k in 1:N)...)
+        bv[1] = v
+        return new{T,1,Array{Array{T,N},N}}(bv)
+    end
+    function BlockBoundaryVector(v::Array{<:Any,N}) where {N}
+        T = promote_type(eltype.(v)...)
+        new{T,N,typeof(v)}(v)
+    end
+end
+# function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
+#     bv = Array{Array{T,N},N}(undef, (1 for k in 1:N)...)
+#     bv[1] = v
+#     return BlockBoundaryVector(bv)
+# end
+
+abstract type AbstractTransferMatrix{T,S} end
+struct TransferMatrix{F,Fa,T,S} <: AbstractTransferMatrix{T,S}
+    f::F
+    fa::Fa
+    sizes::S
+end
+TransferMatrix(f::Function, T::DataType, s) = TransferMatrix{typeof(f),Nothing,T,typeof(s)}(f, nothing, s)
+
+struct CompositeTransferMatrix{Maps,T,S} <: AbstractTransferMatrix{T,S}
+    maps::Maps
+    sizes::S
+end
+function CompositeTransferMatrix{T}(maps::Maps) where {Maps,T}
+    s1 = size(maps[1], 1)
+    s2 = size(maps[end], 2)
+    CompositeTransferMatrix{Maps,T,typeof(tuple(s1, s2))}(maps, (s1, s2))
+end
+function CompositeTransferMatrix(map::TransferMatrix{<:Any,<:Any,T,S}) where {T,S}
+    CompositeTransferMatrix{typeof(tuple(map)),T,S}(tuple(map), size(map))
+end
+function CompositeTransferMatrix{T,S}(maps::Maps) where {Maps,T,S}
+    s1 = size(maps[1], 1)
+    s2 = size(maps[end], 2)
+    CompositeTransferMatrix{Maps,T,S}(maps, (s1, s2))
+end
+
+abstract type AbstractMPOsite{T} <: AbstractArray{T,4} end
+
+struct MPOsite{T} <: AbstractMPOsite{T}
+    data::Array{T,4}
+    # ishermitian::Bool
+    # isunitary::Bool
+end
+
+abstract type AbstractMPO{T<:Number} <: AbstractVector{MPOsite{T}} end
+
+struct MPO{S,T<:Number} <: AbstractMPO{T}
+    data::Vector{S}
+    boundary::Vector{T}
+    function MPO(sites::Vector{S}, boundary::Vector{T}) where {S<:AbstractMPOsite,T}
+        K = promote_type(eltype.(sites)..., T)
+        new{S,K}(sites, boundary)
+    end
+end
+
+struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
+    sites::S
+    function SiteSum(sites::Tuple)
+        #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
+        new{typeof(sites),promote_type(eltype.(sites)...)}(copy.(sites))
+    end
+end
+
+struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
+    states::MPSs
+    scalings::Vector{Num}
+    function MPSSum(mpss::Tuple, scalings::Vector{Num}) where {Num}
+        new{typeof(mpss),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
+    end
+end
+function MPSSum(mpss::Tuple)
+    MPSSum(mpss, fill(one(numtype(mpss...)), length(mpss)))
+end
+
+struct MPOSiteSum{S<:Tuple,T} <: AbstractMPOsite{T}
+    sites::S
+    function MPOSiteSum(sites::Tuple)
+        new{typeof(sites),promote_type(eltype.(sites)...)}(sites)
+    end
+end
+
+struct MPOSum{MPOs<:Tuple,Num} <: AbstractMPO{Num}
+    mpos::MPOs
+    scalings::Vector{Num}
+    function MPOSum(mpos::Tuple, scalings::Vector{Num}) where {Num}
+        @assert all(length.(mpos) .== length(mpos[1])) "Length of mpos is not the same"
+        @assert length(mpos) == length(scalings) "Number of mpos don't match the numver of scale factors."
+        new{typeof(mpos),Num}(mpos, scalings)
+    end
+end

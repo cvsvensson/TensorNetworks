@@ -38,10 +38,10 @@ end
 data(site::GenericSite) = site.Γ
 data(site::VirtualSite) = site.Λ
 data(site::LinkSite) = site.Λ
-data(site::GenericSite, dir) = site.Γ
+data(site::GenericSite, dir) = data(site)
 data(site::OrthogonalLinkSite, dir) = data(GenericSite(site, dir))
-data(site::VirtualSite, dir) = site.Λ
-data(site::LinkSite, dir) = site.Λ
+data(site::VirtualSite, dir) = data(site)
+data(site::LinkSite, dir) = data(site)
 data(site::OrthogonalLinkSite) = data(site.Λ1 * site.Γ * site.Λ2)
 
 MPOsite(site::GenericSite) = (s = size(site); MPOsite(reshape(data(site), s[1], s[2], 1, s[3])))
@@ -304,11 +304,15 @@ function to_right_orthogonal(M::Vector{GenericSite{T}}; method = :qr) where {T}
     return out, G
 end
 
-function GenericSite(site::OrthogonalLinkSite, direction = :left)
+function GenericSite(site::OrthogonalLinkSite, direction)
     if direction == :left
         return site.Λ1 * site.Γ
     elseif direction == :right
         return site.Γ * site.Λ2
+    elseif direction ==:both
+        return site.Λ1 * site.Γ* site.Λ2
+    else 
+        error("Choose :left, :right or :both when converting OrthogonalLinkSite to GenericSite")
     end
 end
 

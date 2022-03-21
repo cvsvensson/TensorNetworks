@@ -10,14 +10,21 @@ Base.show(io::IO, m::MIME"text/plain", mps::AbstractMPS) = show(io, mps)
 
 function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
     K = numtype(mps1, mps2)
-    Ts::Vector{LinearMap{K}} = transfer_matrices(mps1, mps2)
-    vl = transfer_matrix_bond(mps1, mps2, 1, :right) * boundaryvec(mps1, mps2, :left)
-    vr::Vector{K} = boundaryvec(mps1, mps2, :right)
-    for k in length(mps1):-1:1
-        vr = Ts[k] * vr
-    end
-    return transpose(vr) * vl
+    #::Vector{LinearMap{K}}
+    Ts = transfer_matrices((mps1,), (mps2,), :left)
+    vl = transfer_matrix_bond((mps1[1],), (mps2[1],)) * boundary((mps1,), (mps2,), :left)
+    #::Vector{K}
+    vr = boundary((mps1,), (mps2,), :right)
+    # for k in length(mps1):-1:1
+    #     vr = Ts[k] * vr
+    # end
+    # vr = foldr(*,Ts,init=vr)    # println(size(vr))
+    # println(size(Ts[end]))
+    # println(Ts[end]*vr)
+    return inner(vl, apply_transfer_matrices(Ts,vr))
 end
+inner(v::AbstractArray{<:Number,N}, w::AbstractArray{<:Number,N}) where {N} = mapreduce(prod, +, zip(v, w))
+inner(v::BlockBoundaryVector{<:Number,N}, w::BlockBoundaryVector{<:Number,N}) where {N} = mapreduce(inner, +, data(v), data(w))
 
 LinearAlgebra.norm(mps::AbstractMPS) = sqrt(abs(scalar_product(mps, mps)))
 

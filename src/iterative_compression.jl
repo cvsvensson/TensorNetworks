@@ -25,7 +25,7 @@ function shift_center!(mps, j, dir, ::ShiftCenter; kwargs...)
 end
 
 function shift_center!(mps, j, dir, SE::SubspaceExpand; mpo, env, kwargs...)
-    newmin = transpose(transfer_matrix(mps[j], mpo[j], mps[j]) * vec(env.R[j])) * vec(env.L[j])
+    newmin = inner(_local_transfer_matrix((mps[j],), (mpo[j], mps[j]),:left) * env.R[j], env.L[j])
     if SE.alpha < mps.truncation.tol
         shift_center!(mps, j, dir, ShiftCenter(); mpo, env)
         return SE.oldmin
@@ -43,9 +43,8 @@ function shift_center!(mps, j, dir, SE::SubspaceExpand; mpo, env, kwargs...)
     mps.center += dirval
     mps.Γ[j] = A
     mps.Γ[j+dirval] = B
-    T = prod(transfer_matrices(mps[j1:j2], mpo[j1:j2], mps[j1:j2], :left))
-    truncmin = transpose(T * vec(env.R[j2])) * vec(env.L[j1])
-
+    Ts = transfer_matrices((mps[j1:j2],), (mpo[j1:j2], mps[j1:j2],), :left)
+    truncmin = inner(apply_transfer_matrices(Ts,env.R[j2]), env.L[j1])
 
     if SE.oldmin !== nothing
         if real((truncmin - newmin) / (SE.oldmin - newmin)) > 0.3
@@ -69,22 +68,22 @@ function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec = 1
     # IL(site) = Array(vec(Diagonal{eltype(guess[1])}(I,size(site,1))))
     # IR(site) = Array(vec(Diagonal{eltype(guess[1])}(I,size(site,3))))
     #errorfunc(mps) = 1 - abs(scalar_product(target, mps)) #FIXME can save memory by using precomputed envuronments
-    function errorfunc(mps,dir,env)
-        if dir==:right
-            temp = transfer_matrix(mps[end],target[end],:right)*vec(env.L[end])
+    function errorfunc(mps, dir, env)
+        if dir == :right
+            temp = transfer_matrix(mps[end], target[end], :right) * env.L[end]
             #@tensor overlap[:] := env.L[end-1][1,2] *conj(target[end][1,3,4])* mps[end][2,3,4]
-        elseif dir==:left
-            temp = transfer_matrix(mps[1],target[1],:left)*vec(env.R[1])
+        elseif dir == :left
+            temp = transfer_matrix(mps[1], target[1], :left) * env.R[1]
             #@tensor overlap[:] := env.R[2][1,2] *conj(target[1][4,3,1])* mps[1][4,3,2]
         end
-        overlap = boundary(target,mps,dir)'*temp
-        @assert length(overlap)==1
+        overlap = inner(boundary((mps,), (target,), dir), temp)
+        @assert length(overlap) == 1
 
         #println(norm(mps))
         #println(norm(target))
         #println(scalar_product(target,mps))
         #println((overlap[1]))
-        return 1-norm(overlap)/(targetnorm)
+        return 1 - norm(overlap) / (targetnorm)
     end
     #TODO Make it work for UMPS. The following errorfunction can be used
     #density_matrix(mps,k) = @tensor rho[:] := data(mps[k])[1,-1,2]*conj(data(mps[k])[1,-2,2])
@@ -93,12 +92,12 @@ function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec = 1
     #real(targetnorm - sum([transpose(transfer_matrix(site) * IR(site))*IL(site) for site in mps[1:end]])) #use @view
     #if isinfinite(target)
     count = 1
-    error = errorfunc(mps,dir,env)
+    error = errorfunc(mps, dir, env)
     # error = error 
     #println(error)
     while error > prec && count < maxiter
         mps, env = sweep(target, mps, env, dir, prec)
-        newerror = errorfunc(mps,dir,env)
+        newerror = errorfunc(mps, dir, env)
         #newerror2 = errorfunc(mps,dir,env)
         #println((newerror,newerror2))
         if abs(error - newerror) < prec
@@ -129,7 +128,7 @@ function sweep(target, mps, env, dir, prec; kwargs...)
         mps[j] = newsite / norm(newsite)
         shift_center!(mps, j, dir, shifter; error = error)
         update! = dir == :right ? update_left_environment! : update_right_environment!
-        update!(env, j, mps[j], target[j])
+        update!(env, j, (mps[j],), (target[j],))
     end
     return mps, env
 end

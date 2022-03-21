@@ -1,44 +1,29 @@
-struct SiteSum{S<:Tuple,T} <: AbstractCenterSite{T}
-    sites::S
-    function SiteSum(sites::Tuple)
-        #println(typeof(Tuple((sites))), promote_rule(eltype.(sites)...))
-        new{typeof(sites), promote_type(eltype.(sites)...)}(copy.(sites))
-    end
-end
 Base.similar(site::SiteSum) = SiteSum(similar.(site.sites))
 Base.copy(site::SiteSum) = SiteSum(copy.(site.sites))
 Base.:*(x::Number, site::SiteSum) = SiteSum(x .* sites(site))
+Base.:*(site::SiteSum, x::Number) = x * site
+Base.:/(site::SiteSum, x::Number) = inv(x) * site
 #Base.setindex!(site::GenericSite, v, I::Vararg{Integer,3}) = (data(site)[I...] = v)
 function LinearAlgebra.mul!(w::SiteSum, v::SiteSum, x::Number)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([mul!(sw, sv, x) for (sv,sw) in zip(sites(v), sites(w))])
+    SiteSum([mul!(sw, sv, x) for (sv, sw) in zip(sites(v), sites(w))])
 end
 LinearAlgebra.rmul!(v::SiteSum, x::Number) = SiteSum([rmul!(sv, x) for sv in sites(v)])
 LinearAlgebra.norm(v::SiteSum) = norm(norm.(sites(v)))
-LinearAlgebra.dot(v::SiteSum,w::SiteSum) = sum([dot(sv,sw) for (sv,sw) in zip(sites(v),sites(w))])
+LinearAlgebra.dot(v::SiteSum, w::SiteSum) = sum([dot(sv, sw) for (sv, sw) in zip(sites(v), sites(w))])
 
 function LinearAlgebra.axpy!(x::Number, v::SiteSum, w::SiteSum)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([axpy!(x, sv, sw) for (sv,sw) in zip(sites(v),sites(w))])
+    SiteSum([axpy!(x, sv, sw) for (sv, sw) in zip(sites(v), sites(w))])
 end
 function LinearAlgebra.axpby!(x::Number, v::SiteSum, β::Number, w::SiteSum)
     @assert length(sites(w)) == length(sites(v)) "Error: Storage is differently sized from input"
-    SiteSum([axpby!(x, sv, β, sw) for (sv,sw) in zip(sites(v),sites(w))])
+    SiteSum([axpby!(x, sv, β, sw) for (sv, sw) in zip(sites(v), sites(w))])
 end
 
 Base.:*(op::MPOsite, sites::SiteSum) = SiteSum([op * site for site in sites.sites])
+multiply(op::MPOsite, site::SiteSum) = SiteSum(Tuple([multiply(op, s) for s in sites(site)]))
 
-
-struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
-    states::MPSs
-    scalings::Vector{Num}
-    function MPSSum(mpss::Tuple, scalings::Vector{Num}) where {Num}
-        new{typeof(mpss),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
-    end
-end
-function MPSSum(mpss::Tuple)
-    MPSSum(mpss, fill(one(numtype(mpss...)), length(mpss)))
-end
 #TODO: change vector argument to tuple arguments.
 #MPSSum(sites::NTuple{<:Any,<:AbstractMPS}) = MPSSum([sites...])
 #MPSSum(sites::NTuple{<:Any,<:AbstractMPS},s) = MPSSum([sites...],s)
@@ -70,15 +55,17 @@ Base.:+(s1::MPSSum, s2::MPSSum) = MPSSum(tuple(s1.states..., s2.states...), vcat
 Base.:+(s1::AbstractSite, s2::AbstractSite) = SiteSum((s1, s2))
 
 Base.:*(x::Number, mps::AbstractMPS) = MPSSum((mps,), [x])
-Base.:*(mps::AbstractMPS, x::Number) = MPSSum((mps,), [x])
+Base.:*(mps::AbstractMPS, x::Number) = x * mps
 Base.:*(x::Number, mps::MPSSum) = MPSSum(mps.states, x * mps.scalings)
-Base.:*(mps::MPSSum, x::Number) = MPSSum(mps.states, x * mps.scalings)
-Base.:/(mps::MPSSum, x::Number) = MPSSum(mps.states, inv(x) * mps.scalings)
+Base.:*(mps::MPSSum, x::Number) = x * mps
+Base.:/(mps::MPSSum, x::Number) = inv(x) * mps
 Base.:-(mps::AbstractMPS) = (-1) * mps
 Base.:-(mps::AbstractMPS, mps2::AbstractMPS) = mps + (-1) * mps2
 
 Base.IndexStyle(::Type{<:MPSSum}) = IndexLinear()
-Base.getindex(sum::MPSSum, i::Integer) = SiteSum(Tuple(state[i] for state in sum.states))
+SiteSum(sites...) = SiteSum(sites)
+Base.getindex(sum::MPSSum, i::Integer) = SiteSum((state[i] for state in sum.states)...)
+Base.getindex(sum::MPSSum, I...) = (mapfoldr(mps -> mps[I...], .+ , sum.states))
 
 #Base.getindex(sum::SiteSum, i::Integer) = sum.sites[i]
 #Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
@@ -94,60 +81,10 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
     return v
 end
 
-# function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum})
-#     #FIXME Might screw up type stability, so might need a TransferMatrix struct?
-#     N1 = length(Γ1[1])
-#     N2 = length(Γ2[1])
-#     Ts = [_transfer_right_gate(map(s->sites(s)[n1],Γ1), gate, map(s->sites(s)[n2],Γ2)) for n1 in 1:N1, n2 in 1:N2]
-#     return _apply_transfer_matrices(Ts)
-# end
-#_transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
-#_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:AbstractSite}) = _transfer_right_gate(Γ1, gate, SiteSum.(Γ2))
-#_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
 
+_transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
+transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
 
-# _transfer_left_mpo(Γ1::GenericSite, op, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), op, Γ2)
-# _transfer_left_mpo(Γ1::SiteSum, op, Γ2::GenericSite) = _transfer_left_mpo(Γ1, op, SiteSum(Γ2))
-# _transfer_left_mpo(Γ1::GenericSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
-# _transfer_left_mpo(Γ1::SiteSum, Γ2::GenericSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
-_transfer_left_mpo(Γ1, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
-_transfer_left_mpo(Γ1) = _transfer_left_mpo(Γ1, Γ1)
-
-function _transfer_left_mpo(Γ1, op, Γ2)
-    Ts = [__transfer_left_mpo(Γ1site, opsite, Γ2site) for Γ1site in sites(Γ1), opsite in sites(op), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
-function _transfer_left_mpo(Γ1, Γ2)
-    Ts = [__transfer_left_mpo(Γ1site, Γ2site) for Γ1site in sites(Γ1), Γ2site in sites(Γ2)]
-    return _apply_transfer_matrices(Ts)
-end
-
-# function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
-#     N1 = length(Γ1)
-#     N2 = length(Γ2)
-#     Ts = [_transfer_left_mpo(Γ1[n1], op, Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
-#     N1 = length(Γ1)
-#     N2 = length(Γ2)
-#     Ts = [_transfer_left_mpo(Γ1[n1], Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
-#     return _apply_transfer_matrices(Ts)
-# end
-# function _transfer_left_mpo(Γ1::SiteSum)
-#     N1 = length(Γ1)
-#     Ts = [_transfer_left_mpo(Γ1[n1], Γ1[n2]) for n1 in 1:N1, n2 in 1:N1]
-#     return _apply_transfer_matrices(Ts)
-# end
-
-
-
-# function _transfer_left_mpo(Γ::AbstractSite)
-#     Ts = [_transfer_left_mpo(block) for block in blocks(Γ)]
-# end
-
-
-#TODO: replace with Blockdiagonals.jl or BlockArrays.jl.
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
     last = 0
@@ -160,49 +97,47 @@ function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     end
     return tens
 end
-function _split_vector(v, s::Matrix{Int})
-    N1, N2 = size(s)
-    tens = Matrix{Vector{eltype(v)}}(undef, size(s))
-    last = 0
-    for n2 in 1:N2
-        for n1 in 1:N1
-            next = last + s[n1, n2]
-            tens[n1, n2] = v[last+1:next]
-            last = next
-        end
-    end
-    return tens
-end
-function _split_vector(v, s::Array{Int,3})
-    N1, N2, N3 = size(s)
-    tens = Array{Vector{eltype(v)},3}(undef, size(s))
-    last = 0
-    for n3 in 1:N3
-        for n2 in 1:N2
-            for n1 in 1:N1
-                next = last + s[n1, n2, n3]
-                tens[n1, n2, n3] = v[last+1:next]
-                last = next
-            end
-        end
-    end
-    return tens
-end
+# function _split_vector(v, s::Matrix{Int})
+#     N1, N2 = size(s)
+#     tens = Matrix{Vector{eltype(v)}}(undef, size(s))
+#     last = 0
+#     for n2 in 1:N2
+#         for n1 in 1:N1
+#             next = last + s[n1, n2]
+#             tens[n1, n2] = v[last+1:next]
+#             last = next
+#         end
+#     end
+#     return tens
+# end
+# function _split_vector(v, s::Array{Int,3})
+#     N1, N2, N3 = size(s)
+#     tens = Array{Vector{eltype(v)},3}(undef, size(s))
+#     last = 0
+#     for n3 in 1:N3
+#         for n2 in 1:N2
+#             for n1 in 1:N1
+#                 next = last + s[n1, n2, n3]
+#                 tens[n1, n2, n3] = v[last+1:next]
+#                 last = next
+#             end
+#         end
+#     end
+#     return tens
+# end
 function _split_vector(v, s::Array{NTuple{N,Int},K}) where {N,K}
     ranges = size(s)
     tens = Array{Array{eltype(v),N},K}(undef, ranges)
     last = 0
-    println("V:", length(v))
-    println("sizes:", s)
     for ns in Base.product((1:r for r in ranges)...)
         next = last + prod(s[ns...])
-        println(ns)
-        println("S: ", s[ns...])
         tens[ns...] = reshape(v[last+1:next], s[ns...])
         last = next
     end
     return tens
 end
+_split_vector(v, s::Dims) = reshape(v, s...)
+
 function _join_tensor(tens)
     reduce(vcat, tens)
 end
@@ -214,15 +149,22 @@ function boundaryconditions(mps::MPSSum)
     @assert length(union(bcs)) == 1
     return bcs[1]
 end
-
-function boundary(::OpenBoundary, mps::MPSSum, side::Symbol)
+#,LazyProduct{<:Any,<:Any,<:MPOSum}
+function boundary(::OpenBoundary, mps::Union{MPSSum}, side::Symbol)
     if side == :right
-        return fill(one(eltype(mps.scalings)), length(mps.scalings))
+        return BlockBoundaryVector([boundary(OpenBoundary(), mps.states[k], :right) for k in 1:length(mps.states)])
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return mps.scalings
+        # v=[mps.scalings[k] .* boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)]
+        # println.(typeof.(v))
+        # println("ASD")
+        # bvs = BlockBoundaryVector.(v)
+        # println.(bvs)
+        # println.(eltype.(BlockBoundaryVector.(v)))
+        # println(BlockBoundaryVector(v))
+        return BlockBoundaryVector([mps.scalings[k] * boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)])
     end
 end
 
@@ -232,14 +174,14 @@ function dense(mpss::MPSSum{<:NTuple{<:Any,<:LCROpenMPS{T}},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
 end
 
 function LCROpenMPS(mpss::MPSSum{<:Any,<:AbstractSite{T},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
 end
 
 # function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}
@@ -262,7 +204,7 @@ end
 
 function dense(sitesum::SiteSum{Tup,T}) where {Tup,T}
     sites = dense.(sitesum.sites)
-    sizes = size.(sitesum.sites)
+    sizes = size.(sites)
     d = sizes[1][2] #Maybe check that all sites have the same physical dim?
     DL = sum([s[1] for s in sizes])
     DR = sum([s[3] for s in sizes])
@@ -278,7 +220,8 @@ function dense(sitesum::SiteSum{Tup,T}) where {Tup,T}
     end
     return GenericSite(newsite, ispurification(sitesum))
 end
-
+Base.convert(::Type{<:GenericSite}, site::SiteSum) = dense(site)
+GenericSite(s::SiteSum) = dense(s)
 dense(s::GenericSite) = s
 
 function dense(sitesum::SiteSum{<:NTuple{<:Any,OrthogonalLinkSite},T}) where {T}
@@ -298,19 +241,16 @@ end
 
 Base.vec(site::LinkSite) = vec(diag(data(site)))
 
+# function transfer_matrix_bond(sites::SiteSum)
+#     Λ1s = transfer_matrix_bond_dense.(sites.sites)
+#     #println(Λ1s)
+#     #println( reduce(vcat,vec.(Λ1s)))
+#     return LinkSite(vec(reduce(vcat, Array.(Λ1s))))
+# end
 
-transfer_matrix_bond(mps::MPSSum, site::Integer, dir::Symbol) = transfer_matrix_bond(mps[site],dir)
-function transfer_matrix_bond(sites::SiteSum, dir::Symbol)
-    Λ1s = transfer_matrix_bond_dense.(sites.sites, dir)
-    #println(Λ1s)
-    #println( reduce(vcat,vec.(Λ1s)))
-    return LinkSite(vec(reduce(vcat, Array.(Λ1s))))
-end
-
-transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer, dir::Symbol) where N = I
+# transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:NTuple{N,<:GenericSite},<:Any}}, site::Integer) where N = IdentityTransferMatrix
 #transfer_matrix_bond(mps::MPSSum{<:NTuple{<:Any,<:LCROpenMPS},<:Any}, site::Integer, dir::Symbol) = I
-transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},<:Any}, dir::Symbol) = I
-transfer_matrix_bond_dense(mps::SiteSum, dir::Symbol) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
-
+# transfer_matrix_bond(mps::SiteSum{<:NTuple{<:Any,<:GenericSite},T}) where T = I #IdentityTransferMatrix(T)
+# transfer_matrix_bond_dense(mps::SiteSum) = LinkSite(vec(reduce(vcat, Array.(transfer_matrix_bond_dense.(mps.sites,dir)))))
 
 iscanonical(sites::SiteSum) = all(iscanonical.(sites.sites))
