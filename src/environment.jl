@@ -1,4 +1,3 @@
-
 # abstract type AbstractBoundaryVector{T,N} <: AbstractArray{T,N} end
 # struct BoundaryVector{T,N} <: AbstractBoundaryVector{T,N}
 #     data::Array{T,N}
@@ -17,6 +16,7 @@ data(bv::Union{BlockBoundaryVector}) = bv.data
 Base.:*(x::Number, v::T) where {T<:Union{BlockBoundaryVector}} = BlockBoundaryVector(x * data(v))
 Base.:*(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = x * v
 Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = inv(x) * v
+
 
 # Base.iterate(v::Union{BlockBoundaryVector,BoundaryVector}, state) = iterate(data(v),state)
 # Base.iterate(v::Union{BlockBoundaryVector,BoundaryVector}) = iterate(data(v))
@@ -44,6 +44,7 @@ Base.similar(v::BlockBoundaryVector, ::Type{S}, dims::Dims) where {S} = BlockBou
 # Base.similar(v::B, ::Type{S}, dims::Dims) where {S,B<:Union{<:BlockBoundaryVector,<:BoundaryVector}} = B(similar(data(v), S, dims))
 # Base.similar(v::BoundaryVector, s::Type{S}) where S = similar(data(v),s)
 Base.copy(v::B) where {B<:Union{BlockBoundaryVector}} = B(copy.(v))
+
 # Base.copy(v::BoundaryVector) = BoundaryVector(copy(data(v)))
 # Base.copyto!(dest::BlockBoundaryVector, v::BlockBoundaryVector) = BlockBoundaryVector(copy.(data(v)))
 # Base.copyto!(dest::BoundaryVector, v::BoundaryVector) = BoundaryVector(copy(data(v)))
@@ -71,6 +72,7 @@ end
 function LinearAlgebra.axpby!(x::Number, v::BlockBoundaryVector, β::Number, w::BlockBoundaryVector)
     BlockBoundaryVector([axpby!(x, sv, β, sw) for (sv, sw) in zip(data(v), data(w))])
 end
+
 
 ###
 
