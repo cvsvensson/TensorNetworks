@@ -25,27 +25,41 @@ boundary(::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = tensor_produ
 
 boundary(::OpenBoundary, lp::LazyProduct, side::Symbol) = tensor_product((boundary(OpenBoundary(), mp, side) for mp in (lp.mpos..., lp.mps))...)
 
-# function boundary(csites::NTuple{<:Any,Union{<:AbstractMPS,MPSSum,MPOSum}}, sites::NTuple{<:Any,Union{<:AbstractMPS,MPSSum,MPOSum}}, side::Symbol)
-    
-#     BlockBoundaryVector([boundary(cs, ss,site) for (cs, ss) in Base.product(Base.product(states.(csites)...), Base.product(states.(s)...))])
-#     if side == :right
-#         return tensor_product(BlockBoundaryVector.([boundary(OpenBoundary(), mps.states[k], :right) for k in 1:length(mps.states)...])...)::BlockBoundaryVector
-#     else
-#         if side !== :left
-#             @warn "No direction chosen for the boundary vector. Defaulting to :left"
-#         end
-#         return tensor_product(BlockBoundaryVector.([mps.scalings[k] .* boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)])...)::BlockBoundaryVector
-#     end
-# end
+function boundary(csites::Tuple, s::Tuple, side::Symbol)
+    stateitr = Base.product(Base.product(states.(csites)...), Base.product(states.(s)...))
+    scaleitr = Base.product(Base.product(scaling.(csites)...), Base.product(scaling.(s)...))
+    println(typeof(collect(scaleitr)))
+    println(size(scaleitr))
+    println(collect(scaleitr))
+    println(collect(Base.product(scaling.(s)...)))
+    println(scaling.(csites))
+    vecs = [prod(cscale) * prod(scale) * boundary_dense(cs, ss, side) for ((cs, ss), (cscale, scale)) in zip(stateitr, scaleitr)]
+    BlockBoundaryVector(vecs)
+end
+states(mps::MPSSum) = mps.states
+states(mpo::MPOSum) = mpo.mpos
+states(mps::Union{AbstractMPS,AbstractMPO}) = [mps]
+states(mps::LazyProduct) = (states.(mps.mpos)..., states(mps.mps))
+scaling(mps::MPSSum) = mps.scalings
+scaling(mpo::MPOSum) = mpo.scalings
+scaling(mps::Union{AbstractMPS,AbstractMPO}) = [one(numtype(mps))]
+scaling(mps::LazyProduct) = (scaling.(mps.mpos)..., scaling(mps.mps))
+statesscaling(mps::MPSSum) = zip(mps.states, mps.scalings)
+statesscaling(mpo::MPOSum) = zip(mpo.mpos, mpo.scalings)
+statesscaling(mps::Union{AbstractMPS,AbstractMPO}) = [(mps, one(numtype(mps)))]
 
-function boundary(csites::Tuple, sites::Tuple, side::Symbol)
+
+function boundary_dense(csites::Tuple, sites::Tuple, side::Symbol)
     K = promote_type(numtype.(sites)...)
-    newcsites2 = foldl(_split_lazy, csites, init = ())
-    newsites2 = foldr(_split_lazy, sites, init = ())
-    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
-    scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
+    # println.(numtype.(sites))
+    @assert (K) <: Number "Error: K is not a number, $K"
+    newcsites3 = foldl(_split_lazy, csites, init=())
+    newsites3 = foldr(_split_lazy, sites, init=())
+    # cscale, newcsites3 = foldl(_remove_identity, newcsites2, init=(one(K), ()))
+    # scale, newsites3 = foldr(_remove_identity, newsites2, init=(one(K), ()))
     #println.(typeof.(newcsites3))
-    T = (scale * cscale) * boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
+    # final_scale = side==:left ? (scale * cscale) : one(K)
+    T = boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
     return T#::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any,<:Any}}
 end
 
@@ -54,7 +68,7 @@ end
 #     return (data(g) ≈ 1 ? 1 : 0) * rhos[1]
 # end
 function boundary(::InfiniteBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol)
-    _, rhos = transfer_spectrum(cmpss, mpss, reverse_direction(side), nev = 1)
+    _, rhos = transfer_spectrum(cmpss, mpss, reverse_direction(side), nev=1)
     return canonicalize_eigenoperator(rhos[1])
 end
 
@@ -71,7 +85,7 @@ end
 
 function expectation_value(mps::AbstractMPS{GenericSite}, op, site::Integer)
     mps = set_center(mps, site)
-    return expectation_value(mps, op, site, iscanonical = true)
+    return expectation_value(mps, op, site, iscanonical=true)
 end
 
 function apply_identity_layer(::OpenBoundary, mpsin::AbstractMPS{GenericSite}; kwargs...)

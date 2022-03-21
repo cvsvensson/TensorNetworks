@@ -170,13 +170,6 @@ end
 # numtype(::UMPS{T}) where {T} = T
 # numtype(::CentralUMPS{T}) where {T} = T
 # numtype(::OpenMPS{T}) where {T} = T
-numtype(ms...) = promote_type(numtype.(ms)...)
-numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
-
-sites(mps::LCROpenMPS) = mps.Γ
-sites(mps::UMPS) = mps.Γ
-sites(mps::CentralUMPS) = mps.Γ
-sites(mps::OpenMPS) = mps.Γ
 
 abstract type BoundaryCondition end
 struct OpenBoundary <: BoundaryCondition end
@@ -221,17 +214,21 @@ abstract type AbstractFiniteEnvironment <: AbstractEnvironment end
 # struct BoundaryVector{T,N} <: AbstractArray{T,N}
 #     data::Array{T,N}
 # end
-struct BlockBoundaryVector{T,N,B} #<: AbstractArray{Array{T,N},N}
-    data::B
+struct BlockBoundaryVector{T,N} #<: AbstractArray{Array{T,N},N}
+    data::Array{Array{T,N},N}
     function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
         bv = Array{Array{T,N},N}(undef, (1 for k in 1:N)...)
         bv[1] = v
-        return new{T,1,Array{Array{T,N},N}}(bv)
+        return new{T,N}(bv)
     end
-    function BlockBoundaryVector(v::Array{<:Any,N}) where {N}
-        T = promote_type(eltype.(v)...)
-        new{T,N,typeof(v)}(v)
+    function BlockBoundaryVector(v::Array{Array{T,N},N}) where {T,N}
+        #T = promote_type(eltype.(v)...)
+        new{T,N}(v)
     end
+    # function BlockBoundaryVector(vecs...)
+    #     T = promote_type(eltype.(vecs)...)
+    #     new{T,length(vecs),typeof(vecs)}(vecs)
+    # end
 end
 # function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
 #     bv = Array{Array{T,N},N}(undef, (1 for k in 1:N)...)
@@ -319,3 +316,29 @@ struct MPOSum{MPOs<:Tuple,Num} <: AbstractMPO{Num}
         new{typeof(mpos),Num}(mpos, scalings)
     end
 end
+
+struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
+    data::T
+    dim::Int
+    function ScaledIdentityMPOsite(scaling::T, dim) where {T<:Number}
+        new{T}(scaling, dim)
+    end
+end
+
+struct ScaledIdentityMPO{T} <: AbstractMPO{T}
+    data::T
+    length::Int
+    dim::Int
+    function ScaledIdentityMPO(scaling::T, n::Integer, dim) where {T<:Number}
+        new{T}(scaling, n, dim)
+    end
+end
+
+numtype(ms...) = promote_type(numtype.(ms)...)
+numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
+numtype(::ScaledIdentityMPOsite{T}) where T = T 
+
+sites(mps::LCROpenMPS) = mps.Γ
+sites(mps::UMPS) = mps.Γ
+sites(mps::CentralUMPS) = mps.Γ
+sites(mps::OpenMPS) = mps.Γ

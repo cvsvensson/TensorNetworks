@@ -55,19 +55,12 @@ Base.copy(mpo::MPO) = MPO(copy.(mpo), copy(mpo.boundary))
 
 Base.setindex!(mpo::MPO, v, i::Integer) = mpo.data[i] = v
 
-struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
-    data::T
-    dim::Int
-    function ScaledIdentityMPOsite(scaling::T, dim) where {T<:Number}
-        new{T}(scaling, dim)
-    end
-end
+
 data(site::ScaledIdentityMPOsite) = site.data
+data(site::ScaledIdentityMPOsite,dir::Symbol) = site.data
+
 IdentityMPOsite(d) = ScaledIdentityMPOsite(true, d)
 sites(s::ScaledIdentityMPOsite) = [s]
-# MPOsite(s::ScaledIdentityMPOsite) = s
-# MPOsite{K}(s::ScaledIdentityMPOsite) where {K} = ScaledIdentityMPOsite{K}(data(s))
-#Base.length(mpo::ScaledIdentityMPOsite) = 1
 Base.size(mpo::ScaledIdentityMPOsite) = (1, mpo.dim, mpo.dim, 1)
 function Base.size(mpo::ScaledIdentityMPOsite, i::Integer)
     if i == 1 || i == 4
@@ -76,6 +69,8 @@ function Base.size(mpo::ScaledIdentityMPOsite, i::Integer)
         return mpo.dim
     end
 end
+Base.copy(mpo::ScaledIdentityMPO) = ScaledIdentityMPO(mpo.data, length(mpo), mpo.dim)
+Base.copy(mpo::ScaledIdentityMPOsite) = ScaledIdentityMPOsite(copy(mpo.data), copy(mpo.dim))
 
 LinearAlgebra.ishermitian(mpo::ScaledIdentityMPOsite) = isreal(mpo.data)
 isunitary(mpo::ScaledIdentityMPOsite) = data(mpo)' * data(mpo) ≈ 1
@@ -100,18 +95,10 @@ function Base.getindex(g::ScaledIdentityMPOsite, I::Vararg{Int,4})
     return data(g) * val
 end
 
-struct ScaledIdentityMPO{T} <: AbstractMPO{T}
-    data::T
-    length::Int
-    dim::Int
-    function ScaledIdentityMPO(scaling::T, n::Integer, dim) where {T<:Number}
-        new{T}(scaling, n, dim)
-    end
-end
 Base.IndexStyle(::Type{<:ScaledIdentityMPO}) = IndexLinear()
-Base.getindex(g::ScaledIdentityMPO{Bool}, i::Integer) = g.data * IdentityMPOsite(g.dim)
-Base.getindex(g::ScaledIdentityMPO, i::Integer) = g.data^(1 / length(g)) * IdentityMPOsite(g.dim)
-Base.getindex(g::ScaledIdentityMPO, I) = g.data^(1 / length(g)) * fill(IdentityMPOsite(g.dim), length(I))
+Base.getindex(g::ScaledIdentityMPO{Bool}, i::Integer) = IdentityMPOsite(g.dim)
+Base.getindex(g::ScaledIdentityMPO, i::Integer) = IdentityMPOsite(g.dim)
+Base.getindex(g::ScaledIdentityMPO, I) = fill(IdentityMPOsite(g.dim), length(I))
 data(g::ScaledIdentityMPO) = g.data
 sites(g::ScaledIdentityMPO) = g[1:length(g)]
 
@@ -175,14 +162,14 @@ Base.:*(mpo::MPO, mps::AbstractMPS) where {MPO<:AbstractMPO} = LazyProduct((mpo,
 Base.:*(mpo::MPO, mps::LazyProduct) where {MPO<:AbstractMPO} = LazyProduct((mpo, mps.mpos...), mps.mps)
 Base.:*(mpo::MPO, mps::MPSSum) where {MPO<:AbstractMPO} = mapreduce(k -> mps.scalings[k] * mpo * mps.states[k], +, 1:length(mps.states))
 Base.:*(mpo::MPOSum, mps::AbstractMPS) = mapreduce(sm -> sm[1] * (sm[2] * mps), +, zip(mpo.mpos, mpo.scalings))
-Base.:*(mpo::MPOSum, mps::MPSSum) = mapreduce(os -> os[1][1]*os[2][1] * (os[1][2] * os[2][2]), +, Base.product(zip(mpo.mpos, mpo.scalings),zip(mps.states,mps.scalings)))
+Base.:*(mpo::MPOSum, mps::MPSSum) = mapreduce(os -> os[1][1] * os[2][1] * (os[1][2] * os[2][2]), +, Base.product(zip(mpo.mpos, mpo.scalings), zip(mps.states, mps.scalings)))
 
 
 truncation(lp::LazyProduct) = truncation(lp.mps)
 Base.length(lp::LazyProduct) = length(lp.mps)
 Base.eltype(lp::LazyProduct) = eltype(lp.mps)
-Base.getindex(lp::LazyProduct, i::Integer) = mapfoldr(x -> x[i], *, lp.mpos, init = lp.mps[i])
-Base.getindex(lp::LazyProduct, I...) = mapfoldr(x -> x[I...], .*, lp.mpos, init = lp.mps[I...])
+Base.getindex(lp::LazyProduct, i::Integer) = mapfoldr(x -> x[i], *, lp.mpos, init=lp.mps[i])
+Base.getindex(lp::LazyProduct, I...) = mapfoldr(x -> x[I...], .*, lp.mpos, init=lp.mps[I...])
 
 Base.size(lp::LazyProduct) = size(lp.mps)
 #boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
@@ -190,15 +177,15 @@ boundaryconditions(mps::LazyProduct) = boundaryconditions(mps.mps)
 Base.error(lp::LazyProduct) = error(lp.mps)
 Base.copy(lp::LazyProduct) = LazyProduct(copy.(lp.mpos), copy(lp.mps))
 
-function LCROpenMPS(lp::LazyProduct; center = 1, method = :qr)
-    Γ = to_left_right_orthogonal(dense.(lp[1:end]), center = center, method = method)
-    LCROpenMPS(Γ, truncation = truncation(lp), error = error(lp))
+function LCROpenMPS(lp::LazyProduct; center=1, method=:qr)
+    Γ = to_left_right_orthogonal(dense.(lp[1:end]), center=center, method=method)
+    LCROpenMPS(Γ, truncation=truncation(lp), error=error(lp))
 end
 
 struct LazySiteProduct{T<:Number,S,N} <: AbstractSite{T,N}
     sites::S
     function LazySiteProduct(sites...)
-        new{promote_type(eltype.(sites)...),typeof(sites), length(size(sites[end]))}(sites)
+        new{promote_type(eltype.(sites)...),typeof(sites),length(size(sites[end]))}(sites)
     end
 end
 Base.show(io::IO, lp::LazySiteProduct) =
@@ -217,6 +204,7 @@ Base.:*(o::MPOSiteSum, site::Union{AbstractSite,AbstractMPOsite}) = mapreduce(s 
 function dense(lp::LazySiteProduct)
     foldr(multiply, lp.sites)
 end
+multiply(op::ScaledIdentityMPOsite, site::GenericSite) = data(op) * site
 function multiply(op::MPOsite, site::GenericSite)
     sop = size(op)
     ss = size(site)
@@ -273,7 +261,7 @@ Base.:-(mpo::AbstractMPO, mpo2::AbstractMPO) = mpo + (-1) * mpo2
 
 Base.IndexStyle(::Type{<:MPOSum}) = IndexLinear()
 Base.getindex(sum::MPOSum, i::Integer) = MPOSiteSum(map(mpo -> mpo[i], sum.mpos))
-Base.getindex(sum::MPOSum, I...) = (mapfoldr(mpo -> mpo[I...], .+ , sum.mpos))
+Base.getindex(sum::MPOSum, I...) = (mapfoldr(mpo -> mpo[I...], .+, sum.mpos))
 
 Base.getindex(sum::MPOSiteSum, i::Integer) = sum.sites[i]
 
@@ -314,7 +302,7 @@ function dense(mpo::MPOSum)
     @tensor left[:] := scalings[-1, 1] * data(sites[1])[1, -2, -3, -4]
     sites[1] = MPOsite(left)
     scalings = reshape(mpo.scalings, 1, length(mpo.scalings))
-    sites[end] = MPOsite(sum(data(sites[end]), dims = 4))
+    sites[end] = MPOsite(sum(data(sites[end]), dims=4))
     MPO(sites)
 end
 
@@ -330,14 +318,19 @@ function boundary(::OpenBoundary, mpo::MPO, side::Symbol)
     end
 end
 
+function boundary(::OpenBoundary, mpo::ScaledIdentityMPO{T}, side::Symbol) where {T}
+    T[]
+end
+
 function boundary(::OpenBoundary, mpo::MPOSum, side::Symbol)
+    println.([boundary(OpenBoundary(), m, :right) for m in mpo.mpos if !(typeof(m) <: ScaledIdentityMPO)])
     if side == :right
-        return BlockBoundaryVector([boundary(OpenBoundary(), m, :right) for m in mpo.mpos])
+        return BlockBoundaryVector([boundary(OpenBoundary(), m, :right) for m in mpo.mpos if !(typeof(m) <: ScaledIdentityMPO)])
     else
         if side !== :left
             @warn "No direction chosen for the boundary vector. Defaulting to :left"
         end
-        return BlockBoundaryVector([s * boundary(OpenBoundary(), m, :left) for (s, m) in zip(mpo.scalings, mpo.mpos)])
+        return BlockBoundaryVector([s * boundary(OpenBoundary(), m, :left) for (s, m) in zip(mpo.scalings, mpo.mpos) if !(typeof(m) <: ScaledIdentityMPO)])
     end
 end
 # boundary(mpos::MPOSum) = reduce(vcat, [s*boundary(mpo) for (mpo,s) in zip(mpos.mpos,mpos.scalings)])
@@ -347,7 +340,7 @@ boundary(::ScaledIdentityMPO{T}) where {T} = [one(T)]
 """
 gives the mpo corresponding to a*mpo1 + b*mpo2.
 """
-function addmpos(mpo1, mpo2, a, b, Dmax, tol = 0) #FIXME
+function addmpos(mpo1, mpo2, a, b, Dmax, tol=0) #FIXME
     L = length(mpo1)
     d = size(mpo1[1])[2]
     T = promote_type(eltype(eltype(mpo1)), eltype(eltype(mpo2)))
@@ -406,9 +399,7 @@ Naive multiplication of mpos. Multiplies the bond dimensions.
 multiply(mpo1::MPO, mpo2::MPO) = MPO([multiply(s1, s2) for (s1, s2) in zip(mpo1, mpo2)], kron(boundary(OpenBoundary(), mpo1, :left), boundary(OpenBoundary(), mpo2, :left)))
 multiply(mpo1::MPOSum, mpo2::MPOSum) = MPOSum(Tuple([multiply(m1, m2) for (m1, m2) in Base.product(mpo1.mpos, mpo2.mpos)]), vec([s1 * s2 for (s1, s2) in Base.product(mpo1.scalings, mpo2.scalings)]))
 #multiplyMPOs(mpo1::MPOSum, mpo2::MPO) = MPO([s1 * s2 for (s1, s2) in zip(mpo1, mpo2)], kron(mpo1.boundary,mpo2.boundary))
-transfer_matrix_bond(::AbstractMPOsite) = I
-# transfer_matrix_bond(mpo::MPOsite{T}) where T = IdentityTransferMatrix(T,(size(mpo,1),size(mpo,4)))
-# transfer_matrix_bond(mpo::MPOSiteSum{T}) where T = IdentityTransferMatrix(T,(blocksizes(size(mpo,1)),(blocksizes(size(mpo,4)))
+# transfer_matrix_bond(::AbstractMPOsite) = I
 
 
 function Matrix(mpo::MPO)

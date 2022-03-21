@@ -57,7 +57,7 @@ Base.setindex!(v::Union{BlockBoundaryVector}, value, i::Vararg{Int,N}) where {N}
 # LinearAlgebra.norm(v::BoundaryVector) = norm(data(v))
 
 LinearAlgebra.dot(v::BlockBoundaryVector, w::BlockBoundaryVector) = mapreduce(dot, +, v.data, w.data)
-LinearAlgebra.norm(v::BlockBoundaryVector) = sqrt(mapreduce(x -> norm(x)^2, +, v))
+LinearAlgebra.norm(v::BlockBoundaryVector) = sqrt(mapreduce(x -> norm(x)^2, +, data(v)))
 
 #TODO: Implement the rest of the operations necessary for eigsolve
 ###
@@ -158,32 +158,32 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
     end
     return env
 end
-function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
-    T = numtype(mps1, mps2)
-    Ts = data(mpo) * transfer_matrices((mps1,), (mps2,), reverse_direction(dir))
-    V = boundary((mps1,), (mps2,), dir)
-    N = length(mps1)
-    env = Vector{typeof(V)}(undef, N)
-    if dir == :left
-        itr = 1:1:N
-        s = 1
-    elseif dir == :right
-        itr = N:-1:1
-        s = 3
-    else
-        @error "In environment: choose direction :left or :right"
-    end
-    #Vsize(k) = (size(mps1[k],s), size(mps2[k],s))
-    for k in itr
-        env[k] = V#reshape(V, size(mps1[k], s), size(mps2[k], s))
-        if k != itr[end]
-            V = Ts[k] * V
-        end
-    end
-    return env
-end
+# function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
+#     T = numtype(mps1, mps2)
+#     Ts = data(mpo) * transfer_matrices((mps1,), (mps2,), reverse_direction(dir))
+#     V = boundary((mps1,), (mps2,), dir)
+#     N = length(mps1)
+#     env = Vector{typeof(V)}(undef, N)
+#     if dir == :left
+#         itr = 1:1:N
+#         s = 1
+#     elseif dir == :right
+#         itr = N:-1:1
+#         s = 3
+#     else
+#         @error "In environment: choose direction :left or :right"
+#     end
+#     #Vsize(k) = (size(mps1[k],s), size(mps2[k],s))
+#     for k in itr
+#         env[k] = V#reshape(V, size(mps1[k], s), size(mps2[k], s))
+#         if k != itr[end]
+#             V = Ts[k] * V
+#         end
+#     end
+#     return env
+# end
 
-halfenvironment(mps1::AbstractMPS, mps2::AbstractMPS, dir::Symbol) = halfenvironment(mps1, IdentityMPO(length(mps1)), mps2, dir)
+# halfenvironment(mps1::AbstractMPS, mps2::AbstractMPS, dir::Symbol) = halfenvironment(mps1, IdentityMPO(length(mps1)), mps2, dir)
 halfenvironment(mps::AbstractMPS, mpo::AbstractMPO, dir::Symbol) = halfenvironment(mps, mpo, mps, dir)
 halfenvironment(mps::AbstractMPS, dir::Symbol) = halfenvironment(mps, IdentityMPO(length(mps)), mps, dir)
 
@@ -198,9 +198,9 @@ function environment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     end
 end
 
-environment(mps1::AbstractMPS, mps2::AbstractMPS) = environment(mps1, IdentityMPO(length(mps1)), mps2)
+# environment(mps1::AbstractMPS, mps2::AbstractMPS) = environment(mps1, IdentityMPO(length(mps1)), mps2)
 environment(mps::AbstractMPS, mpo::AbstractMPO) = environment(mps, mpo, mps)
-environment(mps::AbstractMPS) = environment(mps, IdentityMPO(length(mps)), mps)
+# environment(mps::AbstractMPS) = environment(mps, IdentityMPO(length(mps)), mps)
 
 # function update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::AbstractMPOsite, mps2::AbstractSite, site::Integer)
 #     site == length(env) || (env.L[site+1] = reshape(transfer_matrix(mps1, mpo, mps2, :right)*vec(env.L[site]), size(mps1,3), size(mpo,4), size(mps2,3)))
@@ -242,46 +242,57 @@ update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::Abs
 # end
 
 #TODO check performance and compare to matrix multiplication and Tullio
-local_mul(envL, envR, mposite::MPOsite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
-local_mul(envL, envR, mposite::MPOsite, site::GenericSite) = GenericSite(local_mul(envL, envR, mposite, data(site)), ispurification(site))
-local_mul(envL, envR, mposite::MPOsite, site::OrthogonalLinkSite) = local_mul(envL, envR, mposite, site.Λ1 * site * site.Λ2)
+local_mul_dense(envL, envR, mposite::MPOsite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
+local_mul_dense(envL, envR, mposite::MPOsite, site::GenericSite) = GenericSite(local_mul_dense(envL, envR, mposite, data(site)), ispurification(site))
+local_mul_dense(envL, envR, mposite::MPOsite, site::OrthogonalLinkSite) = local_mul_dense(envL, envR, mposite, site.Λ1 * site * site.Λ2)
 
 #TODO implement these for SiteSum
-local_mul(envL, envR, site::Array{<:Number,3}) = @tensor temp[:] := envL[-1, 1] * site[1, -2, 2] * envR[-3, 2]
-local_mul(envL, envR, site::GenericSite) = GenericSite(local_mul(envL, envR, data(site)), ispurification(site))
-local_mul(envL, envR, site::OrthogonalLinkSite) = local_mul(envL, envR, site.Λ1 * site.Γ * site.Λ2)
+local_mul_dense(envL, envR, site::Array{<:Number,3}) = @tensor temp[:] := envL[-1, 1] * site[1, -2, 2] * envR[-3, 2]
+local_mul_dense(envL, envR, site::GenericSite) = GenericSite(local_mul_dense(envL, envR, data(site)), ispurification(site))
+local_mul_dense(envL, envR, site::OrthogonalLinkSite) = local_mul_dense(envL, envR, site.Λ1 * site.Γ * site.Λ2)
 
 #local_mul(envL, envR, site::SiteSum) = local_mul(envL, envR, dense(site))
 
-function local_mul(envL, envR, mpo, lp::LazySiteProduct)
+function local_mul_dense(envL, envR, mpo, lp::LazySiteProduct)
     local_mul(envL, envR, mpo, lp.sites...)
 end
-function local_mul(envL, envR, lp::LazySiteProduct)
+function local_mul_dense(envL, envR, lp::LazySiteProduct)
     local_mul(envL, envR, lp.sites...)
 end
 
-function local_mul(envL, envR, sitesum::SiteSum)
+function local_mul(envL, envR, site)
     @assert size(data(envL)) == size(data(envR)) "Error: Left and right environments have different dimensions"
     itr = Base.product(1:size(data(envL), 1), 1:size(data(envL), 2))
-    arrays = sum([data(local_mul(data(envL)[n1, n2], data(envR)[n1, n2], sites(sitesum)[n2])) for (n1, n2) in itr], dims = 2)
-    SiteSum(Tuple(GenericSite.(arrays, ispurification(sitesum))))
+    arrays = sum([data(local_mul_dense(data(envL)[n1, n2], data(envR)[n1, n2], sites(site)[n2])) for (n1, n2) in itr], dims=2)
+    #SiteSum(Tuple(GenericSite.(arrays, ispurification(sitesum))))
+    reduce(+, GenericSite.(arrays, ispurification(sitesum)))
 end
 
-function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site::SiteSum) where {T}
+function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site) where {T}
     @assert size(data(envL)) == size(data(envR)) "Error: Left and right environments have different dimensions"
     sizes = size(data(envL))
     itr = Base.product((1:s for s in sizes)...)
-    arrays = sum([data(local_mul(data(envL)[ns...], data(envR)[ns...], sites(mpo)[ns[2]], sites(site)[ns[3]])) for ns in itr], dims = 2:3)
-    SiteSum(Tuple(GenericSite.(arrays, ispurification(site))))
+    arrays = sum([data(local_mul_dense(data(envL)[ns...], data(envR)[ns...], sites(mpo)[ns[2]], sites(site)[ns[3]])) for ns in itr], dims=2:3)
+    #SiteSum(Tuple(GenericSite.(arrays, ispurification(site))))
+    reduce(+, GenericSite.(arrays, ispurification(site)))
 end
-function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site::GenericSite) where {T}
-    outsite = local_mul(envL, envR, mpo, SiteSum(site))
-    GenericSite(outsite)
+# function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site::GenericSite) where {T}
+#     outsite = local_mul(envL, envR, mpo, SiteSum(site))
+#     GenericSite(outsite)
+# end
+
+function local_mul_dense(envL, envR, mpo::ScaledIdentityMPOsite, site) where {T}
+    return data(mpo) * local_mul_dense(envL, envR, site)
+    #GenericSite(outsite)
 end
 
 function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}
     f(v::BlockBoundaryVector) = BlockBoundaryVector([T * t for (T, t) in zip(Ts, data(v))])
     f_adjoint(v::BlockBoundaryVector) = BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
+    if prod(size(Ts)) == 1
+        f(v) = Ts[1] * v
+        f_adjoint(v) = Ts[1] * v
+    end
     return TransferMatrix(f, f_adjoint, promote_type(eltype.(Ts)...), ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))
 end
 

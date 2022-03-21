@@ -65,7 +65,7 @@ Base.:-(mps::AbstractMPS, mps2::AbstractMPS) = mps + (-1) * mps2
 Base.IndexStyle(::Type{<:MPSSum}) = IndexLinear()
 SiteSum(sites...) = SiteSum(sites)
 Base.getindex(sum::MPSSum, i::Integer) = SiteSum((state[i] for state in sum.states)...)
-Base.getindex(sum::MPSSum, I...) = (mapfoldr(mps -> mps[I...], .+ , sum.states))
+Base.getindex(sum::MPSSum, I...) = (mapfoldr(mps -> mps[I...], .+, sum.states))
 
 #Base.getindex(sum::SiteSum, i::Integer) = sum.sites[i]
 #Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
@@ -81,10 +81,15 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
     return v
 end
 
-
-_transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
-transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
-
+#::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}
+function _transfer_left_mpo(csites::Tuple, s::Tuple)
+    itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
+    _apply_transfer_matrices([_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr])
+end
+function transfer_matrix_bond(csites::Tuple, s::Tuple)
+    itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
+    _apply_transfer_matrices([transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
+end
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
     last = 0
@@ -174,14 +179,14 @@ function dense(mpss::MPSSum{<:NTuple{<:Any,<:LCROpenMPS{T}},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation=truncation(mpss.states[1]), error=sum(error.(mpss.states)))
 end
 
 function LCROpenMPS(mpss::MPSSum{<:Any,<:AbstractSite{T},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation=truncation(mpss.states[1]), error=sum(error.(mpss.states)))
 end
 
 # function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}

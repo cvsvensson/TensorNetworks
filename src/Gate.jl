@@ -132,8 +132,6 @@ end
 
 auxillerate(gate::ScaledIdentityGate) = gate
 
-
-
 const gsx = Gate(sx)
 const gsy = Gate(sy)
 const gsz = Gate(sz)

@@ -11,6 +11,8 @@ using GenericSchur
 # using SparseArrays
 using SparseArrayKit
 using Tullio
+using Polynomials
+#using BlockArrays
 # using ProgressMeter
 
 # import Distributed.pmap

@@ -43,27 +43,34 @@ function test_ldos()
     mps = randomLCROpenMPS(N, 2, D)
     ham = TensorNetworks.KitaevMPO(N, 1, 1, 0.0, 3)
     states, energy = DMRG(ham, mps)
-    println(energy)
-    ham2 = -energy * TensorNetworks.DenseIdentityMPO(N, 2) + ham
-    states2, energy2 = DMRG(ham2, mps)
-    states3, Emax = DMRG(-ham2, mps)
+    states2, energy2 = DMRG(-ham, mps)
+    ham2a = -energy * TensorNetworks.DenseIdentityMPO(N, 2) + ham
+    ham2b = -energy * TensorNetworks.IdentityMPO(N, 2) + ham
+    states2a, energy2a = DMRG(ham2a, mps)
+    states2b, energy2b = DMRG(ham2b, mps)
+    println((energy2a - energy2b) / (energy2a + energy2b))
+    println(abs(scalar_product(states2a, states2b)))
+    emax = -energy2
+    emin = energy
+    #states3, Emax = DMRG(-ham2, mps)
     #op = MPOsite(sx + sy*im)
-    ham3 = (ham2 / (-Emax))
-    ham3d = dense(ham2 / (-Emax))
-    @time mus1 = TensorNetworks.ldos(states, ham3, ham3, ham3)
-    @time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d)
+    w = (emax - emin)
+    mid = (emax + emin) / 2
+
+    rescaledHam = (mid / w) * TensorNetworks.IdentityMPO(N, 2) + ham / w
+    rescaledHamd = dense(rescaledHam)
+    @time mus1 = TensorNetworks.ldos(states, rescaledHam, rescaledHam, rescaledHam)
+    @time mus2 = TensorNetworks.ldos(states, rescaledHamd, rescaledHamd, rescaledHamd)
     return mus1, mus2
 end
 
 function jacksonkernel(M)
-    [((M-n+1)cos(π*n/(M+1)) + sin(π*n/(M+1))cot(π/(M+1)))/(M+1) for n in 0:M]
+    [((M - n + 1)cos(π * n / (M + 1)) + sin(π * n / (M + 1))cot(π / (M + 1))) / (M + 1) for n in 0:M]
 end
 
-using Polynomials
-
 function chebyshev(mus, gammas)
-    coeffs = 2*mus .* gammas
+    coeffs = 2 * mus .* gammas
     coeffs[1] /= 2
     p = ChebyshevT(coeffs)
-    return x-> p(x)/ (pi*sqrt(1-x^2))
+    return x -> p(x) / (pi * sqrt(1 - x^2))
 end
