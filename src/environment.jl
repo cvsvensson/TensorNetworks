@@ -133,6 +133,8 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
     T = numtype(mps1, mps2)
     Ts = transfer_matrices((mps1,), (mpo, mps2), reverse_direction(dir))
     V = boundary((mps1,), (mpo, mps2), dir)
+    println(typeof(mpo))
+    println(V)
     N = length(mps1)
     env = Vector{typeof(V)}(undef, N)
     if dir == :left
@@ -151,6 +153,10 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
         #env[k] = reshape(V, size(mps1[k], s1), size(mpo[k], s2), size(mps2[k], s1))
         # println(typeof(V))
         # println(typeof(env))
+        println("_")
+        println(size(V))
+        println(size(Ts[k],2))
+        println(size(Ts[k]*V))
         env[k] = V
         if k != itr[end]
             V = Ts[k] * V
@@ -277,6 +283,10 @@ end
 function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site::GenericSite) where {T}
     outsite = local_mul(envL, envR, mpo, SiteSum(site))
     GenericSite(outsite)
+end
+
+function local_mul(envL, envR, mpo::ScaledIdentityMPOsite{T}, site) where T
+    data(mpo)*local_mul(envL, envR, mpo, site)
 end
 
 function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}

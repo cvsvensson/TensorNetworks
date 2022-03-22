@@ -39,31 +39,54 @@ end
 
 function test_ldos()
     N = 10
-    D = 20
+    D = 10
+    Nmax = 20
     mps = randomLCROpenMPS(N, 2, D)
     ham = TensorNetworks.KitaevMPO(N, 1, 1, 0.0, 3)
     states, energy = DMRG(ham, mps)
     println(energy)
-    ham2 = -energy * TensorNetworks.DenseIdentityMPO(N, 2) + ham
-    states2, energy2 = DMRG(ham2, mps)
-    states3, Emax = DMRG(-ham2, mps)
+    ham2a = -energy * TensorNetworks.DenseIdentityMPO(N, 2) + ham
+    ham2b = -energy * TensorNetworks.IdentityMPO(N, 2) + ham
+    states2a, energy2a = DMRG(ham2a, mps)
+    states2b, energy2b = DMRG(ham2b, mps)
+    states3, e = DMRG(-ham2b, mps)
+    println(energy2a)
+    println(energy2b)
+    Emax = -e
+    Emin = energy
     #op = MPOsite(sx + sy*im)
-    ham3 = (ham2 / (-Emax))
-    ham3d = dense(ham2 / (-Emax))
-    @time mus1 = TensorNetworks.ldos(states, ham3, ham3, ham3)
-    @time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d)
-    return mus1, mus2
+    mid = (Emax+Emin)/2
+    w = Emax-Emin
+    ham3 = ham/w - mid*TensorNetworks.IdentityMPO(N, 2)
+    ham3d = dense(ham3)
+
+    function op(k, a)
+        idmpo = MPO([MPOsite(si) for k in 1:N])
+        op1 = copy(idmpo)
+        op1[k] = MPOsite(sx + a * 1im * sy)
+        return op1
+    end
+    #op_pairs = [(op(k1, 1), op(k1, -1)) for (k1, k2) in Base.product(1:N, 1:N)]
+    ops = [(op(k, 1), op(k, -1)) for k in 1:N]
+    gammas = jacksonkernel(Nmax - 1)
+    mus = [TensorNetworks.ldos(states, ham3, op1, op2, Nmax=20) for (op1, op2) in ops]
+    functions = [chebyshev(mu, gammas) for mu in mus]
+
+    #@time mus1 = TensorNetworks.ldos(states, ham3, ham3, ham3, Nmax=20)
+    #@time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d, Nmax=20)
+    #coeffs = chebyshev(mus,)
+    return mus, gammas, functions, mid, w
 end
 
 function jacksonkernel(M)
-    [((M-n+1)cos(π*n/(M+1)) + sin(π*n/(M+1))cot(π/(M+1)))/(M+1) for n in 0:M]
+    [((M - n + 1)cos(π * n / (M + 1)) + sin(π * n / (M + 1))cot(π / (M + 1))) / (M + 1) for n in 0:M]
 end
 
 using Polynomials
 
 function chebyshev(mus, gammas)
-    coeffs = 2*mus .* gammas
+    coeffs = 2 * mus .* gammas
     coeffs[1] /= 2
     p = ChebyshevT(coeffs)
-    return x-> p(x)/ (pi*sqrt(1-x^2))
+    return x -> p(x) / (pi * sqrt(1 - x^2))
 end

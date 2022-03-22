@@ -5,7 +5,7 @@ Base.eltype(::AbstractTransferMatrix{T}) where {T} = T
 Base.size(T::AbstractTransferMatrix) = T.sizes
 Base.size(T::AbstractTransferMatrix, i) = T.sizes[i]
 Base.:*(T::TransferMatrix, v) = T.f(v)
-Base.:*(T::CompositeTransferMatrix, v) = foldr(*, T.maps, init = v)
+Base.:*(T::CompositeTransferMatrix, v) = foldr(*, T.maps, init=v)
 Base.adjoint(T::TransferMatrix) = TransferMatrix(T.fa, T.f, eltype(T), (size(T, 2), size(T, 1)))
 Base.adjoint(T::CompositeTransferMatrix{<:Any,K,S}) where {K,S} = CompositeTransferMatrix{K,S}(reverse(adjoint.(T.maps)))
 
@@ -20,15 +20,15 @@ Base.:*(T1::TransferMatrix, T2::CompositeTransferMatrix) = CompositeTransferMatr
 Base.:*(T1::CompositeTransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1.maps..., T2))
 
 function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix}, v)
-    out = foldr(*, Ts, init = v)
+    out = foldr(*, Ts, init=v)
     return out
 end
 function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,Array{NTuple{K,Int},N}}}}, v) where {T,N,K}
-    out = foldr(*, Ts, init = v)
+    out = foldr(*, Ts, init=v)
     return out::BlockBoundaryVector{T,N}
 end
 function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,NTuple{N,Int}}}}, v) where {T,N}
-    out = foldr(*, Ts, init = v)
+    out = foldr(*, Ts, init=v)
     return out::Array{T,N}
 end
 # Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
@@ -141,11 +141,11 @@ _transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::AbstractMatr
     @tensor out[:] := d1[-1, 1] * d2[-2, 2] * d3 * R[1, 2, -3]
 
 function transfer_matrix_bond(csites::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}}, sites::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
-    K = promote_type(eltype.(sites)...)
-    newcsites2 = foldl(_split_lazy, csites, init = ())
-    newsites2 = foldr(_split_lazy, sites, init = ())
-    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
-    scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
+    K = promote_type(eltype.(sites)..., eltype.(csites)...)
+    newcsites2 = foldl(_split_lazy, csites, init=())
+    newsites2 = foldr(_split_lazy, sites, init=())
+    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init=(one(K), ()))
+    scale, newsites3 = foldr(_remove_identity, newsites2, init=(one(K), ()))
     f(R) = (scale * cscale) * _transfer_matrix_bond(R, data.(link.(newcsites3, :left))..., data.(link.(newsites3, :left))...)
     odims = tuple((size(x, 1) for x in newcsites3)..., (size(x, 1) for x in newsites3)...)
     idims = tuple((size(x)[end] for x in newcsites3)..., (size(x)[end] for x in newsites3)...)
@@ -241,10 +241,10 @@ __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,8}, Γ1::Array{<:Any,3},
 
 function _transfer_left_mpo(Γ1::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct,ScaledIdentityMPOsite}}, Γ2::NTuple{<:Any,Union{ScaledIdentityMPOsite,GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
     K = promote_type(eltype.(Γ1)..., eltype.(Γ2)...)
-    Γ12 = foldl(_split_lazy, Γ1, init = ())
-    Γ22 = foldr(_split_lazy, Γ2, init = ())
-    cscale, Γ13 = foldl(_remove_identity, Γ12, init = (one(K), ()))
-    scale, Γ23 = foldr(_remove_identity, Γ22, init = (one(K), ()))
+    Γ12 = foldl(_split_lazy, Γ1, init=())
+    Γ22 = foldr(_split_lazy, Γ2, init=())
+    cscale, Γ13 = foldl(_remove_identity, Γ12, init=(one(K), ()))
+    scale, Γ23 = foldr(_remove_identity, Γ22, init=(one(K), ()))
     g1 = data.(Γ13, :right)
     g2 = data.(Γ23, :right)
     f(R) = __transfer_left_mpo(R, conj.(g1)..., g2...)
@@ -328,7 +328,7 @@ function __transfer_left_mpo(mposites::NTuple{N,MPOsite}) where {N}
         return reshape(temp, prod(rs))
     end
     map = LinearMapAA(contract, adjoint_contract, (prod(ls), prod(rs));
-        idim = rs, odim = ls, T = promote_type(eltype.(mposites)...))
+        idim=rs, odim=ls, T=promote_type(eltype.(mposites)...))
     #LinearMap{promote_type(eltype.(mposites)...)}(contract, adjoint_contract, prod(ls), prod(rs))
     return map
 end
@@ -442,12 +442,12 @@ function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::G
 end
 
 #Sites 
-transfer_matrix(site::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix((site,), (site,), dir)
-transfer_matrix(site1::AbstractSite, site2::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix((site1,), (site2,), dir)
-transfer_matrix(site::AbstractSite, op::AbstractMPOsite, dir::Symbol = :left) = _local_transfer_matrix((site,), (op, site), dir)
-transfer_matrix(site1::AbstractSite, op::AbstractMPOsite, site2::AbstractSite, dir::Symbol = :left) = _local_transfer_matrix((site1,), (op, site2), dir)
-transfer_matrix(site::AbstractSite, op::ScaledIdentityGate, dir::Symbol = :left) = data(op) * transfer_matrix(site, dir)
-transfer_matrix(site1::AbstractSite, op::ScaledIdentityGate, site2::AbstractSite, dir::Symbol = :left) = data(op) * transfer_matrix(site1, site2, dir)
+transfer_matrix(site::AbstractSite, dir::Symbol=:left) = _local_transfer_matrix((site,), (site,), dir)
+transfer_matrix(site1::AbstractSite, site2::AbstractSite, dir::Symbol=:left) = _local_transfer_matrix((site1,), (site2,), dir)
+transfer_matrix(site::AbstractSite, op::AbstractMPOsite, dir::Symbol=:left) = _local_transfer_matrix((site,), (op, site), dir)
+transfer_matrix(site1::AbstractSite, op::AbstractMPOsite, site2::AbstractSite, dir::Symbol=:left) = _local_transfer_matrix((site1,), (op, site2), dir)
+transfer_matrix(site::AbstractSite, op::ScaledIdentityGate, dir::Symbol=:left) = data(op) * transfer_matrix(site, dir)
+transfer_matrix(site1::AbstractSite, op::ScaledIdentityGate, site2::AbstractSite, dir::Symbol=:left) = data(op) * transfer_matrix(site1, site2, dir)
 
 _purify_site(site::AbstractMPOsite, purify::Bool) = purify ? auxillerate(site) : site
 _purify_site(site, purify::Bool) = site
@@ -476,7 +476,7 @@ _remove_identity(s::Union{ScaledIdentityMPOsite,ScaledIdentityMPO}, (x, ss)::Tup
 _remove_identity((x, ss)::Tuple{<:Number,Tuple}, s) = (x, (ss..., s))
 _remove_identity((x, ss)::Tuple{<:Number,Tuple}, s::Union{ScaledIdentityMPOsite,ScaledIdentityMPO}) = (conj(data(s)) * x, ss)
 
-function __local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol = :left)
+function __local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol=:left)
     if direction == :left
         return _transfer_left_mpo(csites, sites)
     else
@@ -487,9 +487,9 @@ function __local_transfer_matrix(csites::Tuple, sites::Tuple, direction::Symbol 
     end
 end
 
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol = :left) = data(op) * transfer_matrix(site1, direction)
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * transfer_matrix(site1, site2, direction)
-function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol=:left) = data(op) * transfer_matrix(site1, direction)
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = data(op) * transfer_matrix(site1, site2, direction)
+function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
     @assert length(site1) == length(site2) == operatorlength(op)
     if ispurification(site1[1])
         @assert ispurification(site2[1])
@@ -519,33 +519,33 @@ end
 #     return T
 # end
 
-transfer_matrix(site::AbstractSite, op::Union{AbstractSquareGate{<:Any,2},Matrix}; direction::Symbol = :left) = transfer_matrix((site, MPOsite(op)), direction)
+transfer_matrix(site::AbstractSite, op::Union{AbstractSquareGate{<:Any,2},Matrix}; direction::Symbol=:left) = transfer_matrix((site, MPOsite(op)), direction)
 
-function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
     @assert length(sites1) == length(sites2)
     n = operatorlength(op)
     return [_local_transfer_matrix(sites1[k:k+n-1], op, sites2[k:k+n-1], direction) for k in 1:length(sites1)+1-n]
 end
-function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol = :left)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, direction::Symbol=:left)
     n = operatorlength(op)
     return [_local_transfer_matrix(sites1[k:k+n-1], op, sites1[k:k+n-1], direction) for k in 1:length(sites1)+1-n]
 end
 
-function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
     @assert length(sites1) == length(sites2)
     return [_local_transfer_matrix((sites1[k],), (op, sites2[k]), direction) for k in 1:length(sites1)]
 end
-function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, direction::Symbol = :left)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, direction::Symbol=:left)
     return [_local_transfer_matrix((sites1[k],), (op, sites1[k]), direction) for k in 1:length(sites1)]
 end
 
-function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left)
     @assert length(sites1) == length(sites2) == length(ops)
     N = length(sites1)
     ns = operatorlength.(ops)
     return [_local_transfer_matrix(sites1[k:k+ns[k]-1], op, sites2[k:k+ns[k]-1], direction) for (k, op) in enumerate(ops) if !(k + ns[k] - 1 > N)]
 end
-function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, direction::Symbol = :left)
+function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, direction::Symbol=:left)
     @assert length(sites1) == length(ops)
     N = length(sites1)
     # Ts = LinearMap{numtype(sites1)}[]
@@ -573,11 +573,11 @@ function transfer_matrices(csites::NTuple{N1,AbstractVector}, sites::NTuple{N2,A
     return [_local_transfer_matrix(getindex.(csites, n), getindex.(sites, n), direction) for n in 1:N]
 end
 
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractSquareGate, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) where {T}
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractSquareGate, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) where {T}
     return _local_transfer_matrix(sites1, op, sites2, direction)
     #return foldr(*, Ts)::CompositeTransferMatrix{<:NTuple{<:Any,AbstractTransferMatrix{T,<:Any}},T,<:NTuple{2,<:Any}} #Products of many linear operators cause long compile times!
 end
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::Symbol = :left) where {T}
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::Symbol=:left) where {T}
     Ts = transfer_matrices((sites1,), (sites1,), direction)
     N = length(sites1)
     # sites = direction == :left ? sites1[1:N] : reverse(sites1)
@@ -598,7 +598,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::S
     #return foldr(*, Ts)::CompositeTransferMatrix{_A,T,_B}
 end
 
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, sites2::AbstractVector{<:AbstractSite{T}}, direction::Symbol = :left) where {T}
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, sites2::AbstractVector{<:AbstractSite{T}}, direction::Symbol=:left) where {T}
     Ts = transfer_matrices((sites1,), (sites2,), direction)
     N = length(sites1)
     # sites = direction == :left ? sites1[1:N] : reverse(sites1)
@@ -611,7 +611,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, sites2::Abst
     return CompositeTransferMatrix{T}(Tuple(Ts))
 end
 
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractMPO, direction::Symbol = :left) where {T}
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractMPO, direction::Symbol=:left) where {T}
     Ts = transfer_matrices((sites1,), (op, sites1), direction)
     N = length(Ts)
     if N > 20
@@ -623,7 +623,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::Abstract
     return CompositeTransferMatrix{T}(Tuple(Ts)) #Products of many linear operators cause long compile times!
 end
 
-function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractSquareGate, direction::Symbol = :left) where {T}
+function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractSquareGate, direction::Symbol=:left) where {T}
     Ts = transfer_matrices(sites1, op, sites1, direction)
     N = length(Ts)
     if N > 20

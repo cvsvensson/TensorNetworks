@@ -26,7 +26,7 @@ boundary(::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = tensor_produ
 boundary(::OpenBoundary, lp::LazyProduct, side::Symbol) = tensor_product((boundary(OpenBoundary(), mp, side) for mp in (lp.mpos..., lp.mps))...)
 
 # function boundary(csites::NTuple{<:Any,Union{<:AbstractMPS,MPSSum,MPOSum}}, sites::NTuple{<:Any,Union{<:AbstractMPS,MPSSum,MPOSum}}, side::Symbol)
-    
+
 #     BlockBoundaryVector([boundary(cs, ss,site) for (cs, ss) in Base.product(Base.product(states.(csites)...), Base.product(states.(s)...))])
 #     if side == :right
 #         return tensor_product(BlockBoundaryVector.([boundary(OpenBoundary(), mps.states[k], :right) for k in 1:length(mps.states)...])...)::BlockBoundaryVector
@@ -39,11 +39,11 @@ boundary(::OpenBoundary, lp::LazyProduct, side::Symbol) = tensor_product((bounda
 # end
 
 function boundary(csites::Tuple, sites::Tuple, side::Symbol)
-    K = promote_type(numtype.(sites)...)
-    newcsites2 = foldl(_split_lazy, csites, init = ())
-    newsites2 = foldr(_split_lazy, sites, init = ())
-    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
-    scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
+    K = promote_type(numtype.(sites)..., numtype.(csites)...)
+    newcsites2 = foldl(_split_lazy, csites, init=())
+    newsites2 = foldr(_split_lazy, sites, init=())
+    cscale, newcsites3 = foldl(_remove_identity, newcsites2, init=(one(K), ()))
+    scale, newsites3 = foldr(_remove_identity, newsites2, init=(one(K), ()))
     #println.(typeof.(newcsites3))
     T = (scale * cscale) * boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
     return T#::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any,<:Any}}
@@ -54,7 +54,7 @@ end
 #     return (data(g) ≈ 1 ? 1 : 0) * rhos[1]
 # end
 function boundary(::InfiniteBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol)
-    _, rhos = transfer_spectrum(cmpss, mpss, reverse_direction(side), nev = 1)
+    _, rhos = transfer_spectrum(cmpss, mpss, reverse_direction(side), nev=1)
     return canonicalize_eigenoperator(rhos[1])
 end
 
@@ -71,7 +71,7 @@ end
 
 function expectation_value(mps::AbstractMPS{GenericSite}, op, site::Integer)
     mps = set_center(mps, site)
-    return expectation_value(mps, op, site, iscanonical = true)
+    return expectation_value(mps, op, site, iscanonical=true)
 end
 
 function apply_identity_layer(::OpenBoundary, mpsin::AbstractMPS{GenericSite}; kwargs...)
