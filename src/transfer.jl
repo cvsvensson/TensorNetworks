@@ -129,7 +129,7 @@ _transfer_matrix_bond(R::Array{<:Number,2}, diags::Vararg{AbstractMatrix,2}) = @
 _transfer_matrix_bond(R::Array{<:Number,3}, diags::Vararg{AbstractMatrix,3}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * diags[3][-3, 3] * R[1, 2, 3]
 _transfer_matrix_bond(R::Array{<:Number,4}, diags::Vararg{AbstractMatrix,4}) = @tensor out[:] := diags[1][-1, 1] * diags[2][-2, 2] * diags[3][-3, 3] * diags[4][-4, 4] * R[1, 2, 3, 4]
 
-_transfer_matrix_bond(R::Array{<:Number,N}, ds::Vararg{Union{Number,Bool},K}) where {N,K} = prod(ds) * R
+_transfer_matrix_bond(R::Array{<:Number,N}, ds::Vararg{<:Union{<:Number,<:Bool},K}) where {N,K} = prod(ds) * R
 _transfer_matrix_bond(R::Array{<:Number,N}, d1::Union{Number,Bool}) where {N} = d1 * R
 _transfer_matrix_bond(R::Array{<:Number,2}, d1::AbstractMatrix, d2::Union{Number,Bool}) = @tensor out[:] := d1[-1, 1] * d2 * R[1, -2]
 _transfer_matrix_bond(R::Array{<:Number,2}, d1::Union{Number,Bool}, d2::AbstractMatrix) = @tensor out[:] := d2[-2, 2] * d1 * R[-1, 2]
@@ -139,14 +139,16 @@ _transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::Union{Number
     @tensor out[:] := d1[-1, 1] * d2 * d3[-3, 3] * R[1, -2, 3]
 _transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::AbstractMatrix, d3::Union{Number,Bool}) =
     @tensor out[:] := d1[-1, 1] * d2[-2, 2] * d3 * R[1, 2, -3]
-
-function transfer_matrix_bond(csites::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}}, sites::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
+#::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}}
+function transfer_matrix_bond_dense(csites, sites)
     K = promote_type(eltype.(sites)..., eltype.(csites)...)
     newcsites2 = foldl(_split_lazy, csites, init=())
     newsites2 = foldr(_split_lazy, sites, init=())
     cscale, newcsites3 = foldl(_remove_identity, newcsites2, init=(one(K), ()))
     scale, newsites3 = foldr(_remove_identity, newsites2, init=(one(K), ()))
-    f(R) = (scale * cscale) * _transfer_matrix_bond(R, data.(link.(newcsites3, :left))..., data.(link.(newsites3, :left))...)
+    # println("ASD")
+    # println.(typeof.(newsites3))
+    f(R) = _transfer_matrix_bond(R, data.(link.(newcsites3, :left))..., data.(link.(newsites3, :left))...)
     odims = tuple((size(x, 1) for x in newcsites3)..., (size(x, 1) for x in newsites3)...)
     idims = tuple((size(x)[end] for x in newcsites3)..., (size(x)[end] for x in newsites3)...)
     return TransferMatrix(f, f, K, (odims, idims))
@@ -238,20 +240,21 @@ __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,8}, Γ1::Array{<:Any,3},
                                            mpo1[cl1, u, c1, -2] * mpo2[cl2, c1, c2, -3] * mpo3[cl3, c2, c3, -4] *
                                            mpo4[cl4, c3, c4, -5] * mpo5[cl5, c4, c5, -5] * mpo6[cl6, c5, d, -6] *
                                            Γ2[bl, d, -8]
-
-function _transfer_left_mpo(Γ1::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct,ScaledIdentityMPOsite}}, Γ2::NTuple{<:Any,Union{ScaledIdentityMPOsite,GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}})
+#::NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct,ScaledIdentityMPOsite}}
+function _transfer_left_mpo_dense(Γ1::Tuple, Γ2::Tuple)
     K = promote_type(eltype.(Γ1)..., eltype.(Γ2)...)
+    #println.(typeof.(Γ2))
     Γ12 = foldl(_split_lazy, Γ1, init=())
     Γ22 = foldr(_split_lazy, Γ2, init=())
     cscale, Γ13 = foldl(_remove_identity, Γ12, init=(one(K), ()))
     scale, Γ23 = foldr(_remove_identity, Γ22, init=(one(K), ()))
     g1 = data.(Γ13, :right)
     g2 = data.(Γ23, :right)
-    f(R) = __transfer_left_mpo(R, conj.(g1)..., g2...)
-    fadj(L) = __transfer_left_mpo_adjoint(L, g1..., conj.(g2)...)
+    f(R) = (cscale * scale) * __transfer_left_mpo(R, conj.(g1)..., g2...)
+    fadj(L) = conj(cscale * scale) * __transfer_left_mpo_adjoint(L, g1..., conj.(g2)...)
     odims = tuple((size(x, 1) for x in Γ13)..., (size(x, 1) for x in Γ23)...)
     idims = tuple((size(x)[end] for x in Γ13)..., (size(x)[end] for x in Γ23)...)
-    return (cscale * scale)TransferMatrix(f, fadj, K, (odims, idims))
+    return (cscale * scale) * TransferMatrix(f, fadj, K, (odims, idims))
 end
 
 # function _transfer_left_mpo(Γ1::Tuple{GenericSite{T}}, Γ2::Tuple{GenericSite{K}}) where {T,K}

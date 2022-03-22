@@ -11,8 +11,11 @@ function ldos(mps, hamiltonian, op1, op2; Nmax=100, prec=1e-8, maxiter=50, shift
     #norms = Vector{eltype(mps[1])}(undef, Nmax)
     #println(typeof(dense((op2 * mps)[1])))
     #println(typeof(((op2 * mps)[1]))) #TODO Replace getindex for LazyProduct
-    t0 = LCROpenMPS(op2 * mps)
-    t1 = LCROpenMPS(H * t0)
+    t0 = (op2 * mps)
+    t1 = (H * t0)
+    println("n0:", norm(t0))
+    println("n1:", norm(t1))
+    println("n2:", norm(2 * (H * t1) ))
     μs[1] = matrix_element(t0, op1, t0)
     μs[2] = matrix_element(t1, op1, t0)
     println(μs[1])
@@ -28,6 +31,9 @@ function ldos(mps, hamiltonian, op1, op2; Nmax=100, prec=1e-8, maxiter=50, shift
         #println(k)
         #println.(typeof.(t1.states))
         newstate = (rec(t1, t0))
+        # println("n",norm(newstate))
+        # println("n2", norm(2 * (H * t1) - t0))
+        println("sp: ", scalar_product(2 * (H * t1) - t0, newstate) / (norm(2 * (H * t1) - t0) * norm(newstate)))
         #println("dense:", dense(newstate))
         μs[k] = matrix_element(mps, op1, newstate)
         println(μs[k])
@@ -38,7 +44,7 @@ function ldos(mps, hamiltonian, op1, op2; Nmax=100, prec=1e-8, maxiter=50, shift
 end
 
 function test_ldos()
-    N = 10
+    N = 20
     D = 10
     Nmax = 20
     mps = randomLCROpenMPS(N, 2, D)
@@ -55,11 +61,15 @@ function test_ldos()
     Emax = -e
     Emin = energy
     #op = MPOsite(sx + sy*im)
-    mid = (Emax+Emin)/2
-    w = Emax-Emin
-    ham3 = ham/w - mid*TensorNetworks.IdentityMPO(N, 2)
-    ham3d = dense(ham3)
-
+    mid = (Emax + Emin) / 2
+    w = (Emax - Emin)
+    eps = 0.1
+    wstar = w #try different choices
+    wprime = 1 - eps / 2
+    a = wstar / (2 * wprime)
+    ham3 = ham / a - (wprime + Emin / a) * TensorNetworks.IdentityMPO(N, 2)
+    #ham3d = TensorNetworks.dense(ham3);
+    #ham3d2 = ham/a - (wprime + Emin/a)* TensorNetworks.DenseIdentityMPO(N, 2)
     function op(k, a)
         idmpo = MPO([MPOsite(si) for k in 1:N])
         op1 = copy(idmpo)
@@ -72,8 +82,8 @@ function test_ldos()
     mus = [TensorNetworks.ldos(states, ham3, op1, op2, Nmax=20) for (op1, op2) in ops]
     functions = [chebyshev(mu, gammas) for mu in mus]
 
-    #@time mus1 = TensorNetworks.ldos(states, ham3, ham3, ham3, Nmax=20)
-    #@time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d, Nmax=20)
+    # @time mus1 = TensorNetworks.ldos(states, ham3, ham3, ham3, Nmax=20)
+    # @time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d, Nmax=20)
     #coeffs = chebyshev(mus,)
     return mus, gammas, functions, mid, w
 end

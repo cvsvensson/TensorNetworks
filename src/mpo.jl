@@ -79,6 +79,7 @@ function Base.size(mpo::ScaledIdentityMPOsite, i::Integer)
     end
 end
 
+
 LinearAlgebra.ishermitian(mpo::ScaledIdentityMPOsite) = isreal(mpo.data)
 isunitary(mpo::ScaledIdentityMPOsite) = data(mpo)' * data(mpo) ≈ 1
 Base.:*(x::K, g::ScaledIdentityMPOsite) where {K<:Number} = ScaledIdentityMPOsite(x * data(g), g.dim)
@@ -167,10 +168,10 @@ auxillerate(mpo::MPO) = MPO(auxillerate.(mpo.data))
 #auxillerate(mpo::HermitianMPO) = HermitianMPO(auxillerate.(mpo.data))
 
 #TODO add density matrix compression of LazyProduct: https://tensornetwork.org/mps/algorithms/denmat_mpo_mps/
-struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPOs<:NTuple{<:Any,<:AbstractMPO}} <: AbstractMPS{SITE}
+struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPOs<:Tuple} <: AbstractMPS{SITE}
     mpos::MPOs
     mps::MPS
-    function LazyProduct(mpos::NTuple{<:Any,<:AbstractMPO}, mps::AbstractMPS)
+    function LazyProduct(mpos::Tuple, mps::AbstractMPS)
         new{typeof(mps),typeof(mapfoldr(x -> x[1], multiply, mpos, init = mps[1])),typeof(mpos)}(mpos, mps)
     end
 end
@@ -180,6 +181,7 @@ Base.:*(mpo::MPO, mps::LazyProduct) where {MPO<:AbstractMPO} = LazyProduct((mpo,
 Base.:*(mpo::MPO, mps::MPSSum) where {MPO<:AbstractMPO} = mapreduce(k -> mps.scalings[k] * mpo * mps.states[k], +, 1:length(mps.states))
 Base.:*(mpo::MPOSum, mps::AbstractMPS) = mapreduce(sm -> sm[1] * (sm[2] * mps), +, zip(mpo.mpos, mpo.scalings))
 Base.:*(mpo::MPOSum, mps::MPSSum) = mapreduce(os -> os[1][1] * os[2][1] * (os[1][2] * os[2][2]), +, Base.product(zip(mpo.mpos, mpo.scalings), zip(mps.states, mps.scalings)))
+Base.:*(mpo::MPOSum, mps::LazyProduct) = mapreduce(sm -> sm[1] * (sm[2] * mps), +, zip(mpo.mpos, mpo.scalings))
 
 
 truncation(lp::LazyProduct) = truncation(lp.mps)
@@ -344,8 +346,8 @@ function boundary(::OpenBoundary, mpo::MPOSum, side::Symbol)
     end
 end
 # boundary(mpos::MPOSum) = reduce(vcat, [s*boundary(mpo) for (mpo,s) in zip(mpos.mpos,mpos.scalings)])
-# boundary(mpo::MPO) = mpo.boundary
-# boundary(::ScaledIdentityMPO{T}) where {T} = [one(T)]
+boundary(mpo::MPO) = mpo.boundary
+boundary(mpo::ScaledIdentityMPO) = [data(mpo)]
 # function boundary(::OpenBoundary, mpo::ScaledIdentityMPO{T}, side::Symbol) where {T}
 #     side==:left ? [data(mpo)] : [one(T)]
 # end

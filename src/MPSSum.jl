@@ -82,8 +82,17 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
 end
 
 
-_transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
-transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
+# _transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
+# transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
+
+function _transfer_left_mpo(csites::Tuple, s::Tuple)
+    itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
+    _apply_transfer_matrices([_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr])
+end
+function transfer_matrix_bond(csites::Tuple, s::Tuple)
+    itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
+    _apply_transfer_matrices([transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
+end
 
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
@@ -97,34 +106,7 @@ function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     end
     return tens
 end
-# function _split_vector(v, s::Matrix{Int})
-#     N1, N2 = size(s)
-#     tens = Matrix{Vector{eltype(v)}}(undef, size(s))
-#     last = 0
-#     for n2 in 1:N2
-#         for n1 in 1:N1
-#             next = last + s[n1, n2]
-#             tens[n1, n2] = v[last+1:next]
-#             last = next
-#         end
-#     end
-#     return tens
-# end
-# function _split_vector(v, s::Array{Int,3})
-#     N1, N2, N3 = size(s)
-#     tens = Array{Vector{eltype(v)},3}(undef, size(s))
-#     last = 0
-#     for n3 in 1:N3
-#         for n2 in 1:N2
-#             for n1 in 1:N1
-#                 next = last + s[n1, n2, n3]
-#                 tens[n1, n2, n3] = v[last+1:next]
-#                 last = next
-#             end
-#         end
-#     end
-#     return tens
-# end
+
 function _split_vector(v, s::Array{NTuple{N,Int},K}) where {N,K}
     ranges = size(s)
     tens = Array{Array{eltype(v),N},K}(undef, ranges)

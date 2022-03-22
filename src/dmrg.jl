@@ -57,11 +57,7 @@ function effective_hamiltonian(mposite, hl, hr, orthvecs)
         #A = reshape(v, szmps)
         HA = local_mul(hl, hr, mposite, v)
         #overlap(o) = overlap2(o, v)
-        # println(size(HA))
-        # println(size(v))
-        # println(size.(orthvecs))
         OA = mapreduce(o -> overlap2(o, v), naivesum, orthvecs; init = zero(v))
-
         #OA = sum(overlap, orthvecs; init = zero(v))
         return naivesum(HA, OA)
     end

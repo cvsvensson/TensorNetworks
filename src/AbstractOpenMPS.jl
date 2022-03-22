@@ -37,17 +37,48 @@ boundary(::OpenBoundary, lp::LazyProduct, side::Symbol) = tensor_product((bounda
 #         return tensor_product(BlockBoundaryVector.([mps.scalings[k] .* boundary(OpenBoundary(), mps.states[k], :left) for k in 1:length(mps.states)])...)::BlockBoundaryVector
 #     end
 # end
+function boundary(csites::Tuple, s::Tuple, side::Symbol)
+    stateitr = Base.product(Base.product(states.(csites)...), Base.product(states.(s)...))
+    scaleitr = Base.product(Base.product(scaling.(csites)...), Base.product(scaling.(s)...))
+    vecs = [prod(cscale) * prod(scale) * boundary_dense(cs, ss, side) for ((cs, ss), (cscale, scale)) in zip(stateitr, scaleitr)]
+    BlockBoundaryVector(vecs)
+end
+states(mps::MPSSum) = mps.states
+states(mpo::MPOSum) = mpo.mpos
+states(mps::Union{AbstractMPS,AbstractMPO}) = [mps]
+states(mps::LazyProduct) = [mps]#(states.(mps.mpos)..., states(mps.mps))
+scaling(mps::MPSSum) = mps.scalings
+scaling(mpo::MPOSum) = mpo.scalings
+scaling(mps::Union{AbstractMPS,AbstractMPO}) = [one(numtype(mps))]
+scaling(mps::LazyProduct) = [one(numtype(mps))] #[(scaling.(mps.mpos)..., scaling(mps.mps))
+statesscaling(mps::MPSSum) = zip(mps.states, mps.scalings)
+statesscaling(mpo::MPOSum) = zip(mpo.mpos, mpo.scalings)
+statesscaling(mps::Union{AbstractMPS,AbstractMPO}) = [(mps, one(numtype(mps)))]
 
-function boundary(csites::Tuple, sites::Tuple, side::Symbol)
-    K = promote_type(numtype.(sites)..., numtype.(csites)...)
+
+function boundary_dense(csites::Tuple, sites::Tuple, side::Symbol)
+    K = promote_type(numtype.(sites)...)
+    # println.(numtype.(sites))
+    @assert (K) <: Number "Error: K is not a number, $K"
     newcsites2 = foldl(_split_lazy, csites, init=())
     newsites2 = foldr(_split_lazy, sites, init=())
     cscale, newcsites3 = foldl(_remove_identity, newcsites2, init=(one(K), ()))
     scale, newsites3 = foldr(_remove_identity, newsites2, init=(one(K), ()))
     #println.(typeof.(newcsites3))
-    T = (scale * cscale) * boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
+    final_scale = side==:left ? (scale * cscale) : one(K)
+    T = final_scale*boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
     return T#::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any,<:Any}}
 end
+# function boundary(csites::Tuple, sites::Tuple, side::Symbol)
+#     K = promote_type(numtype.(sites)..., numtype.(csites)...)
+#     newcsites2 = foldl(_split_lazy, csites, init=())
+#     newsites2 = foldr(_split_lazy, sites, init=())
+#     cscale, newcsites3 = foldl(_remove_identity, newcsites2, init=(one(K), ()))
+#     scale, newsites3 = foldr(_remove_identity, newsites2, init=(one(K), ()))
+#     #println.(typeof.(newcsites3))
+#     T = (scale * cscale) * boundary(boundaryconditions(csites[1]), newcsites3, newsites3, side)
+#     return T#::Union{Array{K,<:Any},BlockBoundaryVector{K,<:Any,<:Any}}
+# end
 
 # function boundary(::InfiniteBoundary, mps::AbstractMPS, g::ScaledIdentityMPO, mps2::AbstractMPS, side::Symbol)
 #     _, rhos = transfer_spectrum((mps,), (mps2,), reverse_direction(side), nev = 1)
