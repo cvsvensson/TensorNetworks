@@ -102,34 +102,6 @@ function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     end
     return tens
 end
-# function _split_vector(v, s::Matrix{Int})
-#     N1, N2 = size(s)
-#     tens = Matrix{Vector{eltype(v)}}(undef, size(s))
-#     last = 0
-#     for n2 in 1:N2
-#         for n1 in 1:N1
-#             next = last + s[n1, n2]
-#             tens[n1, n2] = v[last+1:next]
-#             last = next
-#         end
-#     end
-#     return tens
-# end
-# function _split_vector(v, s::Array{Int,3})
-#     N1, N2, N3 = size(s)
-#     tens = Array{Vector{eltype(v)},3}(undef, size(s))
-#     last = 0
-#     for n3 in 1:N3
-#         for n2 in 1:N2
-#             for n1 in 1:N1
-#                 next = last + s[n1, n2, n3]
-#                 tens[n1, n2, n3] = v[last+1:next]
-#                 last = next
-#             end
-#         end
-#     end
-#     return tens
-# end
 function _split_vector(v, s::Array{NTuple{N,Int},K}) where {N,K}
     ranges = size(s)
     tens = Array{Array{eltype(v),N},K}(undef, ranges)

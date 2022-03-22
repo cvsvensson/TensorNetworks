@@ -44,6 +44,7 @@ Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
 Base.size(mpo::AbstractMPO) = size(sites(mpo))
 operatorlength(mpo::AbstractMPO) = length(mpo)
 
+Base.convert(::Type{MPOsite{T}},s::MPOsite{K}) where {K,T} = MPOsite(Array{T,4}(s.data))
 function Base.:*(x::K, mpo::MPO) where {K<:Number}
     mpo2 = copy(mpo)
     mpo2[1] = x * mpo[1]

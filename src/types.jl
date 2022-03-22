@@ -293,11 +293,12 @@ struct MPSSum{MPSs<:Tuple,Site<:AbstractSite,Num} <: AbstractMPS{Site}
     states::MPSs
     scalings::Vector{Num}
     function MPSSum(mpss::Tuple, scalings::Vector{Num}) where {Num}
-        new{typeof(mpss),SiteSum{Tuple{eltype.(mpss)...},numtype(mpss...)},numtype(mpss...)}(Tuple(mpss), scalings)
+        T = promote_type(numtype.(mpss)...)
+        new{typeof(mpss),SiteSum{Tuple{eltype.(mpss)...},T},T}(Tuple(mpss), scalings)
     end
 end
 function MPSSum(mpss::Tuple)
-    MPSSum(mpss, fill(one(numtype(mpss...)), length(mpss)))
+    MPSSum(mpss, fill(one(promote_type(numtype.(mpss)...)), length(mpss)))
 end
 
 struct MPOSiteSum{S<:Tuple,T} <: AbstractMPOsite{T}
@@ -334,9 +335,13 @@ struct ScaledIdentityMPO{T} <: AbstractMPO{T}
     end
 end
 
-numtype(ms...) = promote_type(numtype.(ms)...)
+#numtype(ms::Vararg{<:AbstractMPS,Val{1}}) = promote_type(numtype(ms)...)
+#numtype(ms::Vararg{<:AbstractMPS,N}) where N = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
-numtype(::ScaledIdentityMPOsite{T}) where T = T 
+#numtype(::ScaledIdentityMPOsite{T}) where T = T 
+numtype(::AbstractMPOsite{T}) where T = T
+numtype(::AbstractMPO{T}) where T = T
+
 
 sites(mps::LCROpenMPS) = mps.Γ
 sites(mps::UMPS) = mps.Γ
