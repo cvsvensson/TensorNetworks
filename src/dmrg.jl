@@ -20,7 +20,7 @@ function DMRG(mpo, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROp
     println("E, var = ", E, ", ", var)
     #count = 1
     mpsout, Eout = do_sweep(mps,mpo,Henv,orthenv,direction,orth,E;kwargs...)
-    return mpsout::LCROpenMPS{T}, Eout
+    return mpsout::LCROpenMPS{T}, Eout::real(T)
 end
 function do_sweep(mps,mpo,Henv,orthenv,direction,orth,E; kwargs...)
     precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
@@ -119,6 +119,7 @@ function eigensite(site::S, mposite, hl, hr, orthvecs, prec) where S
     evals, evecs = eigsolve(heff, site, 1, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
     e::eltype(site) = evals[1]
     vecmin::S = evecs[1] #::Vector{eltype(hl)}
+    println(e)
     if !(isapprox(e, real(e), atol = prec))
         error("ERROR: complex eigenvalues: $e")
     end

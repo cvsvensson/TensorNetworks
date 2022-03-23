@@ -224,12 +224,12 @@ abstract type AbstractFiniteEnvironment <: AbstractEnvironment end
 struct BlockBoundaryVector{T,N,B} #<: AbstractArray{Array{T,N},N}
     data::B
     function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
-        bv = Array{Array{T,N},N}(undef, (1 for k in 1:N)...)
+        bv = Array{Array{T,N},N}(undef, fill(1,N)...)
         bv[1] = v
         return new{T,1,Array{Array{T,N},N}}(bv)
     end
     function BlockBoundaryVector(v::Array{<:Any,N}) where {N}
-        T = promote_type(eltype.(v)...)
+        T = numtype(v)
         new{T,N,typeof(v)}(v)
     end
 end
@@ -238,7 +238,7 @@ end
 #     bv[1] = v
 #     return BlockBoundaryVector(bv)
 # end
-
+numtype(::Array{<:Array{T}}) where T = T
 abstract type AbstractTransferMatrix{T,S} end
 struct TransferMatrix{F,Fa,T,S} <: AbstractTransferMatrix{T,S}
     f::F

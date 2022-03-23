@@ -55,6 +55,10 @@ statesscaling(mps::MPSSum) = zip(mps.states, mps.scalings)
 statesscaling(mpo::MPOSum) = zip(mpo.mpos, mpo.scalings)
 statesscaling(mps::Union{AbstractMPS,AbstractMPO}) = [(mps, one(numtype(mps)))]
 
+# function _filter_sites(csites::Tuple, sites::Tuple)
+
+
+# end
 
 function boundary_dense(csites::Tuple, sites::Tuple, side::Symbol)
     K = promote_type(numtype.(sites)...)

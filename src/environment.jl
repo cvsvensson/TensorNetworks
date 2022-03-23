@@ -1,22 +1,16 @@
-# abstract type AbstractBoundaryVector{T,N} <: AbstractArray{T,N} end
-# struct BoundaryVector{T,N} <: AbstractBoundaryVector{T,N}
-#     data::Array{T,N}
-# end
-# BoundaryVector(x::Number) = BoundaryVector([x])
 
 Base.vec(bv::BlockBoundaryVector) = reduce(vcat, vec.(bv.data))
 Base.conj(bv::BlockBoundaryVector) = BlockBoundaryVector(conj(data(bv)))
 #Base.convert(::Type{BlockBoundaryVector{T,N}},m::Array{<:Any,N}) where {T,N} = BlockBoundaryVector(m)
 
-# Base.length(bv::Union{BoundaryVector}) = length(data(bv))
-# Base.length(bv::Union{BlockBoundaryVector}) = prod(length.(data(bv)))
 data(bv::Union{BlockBoundaryVector}) = bv.data
-# BlockBoundaryVector(v::Array{T,N}) where {T,N} = BlockBoundaryVector(v)
 
 Base.:*(x::Number, v::T) where {T<:Union{BlockBoundaryVector}} = BlockBoundaryVector(x * data(v))
 Base.:*(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = x * v
 Base.:/(v::T, x::Number) where {T<:Union{BlockBoundaryVector}} = inv(x) * v
 
+# Base.isapprox(v::BlockBoundaryVector, w::BlockBoundaryVector) = all(isapprox(data(v), data(w)))
+Base.isapprox(v::BlockBoundaryVector, w::BlockBoundaryVector; kwargs...) = Base.isapprox(data(v), data(w); kwargs...)
 
 # Base.iterate(v::Union{BlockBoundaryVector,BoundaryVector}, state) = iterate(data(v),state)
 # Base.iterate(v::Union{BlockBoundaryVector,BoundaryVector}) = iterate(data(v))
@@ -212,7 +206,7 @@ function update_left_environment!(env::AbstractFiniteEnvironment, j::Integer, cs
 end
 function update_right_environment!(env::AbstractFiniteEnvironment, j::Integer, csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}}, sites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite}})
     #sr = [size(site)[1] for site in sites]
-    sr = size.(sites, 1)
+    #sr = size.(sites, 1)
     if j > 1
         env.R[j-1] = _local_transfer_matrix(csites, sites, :left) * env.R[j]
     end
@@ -238,12 +232,16 @@ update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::Abs
 # end
 local_mul_dense(envL, envR, mposite::MPOsite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
 local_mul_dense(envL, envR, mposite::MPOsite, site::GenericSite) = GenericSite(local_mul_dense(envL, envR, mposite, data(site)), ispurification(site))
-local_mul_dense(envL, envR, mposite::MPOsite, site::OrthogonalLinkSite) = local_mul_dense(envL, envR, mposite, site.Λ1 * site * site.Λ2)
+local_mul_dense(envL, envR, mposite::MPOsite, site::OrthogonalLinkSite) = local_mul_dense(envL, envR, mposite, GenericSite(site, :both))
 
-#TODO implement these for SiteSum
 local_mul_dense(envL, envR, site::Array{<:Number,3}) = @tensor temp[:] := envL[-1, 1] * site[1, -2, 2] * envR[-3, 2]
 local_mul_dense(envL, envR, site::GenericSite) = GenericSite(local_mul_dense(envL, envR, data(site)), ispurification(site))
-local_mul_dense(envL, envR, site::OrthogonalLinkSite) = local_mul_dense(envL, envR, site.Λ1 * site.Γ * site.Λ2)
+local_mul_dense(envL, envR, site::OrthogonalLinkSite) = local_mul_dense(envL, envR, GenericSite(site, :both))
+
+local_mul_dense(envL, envR, mposite1::MPOsite, mposite2::MPOsite, site::AbstractArray{<:Number,3}) =
+    @tensoropt (4, -1, 1, -3) temp[:] := envL[-1, 2, 3, 4] * data(mposite1)[2, -2, c, r2] * data(mposite2)[3, c, d, r3] * site[4, d, 1] * envR[-3, r2, r3, 1]
+local_mul_dense(envL, envR, mposite1::MPOsite, mposite2::MPOsite, site::GenericSite) = GenericSite(local_mul_dense(envL, envR, mposite1, mposite2, data(site)), ispurification(site))
+local_mul_dense(envL, envR, mposite1::MPOsite, mposite2::MPOsite, site::OrthogonalLinkSite) = local_mul_dense(envL, envR, mposite1, mposite2, GenericSite(site, :both))
 
 #local_mul(envL, envR, site::SiteSum) = local_mul(envL, envR, dense(site))
 
@@ -257,7 +255,7 @@ end
 function local_mul(envL, envR, site)
     @assert size(data(envL)) == size(data(envR)) "Error: Left and right environments have different dimensions"
     itr = Base.product(1:size(data(envL), 1), 1:size(data(envL), 2))
-    arrays = sum([data(local_mul_dense(data(envL)[n1, n2], data(envR)[n1, n2], sites(site)[n2])) for (n1, n2) in itr], dims=2)
+    arrays = sum([data(local_mul_dense(data(envL)[n1, n2], data(envR)[n1, n2], sites(site)[n2])) for (n1, n2) in itr], dims = 2)
     #SiteSum(Tuple(GenericSite.(arrays, ispurification(sitesum))))
     reduce(+, GenericSite.(arrays, ispurification(site)))
 end
@@ -266,7 +264,7 @@ function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3
     @assert size(data(envL)) == size(data(envR)) "Error: Left and right environments have different dimensions"
     sizes = size(data(envL))
     itr = Base.product((1:s for s in sizes)...)
-    arrays = sum([data(local_mul_dense(data(envL)[ns...], data(envR)[ns...], sites(mpo)[ns[2]], sites(site)[ns[3]])) for ns in itr], dims=2:3)
+    arrays = sum([data(local_mul_dense(data(envL)[ns...], data(envR)[ns...], sites(mpo)[ns[2]], sites(site)[ns[3]])) for ns in itr], dims = 2:3)
     #SiteSum(Tuple(GenericSite.(arrays, ispurification(site))))
     reduce(+, GenericSite.(arrays, ispurification(site)))
 end
@@ -275,10 +273,9 @@ end
 #     GenericSite(outsite)
 # end
 
-function local_mul_dense(envL, envR, mpo::ScaledIdentityMPOsite, site) where {T}
-    return data(mpo) * local_mul_dense(envL, envR, site)
-    #GenericSite(outsite)
-end
+local_mul_dense(envL, envR, mpo::ScaledIdentityMPOsite, site) = data(mpo) * local_mul_dense(envL, envR, site)
+local_mul_dense(envL, envR, mpo::ScaledIdentityMPOsite, mpo2, site) = data(mpo) * local_mul_dense(envL, envR, mpo2, site)
+local_mul_dense(envL, envR, mpo, mpo2::ScaledIdentityMPOsite, site) = data(mpo2) * local_mul_dense(envL, envR, mpo, site)
 
 function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}
     f(v::BlockBoundaryVector) = BlockBoundaryVector([T * t for (T, t) in zip(Ts, data(v))])

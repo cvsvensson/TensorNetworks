@@ -3,7 +3,6 @@
 """
     ldos()
 
-
 """
 function ldos(mps, hamiltonian, op1, op2; Nmax=100, prec=1e-8, maxiter=50, shifter=ShiftCenter)
     H = hamiltonian #TODO: implement rescalings
@@ -79,11 +78,11 @@ function test_ldos()
     #op_pairs = [(op(k1, 1), op(k1, -1)) for (k1, k2) in Base.product(1:N, 1:N)]
     ops = [(op(k, 1), op(k, -1)) for k in 1:N]
     gammas = jacksonkernel(Nmax - 1)
-    mus = [TensorNetworks.ldos(states, ham3, op1, op2, Nmax=20) for (op1, op2) in ops]
-    functions = [chebyshev(mu, gammas) for mu in mus]
+    # mus = [TensorNetworks.ldos(states, ham3, op1, op2, Nmax=20) for (op1, op2) in ops]
+    # functions = [chebyshev(mu, gammas) for mu in mus]
 
-    # @time mus1 = TensorNetworks.ldos(states, ham3, ham3, ham3, Nmax=20)
-    # @time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d, Nmax=20)
+    @time mus1 = TensorNetworks.ldos(states, ham3, ham3, ham3, Nmax=20)
+    @time mus2 = TensorNetworks.ldos(states, ham3d, ham3d, ham3d, Nmax=20)
     #coeffs = chebyshev(mus,)
     return mus, gammas, functions, mid, w
 end

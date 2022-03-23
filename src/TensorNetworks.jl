@@ -12,7 +12,7 @@ using GenericSchur
 using SparseArrayKit
 using Tullio
 # using ProgressMeter
-
+using Polynomials
 # import Distributed.pmap
 
 export TruncationArgs, identityMPS, MPOsite, MPO
