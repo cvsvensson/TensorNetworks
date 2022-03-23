@@ -179,7 +179,7 @@ end
     mps = randomOpenMPS(N, d, 1)
     env = environment(mps)
     @test length(env.L) == N == length(env.R)
-    @test env.L ≈ fill([1.0], N) ≈ env.R
+    @test all(env.L .≈ fill(TensorNetworks.BlockBoundaryVector([1.0]), N) .≈ env.R)
 
     D = 5
     mps = randomOpenMPS(N, d, D)

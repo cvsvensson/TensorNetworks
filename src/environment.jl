@@ -90,7 +90,7 @@ end
 # BoundaryVector(bvs::Vararg{Array,N}) where {N} = BoundaryVector(tensor_product(data.(bvs)...))
 # BlockBoundaryVector(bvs::Vararg{Array{T,N},N}) where {T<:Number,N} = BlockBoundaryVector(BlockBoundaryVector.(bvs)...)
 
-BlockBoundaryVector(v, s::Array{NTuple{N,Int},K}) where {N,K} = BlockBoundaryVector(_split_vector(vec(v), s))
+BlockBoundaryVector(v, s::Array{Vector{Int},K}) where {K} = BlockBoundaryVector(_split_vector(vec(v), s))
 
 tensor_product(t1::AbstractArray) = t1
 tensor_product(t1::AbstractArray{T1,N1}, t2::AbstractArray{T2,N2}) where {N1,N2,T1<:Number,T2<:Number} = tensorproduct(t1, 1:N1, t2, N1 .+ (1:N2))::Array{promote_type(T1, T2),N1 + N2}
@@ -277,14 +277,29 @@ local_mul_dense(envL, envR, mpo::ScaledIdentityMPOsite, site) = data(mpo) * loca
 local_mul_dense(envL, envR, mpo::ScaledIdentityMPOsite, mpo2, site) = data(mpo) * local_mul_dense(envL, envR, mpo2, site)
 local_mul_dense(envL, envR, mpo, mpo2::ScaledIdentityMPOsite, site) = data(mpo2) * local_mul_dense(envL, envR, mpo, site)
 
-function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}
-    f(v::BlockBoundaryVector) = BlockBoundaryVector([T * t for (T, t) in zip(Ts, data(v))])
-    f_adjoint(v::BlockBoundaryVector) = BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
-    if prod(size(Ts)) == 1
-        f(v) = Ts[1] * v
-        f_adjoint(v) = Ts[1] * v
-    end
-    return TransferMatrix(f, f_adjoint, promote_type(eltype.(Ts)...), ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))
+# _apply_transfer_matrices(Ts::Array{<:TransferMatrix,N}) where {N} = promote_type(eltype.(Ts)...)
+
+# function _apply_transfer_matrices(Ts::Array{<:TransferMatrix{K,<:Any},N}) where {K,N}
+#     f(v::BlockBoundaryVector) = BlockBoundaryVector([T * t for (T, t) in zip(Ts, data(v))])
+#     f_adjoint(v::BlockBoundaryVector) = BlockBoundaryVector([T' * t for (T, t) in zip(Ts, data(v))])
+#     if prod(size(Ts)) == 1
+#         f(v) = Ts[1] * v
+#         f_adjoint(v) = Ts[1] * v
+#     end
+#     #K = promote_type(eltype.(Ts)...)
+#     #::AbstractTransferMatrix{T,NTuple{2,Array{<:NTuple{<:Any,Int},N}}}
+#     return TransferMatrix(f, f_adjoint, K, ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))
+# end
+function TransferMatrix{K}(Ts::Array{<:TransferMatrix,N}) where {K,N}
+    f(v::BlockBoundaryVector{K,M,B}) where {K,M,B} = BlockBoundaryVector{K,M,B}([T * t for (T, t) in zip(Ts, data(v))])
+    f_adjoint(v::BlockBoundaryVector{K,M,B}) where {K,M,B} = BlockBoundaryVector{K,M,B}([T' * t for (T, t) in zip(Ts, data(v))])
+    # if prod(size(Ts)) == 1
+    #     f(v) = Ts[1] * v
+    #     f_adjoint(v) = Ts[1] * v
+    # end
+    #K = promote_type(eltype.(Ts)...)
+    #::AbstractTransferMatrix{T,NTuple{2,Array{<:NTuple{<:Any,Int},N}}}
+    return TransferMatrix{K}(f, f_adjoint, ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))#::TransferMatrix{K,NTuple{2,Array{<:NTuple{<:Any,Int},N}}}
 end
 
 function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)

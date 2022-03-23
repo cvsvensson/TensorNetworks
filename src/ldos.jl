@@ -47,7 +47,7 @@ function test_ldos()
     D = 10
     Nmax = 20
     mps = randomLCROpenMPS(N, 2, D)
-    ham = TensorNetworks.KitaevMPO(N, 1, 1, 0.0, 3)
+    ham = TensorNetworks.KitaevMPO(N, 1, 1, 0.0, 3);
     states, energy = DMRG(ham, mps)
     println(energy)
     ham2a = -energy * TensorNetworks.DenseIdentityMPO(N, 2) + ham

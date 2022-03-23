@@ -224,13 +224,18 @@ abstract type AbstractFiniteEnvironment <: AbstractEnvironment end
 struct BlockBoundaryVector{T,N,B} #<: AbstractArray{Array{T,N},N}
     data::B
     function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
-        bv = Array{Array{T,N},N}(undef, fill(1,N)...)
+        bv = Array{Array{T,N},N}(undef, fill(1, N)...)
         bv[1] = v
-        return new{T,1,Array{Array{T,N},N}}(bv)
+        return new{T,1,Array{Array{T},N}}(bv)
     end
     function BlockBoundaryVector(v::Array{<:Any,N}) where {N}
         T = numtype(v)
-        new{T,N,typeof(v)}(v)
+        new{T,N,Array{Array{T},N}}(v)
+    end
+    function BlockBoundaryVector{K,M,B}(v::Array{<:Array,M}) where {K,M,B}
+        #@assert typeof(v) == B
+        v2::B = v
+        new{K,M,B}(v2)
     end
 end
 # function BlockBoundaryVector(v::Array{T,N}) where {T<:Number,N}
@@ -238,31 +243,31 @@ end
 #     bv[1] = v
 #     return BlockBoundaryVector(bv)
 # end
-numtype(::Array{<:Array{T}}) where T = T
+numtype(::Array{<:Array{T}}) where {T} = T
 abstract type AbstractTransferMatrix{T,S} end
-struct TransferMatrix{F,Fa,T,S} <: AbstractTransferMatrix{T,S}
-    f::F
-    fa::Fa
+struct TransferMatrix{T,S} <: AbstractTransferMatrix{T,S}
+    f::Union{Nothing,Function}
+    fa::Union{Nothing,Function}
     sizes::S
 end
-TransferMatrix(f::Function, T::DataType, s) = TransferMatrix{typeof(f),Nothing,T,typeof(s)}(f, nothing, s)
+TransferMatrix(f::Function, T::DataType, s) = TransferMatrix{T,typeof(s)}(f, nothing, s)
 
-struct CompositeTransferMatrix{Maps,T,S} <: AbstractTransferMatrix{T,S}
-    maps::Maps
+struct CompositeTransferMatrix{T,S} <: AbstractTransferMatrix{T,S}
+    maps::Vector{<:AbstractTransferMatrix{<:Any,S}}
     sizes::S
 end
-function CompositeTransferMatrix{T}(maps::Maps) where {Maps,T}
+function CompositeTransferMatrix{T}(maps::Vector{<:AbstractTransferMatrix{<:Any,S}}) where {T,S}
     s1 = size(maps[1], 1)
     s2 = size(maps[end], 2)
-    CompositeTransferMatrix{Maps,T,typeof(tuple(s1, s2))}(maps, (s1, s2))
+    CompositeTransferMatrix{T,S}(maps, (s1, s2))
 end
-function CompositeTransferMatrix(map::TransferMatrix{<:Any,<:Any,T,S}) where {T,S}
-    CompositeTransferMatrix{typeof(tuple(map)),T,S}(tuple(map), size(map))
+function CompositeTransferMatrix(map::TransferMatrix{T,S}) where {T,S}
+    CompositeTransferMatrix{T,S}([map], size(map))
 end
-function CompositeTransferMatrix{T,S}(maps::Maps) where {Maps,T,S}
+function CompositeTransferMatrix{T,S}(maps::Vector{AbstractTransferMatrix{T,S}}) where {Maps,T,S}
     s1 = size(maps[1], 1)
     s2 = size(maps[end], 2)
-    CompositeTransferMatrix{Maps,T,S}(maps, (s1, s2))
+    CompositeTransferMatrix{T,S}(maps, (s1, s2))
 end
 
 abstract type AbstractMPOsite{T} <: AbstractArray{T,4} end

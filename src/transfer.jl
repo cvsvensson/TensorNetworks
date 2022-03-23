@@ -1,36 +1,42 @@
 #TransferMatrix(f::Function) = TransferMatrix{typeof(f)}(f)
-TransferMatrix(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, T::DataType, s) = TransferMatrix{typeof(f),typeof(fa),T,typeof(s)}(f, fa, s)
+TransferMatrix{T}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s) where {T} = TransferMatrix{T,typeof(s)}(f, fa, s)
 
 Base.eltype(::AbstractTransferMatrix{T}) where {T} = T
 Base.size(T::AbstractTransferMatrix) = T.sizes
 Base.size(T::AbstractTransferMatrix, i) = T.sizes[i]
-Base.:*(T::TransferMatrix, v) = T.f(v)
-Base.:*(T::CompositeTransferMatrix, v) = foldr(*, T.maps, init = v)
-Base.adjoint(T::TransferMatrix) = TransferMatrix(T.fa, T.f, eltype(T), (size(T, 2), size(T, 1)))
-Base.adjoint(T::CompositeTransferMatrix{<:Any,K,S}) where {K,S} = CompositeTransferMatrix{K,S}(reverse(adjoint.(T.maps)))
+Base.:*(T::TransferMatrix, v) where {V} = T.f(v)
+# Base.:*(T::TransferMatrix, v::V) where {V} = T.f(v)::V
+
+Base.:*(T::CompositeTransferMatrix, v) = apply_transfer_matrices(T.maps, v)#foldr(*, T.maps, init = v)::V
+Base.adjoint(T::TransferMatrix) = TransferMatrix{T}(T.fa, T.f, (size(T, 2), size(T, 1)))
+Base.adjoint(T::CompositeTransferMatrix{K,S}) where {K,S} = CompositeTransferMatrix{K,S}(reverse(adjoint.(T.maps)))
 
 # Base.:*(x::Number, T::TransferMatrix) = TransferMatrix(y -> x * T.f(y), eltype(T), size(T))
-Base.:*(x::K, T::AbstractTransferMatrix) where {K<:Number} = TransferMatrix(v -> x * v, v -> conj(x) * v, K, (size(T, 1), size(T, 1))) * T
+Base.:*(x::K, T::AbstractTransferMatrix{K2,<:Any}) where {K2,K<:Number} = TransferMatrix{promote_type(K, K2)}(v -> x * v, v -> conj(x) * v, (size(T, 1), size(T, 1))) * T
 # Base.:*(x::Number, T::TransferMatrixAdj) = TransferMatrix(y -> x * T.f(y), y -> conj(x) * T.fa(y), eltype(T), size(T))
 
 # Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
 
-Base.:*(T1::TransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1, T2))
-Base.:*(T1::TransferMatrix, T2::CompositeTransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1, T2.maps...))
-Base.:*(T1::CompositeTransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1.maps..., T2))
+Base.:*(T1::TransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}([T1, T2])
+Base.:*(T1::TransferMatrix, T2::CompositeTransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}([T1, T2.maps...])
+Base.:*(T1::CompositeTransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}([T1.maps..., T2])
 
-function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix}, v)
+# function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix}, v)
+#     out = foldr(*, Ts, init = v)
+#     return out
+# end
+function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix}, v::V) where {V}
     out = foldr(*, Ts, init = v)
-    return out
+    return out::V
 end
-function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,Array{NTuple{K,Int},N}}}}, v) where {T,N,K}
-    out = foldr(*, Ts, init = v)
-    return out::BlockBoundaryVector{T,N}
-end
-function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,NTuple{N,Int}}}}, v) where {T,N}
-    out = foldr(*, Ts, init = v)
-    return out::Array{T,N}
-end
+# function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,<:NTuple{2,Array{<:Any,N}}}}, v) where {T,N}
+#     out = foldr(*, Ts, init = v)
+#     return out::BlockBoundaryVector{T,N}
+# end
+# function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,NTuple{N,Int}}}}, v) where {T,N}
+#     out = foldr(*, Ts, init = v)
+#     return out::Array{T,N}
+# end
 # Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
 #Base.:*(T1::TransferMatrixAdj{F1,Fa1,K1,S}, T2::TransferMatrixAdj{F2,Fa2,K2,S}) where {F1,F2,Fa1,Fa2,K1,K2,S} = 
 # TransferMatrixAdj{ComposedFunction{F1,F2},ComposedFunction{Fa2,Fa1},promote_type(K1, K2),S}(T1.f ∘ T2.f, T2.fa ∘ T1.fa, (size(T1, 1), size(T2, 2)))
@@ -46,7 +52,7 @@ function IdentityBoundary(T, sizes::NTuple{N,Int}) where {N}
     tp::Array{T,N} = tensor_product(idmat, idvecs...)
     return permutedims(tp, perm)
 end
-function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Array{NTuple{N,Int},K}}}) where {Num,N,K}
+function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Array{Vector{Int},K}}}) where {Num,K}
     s = size(T)
     idim = sum(prod.(s[2]))
     odim = sum(prod.(s[1]))
@@ -59,7 +65,7 @@ function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Array{NTuple{N,Int},K}}})
     end
     return m
 end
-function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,NTuple{N,Int}}}) where {Num,N}
+function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Vector{Int}}}) where {Num}
     odims, idims = size(T)
     v = vec(zeros(Num, idims))
     v[1] = 1
@@ -70,7 +76,7 @@ function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,NTuple{N,Int}}}) where {N
     end
     return m
 end
-function Matrix(T::AbstractTransferMatrix, out::Int, s::Array{NTuple{N,Int},K}) where {N,K}
+function Matrix(T::AbstractTransferMatrix, out::Int, s::Array{Vector{Int},K}) where {K}
     v = zeros(eltype(T), sum(prod.(s)))
     v[1] = 1
     m = zeros(eltype(T), out, sum(prod.(s)))
@@ -81,7 +87,7 @@ function Matrix(T::AbstractTransferMatrix, out::Int, s::Array{NTuple{N,Int},K}) 
     return m
 end
 function blocksizes(dims::Vararg{Vector{Int},N}) where {N}
-    [dim for dim in Base.product(dims...)]
+    [[dim...] for dim in Base.product(dims...)]
 end
 blocksizes(dims::Vararg{Int,N}) where {N} = blocksizes(([d] for d in dims)...)
 function Matrix(T::AbstractTransferMatrix, olength::Int, idims::Dims)
@@ -152,9 +158,9 @@ function transfer_matrix_bond_dense(csites, sites)
     # println("ASD")
     # println.(typeof.(newsites3))
     f(R) = _transfer_matrix_bond(R, data.(link.(newcsites3, :left))..., data.(link.(newsites3, :left))...)
-    odims = tuple((size(x, 1) for x in newcsites3)..., (size(x, 1) for x in newsites3)...)
-    idims = tuple((size(x)[end] for x in newcsites3)..., (size(x)[end] for x in newsites3)...)
-    return TransferMatrix(f, f, K, (odims, idims))
+    odims = [(size(x, 1) for x in newcsites3)..., (size(x, 1) for x in newsites3)...]
+    idims = [(size(x)[end] for x in newcsites3)..., (size(x)[end] for x in newsites3)...]
+    return TransferMatrix{K}(f, f, (odims, idims))
 end
 # function transfer_matrix_bond(sites::Vararg{Union{OrthogonalLinkSite,GenericSite,MPOsite,ScaledIdentityMPOsite},N}) where {N}
 #     diags = data.(link.(sites, :left))
@@ -255,9 +261,9 @@ function _transfer_left_mpo_dense(Γ1::Tuple, Γ2::Tuple)
     g2 = data.(Γ23, :right)
     f(R) = (cscale * scale) * __transfer_left_mpo(R, conj.(g1)..., g2...)
     fadj(L) = conj(cscale * scale) * __transfer_left_mpo_adjoint(L, g1..., conj.(g2)...)
-    odims = tuple((size(x, 1) for x in Γ13)..., (size(x, 1) for x in Γ23)...)
-    idims = tuple((size(x)[end] for x in Γ13)..., (size(x)[end] for x in Γ23)...)
-    return TransferMatrix(f, fadj, K, (odims, idims))
+    odims = [(size(x, 1) for x in Γ13)..., (size(x, 1) for x in Γ23)...]
+    idims = [(size(x)[end] for x in Γ13)..., (size(x)[end] for x in Γ23)...]
+    return TransferMatrix{K}(f, fadj, (odims, idims))
 end
 
 # function _transfer_left_mpo(Γ1::Tuple{GenericSite{T}}, Γ2::Tuple{GenericSite{K}}) where {T,K}
@@ -599,7 +605,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::S
 
     #Convert to CompositeTransferMatrix for type stability
     #CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites
-    return CompositeTransferMatrix{T}(Tuple(Ts))
+    return CompositeTransferMatrix{T}(Ts)
     #return mapfoldr(site -> CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites)::CompositeTransferMatrix{<:NTuple{<:Any,AbstractTransferMatrix{T,<:Any}},T,<:NTuple{2,<:Any}}
     #return foldr(*, Ts)::CompositeTransferMatrix{_A,T,_B}
 end
@@ -614,7 +620,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, sites2::Abst
     if direction == :right
         Ts = reverse(Ts)
     end
-    return CompositeTransferMatrix{T}(Tuple(Ts))
+    return CompositeTransferMatrix{T}(Ts)
 end
 
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPO, direction::Symbol = :left)
@@ -626,7 +632,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPO
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return CompositeTransferMatrix{T}(Tuple(Ts)) #Products of many linear operators cause long compile times!
+    return CompositeTransferMatrix{T}(Ts) #Products of many linear operators cause long compile times!
 end
 transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op::ScaledIdentityMPO, direction::Symbol = :left) = data(op) * transfer_matrix(sites1, direction)
 transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op::ScaledIdentityMPO, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * transfer_matrix(sites1, sites2, direction)
@@ -641,5 +647,5 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::Abstract
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return CompositeTransferMatrix{T}(Tuple(Ts)) #Products of many linear operators cause long compile times!
+    return CompositeTransferMatrix{T}(Ts) #Products of many linear operators cause long compile times!
 end

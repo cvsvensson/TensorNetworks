@@ -65,7 +65,7 @@ Base.:-(mps::AbstractMPS, mps2::AbstractMPS) = mps + (-1) * mps2
 Base.IndexStyle(::Type{<:MPSSum}) = IndexLinear()
 SiteSum(sites...) = SiteSum(sites)
 Base.getindex(sum::MPSSum, i::Integer) = SiteSum((state[i] for state in sum.states)...)
-Base.getindex(sum::MPSSum, I...) = (mapfoldr(mps -> mps[I...], .+ , sum.states))
+Base.getindex(sum::MPSSum, I...) = (mapfoldr(mps -> mps[I...], .+, sum.states))
 
 #Base.getindex(sum::SiteSum, i::Integer) = sum.sites[i]
 #Base.IndexStyle(::Type{<:SiteSum}) = IndexLinear()
@@ -85,13 +85,20 @@ end
 # _transfer_left_mpo(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([_transfer_left_mpo(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))])
 # transfer_matrix_bond(csites::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}, s::NTuple{<:Any,Union{AbstractSite,AbstractMPOsite,SiteSum,MPOSiteSum}}) = _apply_transfer_matrices([transfer_matrix_bond(cs, ss) for (cs, ss) in Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
 
-function _transfer_left_mpo(csites::Tuple, s::Tuple)
+function _transfer_left_mpo(csites::Tuple, s::Tuple) #where {N1,N2}
     itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
-    _apply_transfer_matrices([_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr])
+    K = promote_type(eltype.(csites)..., eltype.(s)...)
+    N = length(csites) + length(s)
+    Ts::Array{TransferMatrix{K,NTuple{2,Vector{Int}}},N} = [_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr]
+    TransferMatrix{K}(Ts)
 end
 function transfer_matrix_bond(csites::Tuple, s::Tuple)
     itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
-    _apply_transfer_matrices([transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
+    K = promote_type(eltype.(csites)..., eltype.(s)...)
+    N = length(csites) + length(s)
+    #::Array{TransferMatrix{K,NTuple{2,Array{Vector{Int},N}}},N}
+    Ts::Array{TransferMatrix{K,NTuple{2,Vector{Int}}},N} = [transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr]
+    TransferMatrix{K}(Ts) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
 end
 
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
@@ -107,7 +114,19 @@ function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     return tens
 end
 
-function _split_vector(v, s::Array{NTuple{N,Int},K}) where {N,K}
+function _split_vector(v, s::Array{Vector{Int},K}) where {K,N}
+    ranges = size(s)
+    tens = [Array{eltype(v),length(sv)}(undef, sv...) for sv in s]
+    #Array{Array{eltype(v),N},K}(undef, ranges)
+    last = 0
+    for ns in Base.product((1:r for r in ranges)...)
+        next = last + prod(s[ns...])
+        tens[ns...] = reshape(v[last+1:next], s[ns...]...)
+        last = next
+    end
+    return tens
+end
+function _split_vector(v, s::Array{NTuple{N,Int},K}) where {K,N}
     ranges = size(s)
     tens = Array{Array{eltype(v),N},K}(undef, ranges)
     last = 0
