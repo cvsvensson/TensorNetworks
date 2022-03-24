@@ -270,7 +270,7 @@ struct MPOsite{T} <: AbstractMPOsite{T}
     # isunitary::Bool
 end
 
-abstract type AbstractMPO{T<:Number} <: AbstractVector{MPOsite{T}} end
+abstract type AbstractMPO{T<:Number} <: AbstractVector{<:AbstractMPOsite{T}} end
 
 struct MPO{S,T<:Number} <: AbstractMPO{T}
     data::Vector{S}

@@ -9,7 +9,7 @@ Base.show(io::IO, mps::AbstractMPS) =
 Base.show(io::IO, m::MIME"text/plain", mps::AbstractMPS) = show(io, mps)
 
 function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
-    K = numtype(mps1, mps2)
+#    K = numtype(mps1, mps2)
     #::Vector{LinearMap{K}}
     Ts = transfer_matrices((mps1,), (mps2,), :left)
     vl = transfer_matrix_bond((mps1[1],), (mps2[1],)) * boundary((mps1,), (mps2,), :left)
