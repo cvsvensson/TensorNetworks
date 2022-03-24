@@ -4,7 +4,7 @@ TransferMatrix{T}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s) wh
 Base.eltype(::AbstractTransferMatrix{T}) where {T} = T
 Base.size(T::AbstractTransferMatrix) = T.sizes
 Base.size(T::AbstractTransferMatrix, i) = T.sizes[i]
-Base.:*(T::TransferMatrix, v) where {V} = T.f(v)
+Base.:*(T::TransferMatrix, v::BlockBoundaryVector{K,M,B}) where {K,M,B} = T.f(v)::BlockBoundaryVector{K,M,B}
 # Base.:*(T::TransferMatrix, v::V) where {V} = T.f(v)::V
 
 Base.:*(T::CompositeTransferMatrix, v) = apply_transfer_matrices(T.maps, v)#foldr(*, T.maps, init = v)::V
