@@ -435,11 +435,11 @@ end
 
 @testset "DMRG" begin
     #Test a few low lying eigenstates of a simple Ising
-    Nchain = 5
+    Nchain = 2
     Dmax = 10
     ham = IsingMPO(Nchain, 1, 0, 0)
     mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax))
-    states, energies = eigenstates(ham, mps, 5; precision = 1e-8)
+    states, energies = eigenstates(ham, mps, 2; precision=1e-8)
     @test sort(energies) ≈ -[Nchain - 1, Nchain - 1, Nchain - 3, Nchain - 3, Nchain - 3]
 
     Nchain = 10

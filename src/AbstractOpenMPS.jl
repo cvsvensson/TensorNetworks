@@ -44,6 +44,11 @@ function boundary(csites::Tuple, s::Tuple, side::Symbol)
     BlockBoundaryVector(vecs)
 end
 states(mps::MPSSum) = mps.states
+
+# function states(mps::MPSSum)
+#     [mp for mp in mps]
+
+# end
 states(mpo::MPOSum) = mpo.mpos
 states(mps::Union{AbstractMPS,AbstractMPO}) = [mps]
 states(mps::LazyProduct) = [mps]#(states.(mps.mpos)..., states(mps.mps))

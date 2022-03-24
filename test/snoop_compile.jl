@@ -2,7 +2,7 @@ using TensorNetworks, TensorOperations, SnoopCompile
 #TensorOperations.disable_cache()
 #disable_blas()
 Ts = subtypes(Any);
-N = 100
+N = 5
 d = 2 
 Dmax = 50
 prec = 1e-14
