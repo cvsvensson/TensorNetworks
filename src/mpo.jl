@@ -151,16 +151,22 @@ auxillerate(mpo::MPO) = MPO(auxillerate.(mpo.data))
 #auxillerate(mpo::HermitianMPO) = HermitianMPO(auxillerate.(mpo.data))
 
 #TODO add density matrix compression of LazyProduct: https://tensornetwork.org/mps/algorithms/denmat_mpo_mps/
-struct LazyProduct{MPS<:AbstractMPS,SITE<:AbstractSite,MPOs<:NTuple{<:Any,<:AbstractMPO}} <: AbstractMPS{SITE}
-    mpos::MPOs
+struct LazyProduct{N,T,MPS<:AbstractMPS,SITE<:AbstractSite} <: AbstractMPS{SITE}
+    mpos::Vector{Union{ScaledIdentityMPO,MPO}}
     mps::MPS
-    function LazyProduct(mpos::NTuple{<:Any,<:AbstractMPO}, mps::AbstractMPS)
-        new{typeof(mps),typeof(mapfoldr(x -> x[1], multiply, mpos, init = mps[1])),typeof(mpos)}(mpos, mps)
+    function LazyProduct{N}(mpos::Vector, mps::AbstractMPS) where N
+        @assert N==length(mpos)+1
+        T = promote_type(map(mp->eltype(mp[1]),mpos)...,eltype(mps[1]))
+        new{N,T,typeof(mps),typeof(mps[1])}(mpos, mps)
     end
+    # function LazyProduct(mpos::Vector, mps::AbstractMPS)
+    #     T = promote_type(map(mp->eltype(mp[1]),mpo)...,eltype(mps[1]))
+    #     new{Val{length(mpos)+1},T,typeof(mps),typeof(mps[1])}(mpos, mps)
+    # end
 end
 
-Base.:*(mpo::MPO, mps::AbstractMPS) where {MPO<:AbstractMPO} = LazyProduct((mpo,), mps)
-Base.:*(mpo::MPO, mps::LazyProduct) where {MPO<:AbstractMPO} = LazyProduct((mpo, mps.mpos...), mps.mps)
+Base.:*(mpo::MPO, mps::AbstractMPS) where {MPO<:AbstractMPO} = LazyProduct{2}([mpo], mps)
+Base.:*(mpo::MPO, mps::LazyProduct{N}) where {N,MPO<:AbstractMPO} = LazyProduct{N+1}([mpo, mps.mpos...], mps.mps)
 Base.:*(mpo::MPO, mps::MPSSum) where {MPO<:AbstractMPO} = mapreduce(k -> mps.scalings[k] * mpo * mps.states[k], +, 1:length(mps.states))
 Base.:*(mpo::MPOSum, mps::AbstractMPS) = mapreduce(sm -> sm[1] * (sm[2] * mps), +, zip(mpo.mpos, mpo.scalings))
 Base.:*(mpo::MPOSum, mps::MPSSum) = mapreduce(os -> os[1][1] * os[2][1] * (os[1][2] * os[2][2]), +, Base.product(zip(mpo.mpos, mpo.scalings), zip(mps.states, mps.scalings)))
@@ -169,8 +175,8 @@ Base.:*(mpo::MPOSum, mps::MPSSum) = mapreduce(os -> os[1][1] * os[2][1] * (os[1]
 truncation(lp::LazyProduct) = truncation(lp.mps)
 Base.length(lp::LazyProduct) = length(lp.mps)
 Base.eltype(lp::LazyProduct) = eltype(lp.mps)
-Base.getindex(lp::LazyProduct, i::Integer) = mapfoldr(x -> x[i], *, lp.mpos, init=lp.mps[i])
-Base.getindex(lp::LazyProduct, I...) = mapfoldr(x -> x[I...], .*, lp.mpos, init=lp.mps[I...])
+Base.getindex(lp::LazyProduct{N,T}, i::Integer) where {N,T} = LazySiteProduct{N,T}([map(x->x[i],lp.mpos)...,lp.mps[i]])#mapfoldr(x -> x[i], *, lp.mpos, init=lp.mps[i])
+Base.getindex(lp::LazyProduct, I...) = [lp[i] for i in I...]#mapfoldr(x -> x[I...], .*, lp.mpos, init=lp.mps[I...])
 
 Base.size(lp::LazyProduct) = size(lp.mps)
 #boundaryconditions(::Type{LazyProduct{MPS,S,MPO}}) where {MPS,S,MPO} = boundaryconditions(MPS)
@@ -183,22 +189,28 @@ function LCROpenMPS(lp::LazyProduct; center=1, method=:qr)
     LCROpenMPS(Γ, truncation=truncation(lp), error=error(lp))
 end
 
-struct LazySiteProduct{T<:Number,S,N} <: AbstractSite{T,N}
-    sites::S
-    function LazySiteProduct(sites...)
-        new{promote_type(eltype.(sites)...),typeof(sites),length(size(sites[end]))}(sites)
+struct LazySiteProduct{N,T<:Number}
+    sites::Vector{Union{ScaledIdentityMPOsite,GenericSite,OrthogonalLinkSite,MPOsite}}
+    function LazySiteProduct{N}(sites::Vector) where N
+        @assert N==length(sites)
+        T = promote_type(eltype.(sites)...)
+        new{N,T}(sites)
+    end
+    function LazySiteProduct{N,T}(sites::Vector) where {N,T}
+        @assert N==length(sites)
+        new{N,T}(sites)
     end
 end
 Base.show(io::IO, lp::LazySiteProduct) =
     print(io, "LazySiteProduct\nSites: ", typeof.(lp.sites))
 Base.show(io::IO, m::MIME"text/plain", lp::LazySiteProduct) = show(io, lp)
 Base.copy(lp::LazySiteProduct) = LazySiteProduct(copy.(lp.sites)...)
-Base.eltype(::LazySiteProduct{T,<:Any}) where {T} = T
+Base.eltype(::LazySiteProduct{<:Any,T}) where {T} = T
 ispurification(lp::LazySiteProduct) = any([ispurification(s) for s in lp.sites if s isa AbstractSite])
 reverse_direction(lp::LazySiteProduct) = LazySiteProduct(reverse_direction.(lp.sites)...)
 
-Base.:*(o::AbstractMPOsite, s::Union{AbstractSite,AbstractMPOsite}) = LazySiteProduct(o, s)
-Base.:*(o::AbstractMPOsite, lp::LazySiteProduct) = LazySiteProduct(o, lp.sites...)
+Base.:*(o::AbstractMPOsite, s::Union{AbstractSite,AbstractMPOsite}) = LazySiteProduct{2}([o, s])
+Base.:*(o::AbstractMPOsite, lp::LazySiteProduct{N}) where {N} = LazySiteProduct{N+1}([o, lp.sites...])
 Base.:*(o::AbstractMPOsite, lp::SiteSum) = mapreduce(s -> o * s, +, lp.sites)
 Base.:*(o::MPOSiteSum, site::Union{AbstractSite,AbstractMPOsite}) = mapreduce(s -> o * s, +, sites(site))
 

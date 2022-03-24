@@ -129,11 +129,11 @@ finite_environment(L::Vector{V}, R::Vector{V}) where {V} = FiniteEnvironment(L, 
 infinite_environment(L::Vector{V}, R::Vector{V}) where {V} = InfiniteEnvironment(L, R)
 
 
-function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, dir::Symbol)
+function halfenvironment(mp1::Tuple, mp2::Tuple, dir::Symbol)
 #    T = numtype(mps1, mps2)
-    Ts = transfer_matrices((mps1,), (mpo, mps2), reverse_direction(dir))
-    V = boundary((mps1,), (mpo, mps2), dir)
-    N = length(mps1)
+    Ts = transfer_matrices(mp1, mp2, reverse_direction(dir))
+    V = boundary(mp1, mp2, dir)
+    N = length(mp1[1])
     env = Vector{typeof(V)}(undef, N)
     if dir == :left
         itr = 1:1:N
@@ -148,9 +148,6 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
     end
     #Vsize(k) = (size(mps1[k],s1), size(mpo[k],s2), size(mps2[k],s1))
     for k in itr
-        #env[k] = reshape(V, size(mps1[k], s1), size(mpo[k], s2), size(mps2[k], s1))
-        # println(typeof(V))
-        # println(typeof(env))
         env[k] = V
         if k != itr[end]
             V = Ts[k] * V
@@ -158,49 +155,20 @@ function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS,
     end
     return env
 end
-# function halfenvironment(mps1::AbstractMPS, mpo::ScaledIdentityMPO, mps2::AbstractMPS, dir::Symbol)
-#     T = numtype(mps1, mps2)
-#     Ts = data(mpo) * transfer_matrices((mps1,), (mps2,), reverse_direction(dir))
-#     V = boundary((mps1,), (mps2,), dir)
-#     N = length(mps1)
-#     env = Vector{typeof(V)}(undef, N)
-#     if dir == :left
-#         itr = 1:1:N
-#         s = 1
-#     elseif dir == :right
-#         itr = N:-1:1
-#         s = 3
-#     else
-#         @error "In environment: choose direction :left or :right"
-#     end
-#     #Vsize(k) = (size(mps1[k],s), size(mps2[k],s))
-#     for k in itr
-#         env[k] = V#reshape(V, size(mps1[k], s), size(mps2[k], s))
-#         if k != itr[end]
-#             V = Ts[k] * V
-#         end
-#     end
-#     return env
-# end
 
-# halfenvironment(mps1::AbstractMPS, mps2::AbstractMPS, dir::Symbol) = halfenvironment(mps1, IdentityMPO(length(mps1)), mps2, dir)
-halfenvironment(mps::AbstractMPS, mpo::AbstractMPO, dir::Symbol) = halfenvironment(mps, mpo, mps, dir)
-halfenvironment(mps::AbstractMPS, dir::Symbol) = halfenvironment(mps, IdentityMPO(length(mps)), mps, dir)
-
-
-function environment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
-    L = halfenvironment(mps1, mpo, mps2, :left)
-    R = halfenvironment(mps1, mpo, mps2, :right)
-    if isinfinite(mps1)
+function environment(mp1::Tuple, mp2::Tuple)
+    L = halfenvironment(mp1,mp2, :left)
+    R = halfenvironment(mp1,mp2, :right)
+    if isinfinite(mp1[1])
         return infinite_environment(L, R)
     else
         return finite_environment(L, R)
     end
 end
 
-# environment(mps1::AbstractMPS, mps2::AbstractMPS) = environment(mps1, IdentityMPO(length(mps1)), mps2)
-environment(mps::AbstractMPS, mpo::AbstractMPO) = environment(mps, mpo, mps)
-# environment(mps::AbstractMPS) = environment(mps, IdentityMPO(length(mps)), mps)
+environment(mps1::AbstractMPS, mps2::AbstractMPS) = environment((mps1,),(mps2,))
+environment(mps::AbstractMPS, mpo::AbstractMPO) = environment((mps,), (mpo, mps))
+environment(mps::AbstractMPS) = environment((mps,),(mps,))
 
 # function update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::AbstractMPOsite, mps2::AbstractSite, site::Integer)
 #     site == length(env) || (env.L[site+1] = reshape(transfer_matrix(mps1, mpo, mps2, :right)*vec(env.L[site]), size(mps1,3), size(mpo,4), size(mps2,3)))
@@ -265,7 +233,7 @@ function local_mul(envL, envR, site)
     itr = Base.product(1:size(data(envL), 1), 1:size(data(envL), 2))
     arrays = sum([data(local_mul_dense(data(envL)[n1, n2], data(envR)[n1, n2], sites(site)[n2])) for (n1, n2) in itr], dims=2)
     #SiteSum(Tuple(GenericSite.(arrays, ispurification(sitesum))))
-    reduce(+, GenericSite.(arrays, ispurification(sitesum)))
+    reduce(+, GenericSite.(arrays, ispurification(site)))
 end
 
 function local_mul(envL::BlockBoundaryVector{T,3}, envR::BlockBoundaryVector{T,3}, mpo, site) where {T}
@@ -293,7 +261,8 @@ function _apply_transfer_matrices(Ts::Array{Maps,N}) where {N,Maps}
         f(v) = Ts[1] * v
         f_adjoint(v) = Ts[1] * v
     end
-    return TransferMatrix(f, f_adjoint, promote_type(eltype.(Ts)...), ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))
+    T = promote_type(eltype.(Ts)...)
+    return TransferMatrix{T,N}(f, f_adjoint, ([size(T, 1) for T in Ts], [size(T, 2) for T in Ts]))
 end
 
 function Base.getindex(env::AbstractEnvironment, i::Integer, dir::Symbol)

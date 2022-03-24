@@ -237,12 +237,18 @@ end
 # end
 
 abstract type AbstractTransferMatrix{T,S} end
-struct TransferMatrix{F,Fa,T,S} <: AbstractTransferMatrix{T,S}
+struct TransferMatrix{N,T,F,Fa,S} <: AbstractTransferMatrix{T,S}
     f::F
     fa::Fa
     sizes::S
 end
-TransferMatrix(f::Function, T::DataType, s) = TransferMatrix{typeof(f),Nothing,T,typeof(s)}(f, nothing, s)
+TransferMatrix{T}(f::Function, s) where T = TransferMatrix{length(s[2]),T,typeof(f),Nothing,typeof(s)}(f, nothing, s)
+TransferMatrix{T,N}(f::Function, s) where {T,N} = (@assert N == length(size(s[2])); TransferMatrix{N,T,typeof(f),Nothing,typeof(s)}(f, nothing, s))
+TransferMatrix{T,N}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s::NTuple{2,Tuple}) where {N,T} =  (@assert N == length(s[2]); TransferMatrix{N,T,typeof(f),typeof(fa),typeof(s)}(f, fa, s))
+TransferMatrix{T,N}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s::NTuple{2,Array}) where {N,T} =  (@assert N == length(size(s[2])); TransferMatrix{N,T,typeof(f),typeof(fa),typeof(s)}(f, fa, s))
+
+# TransferMatrix{T,N}(f::Function, s) where {T,N} = (@assert N == length(s[2]); TransferMatrix{N,T,typeof(f),Nothing,typeof(s)}(f, nothing, s))
+
 
 struct CompositeTransferMatrix{Maps,T,S} <: AbstractTransferMatrix{T,S}
     maps::Maps
@@ -270,7 +276,7 @@ struct MPOsite{T} <: AbstractMPOsite{T}
     # isunitary::Bool
 end
 
-abstract type AbstractMPO{T<:Number} <: AbstractVector{<:AbstractMPOsite{T}} end
+abstract type AbstractMPO{T<:Number} <: AbstractVector{AbstractMPOsite{T}} end
 
 struct MPO{S,T<:Number} <: AbstractMPO{T}
     data::Vector{S}

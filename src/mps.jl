@@ -8,20 +8,40 @@ Base.show(io::IO, mps::AbstractMPS) =
     print(io, "MPS: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps), "\nTruncation: ", truncation(mps))
 Base.show(io::IO, m::MIME"text/plain", mps::AbstractMPS) = show(io, mps)
 
+function _sites_from_tuple(mps_stack::Tuple,k)
+    #foldr((a,b)->(a[k],b...),mps_stack,init=())
+    map(mps->mps[k],mps_stack)
+end
+function _horizontal_contraction(mps1::Tuple, mps2::Tuple)
+    s1 = _sites_from_tuple(mps1,1)
+    s2 = _sites_from_tuple(mps2,1)
+    Tb = transfer_matrix_bond(s1,s2)
+    L =  boundary(mps1, mps2, :left)
+    vr = boundary(mps1, mps2, :right)
+    vl =  Tb*L
+    s = _local_transfer_matrix(_sites_from_tuple(mps1,2),_sites_from_tuple(mps2,2), :left)
+    vr2 = mapfoldr(k->_local_transfer_matrix(_sites_from_tuple(mps1,k),_sites_from_tuple(mps2,k), :left),*,1:length(mps1[1]),init=vr)
+    return inner(vl, vr2)#apply_transfer_matrices(Ts,vr))
+end
+
 function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
+    _horizontal_contraction((mps1,),(mps2,))
 #    K = numtype(mps1, mps2)
     #::Vector{LinearMap{K}}
-    Ts = transfer_matrices((mps1,), (mps2,), :left)
-    vl = transfer_matrix_bond((mps1[1],), (mps2[1],)) * boundary((mps1,), (mps2,), :left)
-    #::Vector{K}
-    vr = boundary((mps1,), (mps2,), :right)
-    # for k in length(mps1):-1:1
-    #     vr = Ts[k] * vr
-    # end
-    # vr = foldr(*,Ts,init=vr)    # println(size(vr))
-    # println(size(Ts[end]))
-    # println(Ts[end]*vr)
-    return inner(vl, apply_transfer_matrices(Ts,vr))
+    #Ts = transfer_matrices((mps1,), (mps2,), :left)
+    # Tb = transfer_matrix_bond((mps1[1],), (mps2[1],))
+    # L =  boundary((mps1,), (mps2,), :left)
+    # vl =  Tb*L
+    # #::Vector{K}
+    # vr = boundary((mps1,), (mps2,), :right)
+    # vr2 = mapfoldr(k->_local_transfer_matrix((mps1[k],), (mps2[k],), :left),*,1:length(mps1),init=vr)
+    # # for k in length(mps1):-1:1
+    # #     vr = Ts[k] * vr
+    # # end
+    # # vr = foldr(*,Ts,init=vr)    # println(size(vr))
+    # # println(size(Ts[end]))
+    # # println(Ts[end]*vr)
+    # return inner(Tb*vl, vr2)#apply_transfer_matrices(Ts,vr))
 end
 inner(v::AbstractArray{<:Number,N}, w::AbstractArray{<:Number,N}) where {N} = mapreduce(prod, +, zip(v, w))
 inner(v::BlockBoundaryVector{<:Number,N}, w::BlockBoundaryVector{<:Number,N}) where {N} = mapreduce(inner, +, data(v), data(w))
