@@ -26,19 +26,19 @@ boundary(::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = tensor_produ
 boundary(::OpenBoundary, lp::LazyProduct, side::Symbol) = tensor_product((boundary(OpenBoundary(), mp, side) for mp in (lp.mpos..., lp.mps))...)
 
 function boundary(csites::Tuple, s::Tuple, side::Symbol)
-    csites2 = foldl(_split_tuple_c, states.(csites), init=())
-    sites2 = foldr(_split_tuple, states.(s), init=())
-    cscale = foldl(_split_tuple_c, scaling.(csites), init=())
-    scale = foldr(_split_tuple, scaling.(s), init=())
-    println.(typeof.(cscale))
-    println("_")
-    println.(typeof.(scale))
+    csites2 = foldl(_split_lazy_v, states.(csites), init = ())
+    sites2 = foldr(_split_lazy_v, states.(s), init = ())
+    cscale = foldl(_split_lazy_v, scaling.(csites), init = ())
+    scale = foldr(_split_lazy_v, scaling.(s), init = ())
+    # println.(typeof.(cscale))
+    # println("_")
+    # println.(typeof.(scale))
     boundary(csites2, cscale, sites2, scale, side)
 end
 _split_lazy_v(s, ss::Tuple) = (s, ss...)
 _split_lazy_v(ss::Tuple, s) = (ss..., s)
-_split_lazy_v(s::Vector{<:LazyProduct}, ss::Tuple) = ([lp.mpos for lp in s], s.mps, ss...)
-_split_lazy_v(ss::Tuple, s::Vector{<:LazyProduct}) = (ss..., s.mps, s.mpos...)
+_split_lazy_v(s::Vector{<:LazyProduct}, ss::Tuple) = ([[mp] for mp in s[1].mpos]..., [s[1].mps], ss...)
+_split_lazy_v(ss::Tuple, s::Vector{<:LazyProduct}) = (ss..., [s[1].mps], [[mp] for mp in reverse(s[1].mpos)]...)
 #::NTuple{N4,<:Any}
 function boundary(csites::Tuple, cscale::Tuple, s::Tuple, scale::Tuple, side::Symbol) #where {N1,N2,N3,N4}
 
@@ -66,17 +66,13 @@ _split_tuple(mp::Tuple, t::Tuple) = (mp..., t...)
 
 states(mps::MPSSum) = mps.states
 
-function states(mps::MPSSum)
-    [mp for mp in mps]
-
-end
 states(mpo::MPOSum) = mpo.mpos
 states(mps::Union{AbstractMPS,AbstractMPO}) = [mps]
-states(mps::LazyProduct) = (states.(mps.mpos)..., states(mps.mps)) #(map(mpo -> [states(mpo)], mps.mpos)..., [states(mps.mps)])
+states(mps::LazyProduct) = [mps] #(states.(mps.mpos)..., states(mps.mps)) #(map(mpo -> [states(mpo)], mps.mpos)..., [states(mps.mps)])
 scaling(mps::MPSSum) = mps.scalings
 scaling(mpo::MPOSum) = mpo.scalings
 scaling(mps::Union{AbstractMPS,AbstractMPO}) = [one(numtype(mps))]
-scaling(mps::LazyProduct) = (scaling.(mps.mpos)..., scaling(mps.mps)) #(map(mpo -> [scaling(mpo)], mps.mpos)..., [scaling(mps.mps)])
+scaling(mps::LazyProduct) = [one(numtype(mps))]#(scaling.(mps.mpos)..., scaling(mps.mps)) #(map(mpo -> [scaling(mpo)], mps.mpos)..., [scaling(mps.mps)])
 statesscaling(mps::MPSSum) = zip(mps.states, mps.scalings)
 statesscaling(mpo::MPOSum) = zip(mpo.mpos, mpo.scalings)
 statesscaling(mps::Union{AbstractMPS,AbstractMPO}) = [(mps, one(numtype(mps)))]
@@ -86,8 +82,8 @@ function boundary_dense(csites::Tuple, sites::Tuple, side::Symbol)
     K = promote_type(numtype.(sites)...)
     # println.(numtype.(sites))
     @assert (K) <: Number "Error: K is not a number, $K"
-    newcsites3 = foldl(_split_lazy, csites, init=())
-    newsites3 = foldr(_split_lazy, sites, init=())
+    newcsites3 = foldl(_split_lazy, csites, init = ())
+    newsites3 = foldr(_split_lazy, sites, init = ())
     # cscale, newcsites3 = foldl(_remove_identity, newcsites2, init=(one(K), ()))
     # scale, newsites3 = foldr(_remove_identity, newsites2, init=(one(K), ()))
     #println.(typeof.(newcsites3))
@@ -101,7 +97,7 @@ end
 #     return (data(g) ≈ 1 ? 1 : 0) * rhos[1]
 # end
 function boundary(::InfiniteBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol)
-    _, rhos = transfer_spectrum(cmpss, mpss, reverse_direction(side), nev=1)
+    _, rhos = transfer_spectrum(cmpss, mpss, reverse_direction(side), nev = 1)
     return canonicalize_eigenoperator(rhos[1])
 end
 
@@ -118,7 +114,7 @@ end
 
 function expectation_value(mps::AbstractMPS{GenericSite}, op, site::Integer)
     mps = set_center(mps, site)
-    return expectation_value(mps, op, site, iscanonical=true)
+    return expectation_value(mps, op, site, iscanonical = true)
 end
 
 function apply_identity_layer(::OpenBoundary, mpsin::AbstractMPS{GenericSite}; kwargs...)
