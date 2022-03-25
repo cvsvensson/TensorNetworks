@@ -379,7 +379,7 @@ function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractM
     return [_local_transfer_matrix((sites1[k], op, sites2[k]), direction) for k in 1:length(sites1)]
 end
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, op::AbstractMPOsite, direction::Symbol = :left)
-    return [_local_transfer_matrix((sites1[k], op, direction), direction) for k in 1:length(sites1)]
+    return [_local_transfer_matrix((sites1[k], op, sites1[k]), direction) for k in 1:length(sites1)]
 end
 
 function transfer_matrices(sites1::AbstractVector{<:AbstractSite}, ops::AbstractVector{<:AbstractSquareGate}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
@@ -439,7 +439,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::Abs
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return foldr(*,Ts) #Products of many linear operators cause long compile times!
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, direction)
@@ -450,7 +450,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symb
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return foldr(*,Ts) #Products of many linear operators cause long compile times!
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, op, direction)
@@ -461,7 +461,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return foldr(*,Ts) #Products of many linear operators cause long compile times!
 end
 
 # transfer_matrix(sites1::AbstractVector{<:AbstractSite}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = transfer_matrix(sites1, IdentityMPO(length(sites1)), sites2, direction)
