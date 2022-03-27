@@ -85,27 +85,31 @@ end
 function _transfer_left_mpo(csites::Tuple, s::Tuple)
     csites2 = foldl(_split_lazy_v, sites.(csites), init = ())
     sites2 = foldr(_split_lazy_v, sites.(s), init = ())
-    println(typeof(csites2))
-    println("_")
-    println.(typeof.(sites2))
     __transfer_left_mpo(csites2, sites2)
 end
-_split_lazy_v(s, ss::Tuple) = (s, ss...)
-_split_lazy_v(ss::Tuple, s) = (ss..., s)
-_split_lazy_v(s::Vector{<:LazySiteProduct}, ss::Tuple) = ([[mp] for mp in s[1].sites]..., ss...)
-_split_lazy_v(ss::Tuple, s::Vector{<:LazySiteProduct}) = (ss..., [[mp] for mp in reverse(s[1].sites)]...)
-function __transfer_left_mpo(csites::Tuple, s::Tuple) #where {N1,N2,N3,N4}
-    itr = Base.product(Base.product(csites...), Base.product(s...))
+sites(s::Tuple) = mapfoldr(sites,_split_lazy_v,s,init=())
+
+# _split_lazy_v(s::Vector{<:LazySiteProduct}, ss::Tuple) = ([[mp] for mp in s[1].sites]..., ss...)
+# _split_lazy_v(ss::Tuple, s::Vector{<:LazySiteProduct}) = (ss..., [[mp] for mp in reverse(s[1].sites)]...,)
+
+function __transfer_left_mpo(csites::Tuple, s::Tuple)
+    itr = Base.product(Base.product((csites)...), Base.product((s)...))
     _apply_transfer_matrices([_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr])
 end
-# function _transfer_left_mpo(csites::Tuple, s::Tuple)
-#     itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
-#     _apply_transfer_matrices([_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr])
-# end
-# function transfer_matrix_bond(csites::Tuple, s::Tuple)
-#     itr = Base.product(Base.product(sites.(csites)...), Base.product(sites.(s)...))
-#     _apply_transfer_matrices([transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr]) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
-# end
+
+function transfer_matrix_bond(csites::Tuple, s::Tuple)
+    csites2 = foldl(_split_lazy_v, sites.(csites), init = ())
+    sites2 = foldr(_split_lazy_v, sites.(s), init = ())
+    K = promote_type(eltype.(s)...,eltype.(csites)...)
+    #N = length(csites2) + length(sites2)
+    N = stackheight(csites) + stackheight(s)
+    _transfer_matrix_bond(csites2, sites2)::TransferMatrix{N,K,<:Any,<:Any,NTuple{2,Array{NTuple{N,Int},N}}}
+end
+function _transfer_matrix_bond(csites::Tuple, s::Tuple)
+    itr = Base.product(Base.product((csites)...), Base.product((s)...))
+    Ts = [transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr]
+    _apply_transfer_matrices(Ts) #_apply_transfer_matrices([transfer_matrix_bond(ss...) for ss in Base.product(sites.(ss)...)])
+end
 function _split_vector(v, s1::NTuple{N1,Int}, s2::NTuple{N2,Int}) where {N1,N2}
     tens = Matrix{Vector{eltype(v)}}(undef, (N1, N2))
     last = 0
