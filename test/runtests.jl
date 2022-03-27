@@ -120,13 +120,14 @@ end
     @test zid' == conj(z) * id
 
     DL1, DL2, DR1, DR2, d = rand(2:10, 5)
+    id = IdentityMPOsite(d)
     site1 = randomGenericSite(DL1, d, DR1)
     site2 = randomGenericSite(DL2, d, DR2)
     T0 = Matrix(transfer_matrix(site1, site2), DL1 * DL2, (DR1, DR2))
-    Tid = Matrix(transfer_matrix(site1, id, site2), DL1 * DL2, (DR1, DR2))
-    @test T0 == Tid
-    @test Matrix(transfer_matrix(site1), DL1^2, (DR1, DR1)) == Matrix(transfer_matrix(site1, id), DL1^2, (DR1, DR1))
-    @test z * T0 == Matrix(transfer_matrix(site1, zid, site2), DL1 * DL2, (DR1, DR2))
+    Tid = Matrix(transfer_matrix(site1, id, site2), DL1 * DL2, (DR1,1, DR2))
+    @test T0 ≈ Tid
+    @test Matrix(transfer_matrix(site1), DL1^2, (DR1, DR1)) ≈ Matrix(transfer_matrix(site1, id), DL1^2, (DR1,1, DR1))
+    @test z * T0 ≈ Matrix(transfer_matrix(site1, zid, site2), DL1 * DL2, (DR1,1, DR2))
 
 
     DL12, DL22, DR12, DR22 = rand(2:10, 4)
@@ -135,14 +136,14 @@ end
 
     T0 = Matrix(transfer_matrix(site1, site22), (DL1) * (DL2 + DL22), blocksizes([DR1], [DR2, DR22]))
     Tid = Matrix(transfer_matrix(site1, id, site22), (DL1) * (DL2 + DL22), blocksizes([DR1], [1], [DR2, DR22]))
-    @test T0 == Tid
-    @test z * T0 == Matrix(transfer_matrix(site1, zid, site22), (DL1) * (DL2 + DL22), blocksizes([DR1], [1], [DR2, DR22]))
+    @test T0 ≈ Tid
+    @test z * T0 ≈ Matrix(transfer_matrix(site1, zid, site22), (DL1) * (DL2 + DL22), blocksizes([DR1], [1], [DR2, DR22]))
 
     T0 = Matrix(transfer_matrix(site12, site22), (DL1 + DL12) * (DL2 + DL22), blocksizes([DR1, DR12], [DR2, DR22]))
     Tid = Matrix(transfer_matrix(site12, id, site22), (DL1 + DL12) * (DL2 + DL22), blocksizes([DR1, DR12], [1], [DR2, DR22]))
-    @test T0 == Tid
+    @test T0 ≈ Tid
     @test Matrix(transfer_matrix(site12), (DL1 + DL12)^2, blocksizes([DR1, DR12], [DR1, DR12])) == Matrix(transfer_matrix(site12, id), (DL1 + DL12)^2, blocksizes([DR1, DR12], [1], [DR1, DR12]))
-    @test z * T0 == Matrix(transfer_matrix(site12, zid, site22), (DL1 + DL12) * (DL2 + DL22), blocksizes([DR1, DR12], [1], [DR2, DR22]))
+    @test z * T0 ≈ Matrix(transfer_matrix(site12, zid, site22), (DL1 + DL12) * (DL2 + DL22), blocksizes([DR1, DR12], [1], [DR2, DR22]))
 end
 
 @testset "MPO" begin

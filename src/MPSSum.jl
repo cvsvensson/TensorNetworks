@@ -91,29 +91,34 @@ _split_lazy_v(ss::Tuple, s::Vector{<:LazySiteProduct}) = (ss..., [[mp] for mp in
 # end
 
 function _transfer_left_mpo(csites::Tuple, s::Tuple)
-    csites2 = foldl(_split_lazy_v, sites.(csites), init = ())
-    sites2 = foldr(_split_lazy_v, sites.(s), init = ())
-    K = promote_type(eltype.(s)...,eltype.(csites)...)
-    N = stackheight(csites) + stackheight(s)
-    __transfer_left_mpo(csites2, sites2)::TransferMatrix{N,K,<:Any,<:Any,NTuple{2,Array{NTuple{N,Int},N}}}
+    csites2 = foldl(_split_lazy_v, sites.(csites), init=())
+    sites2 = foldr(_split_lazy_v, sites.(s), init=())
+    #K = promote_type(eltype.(s)...,eltype.(csites)...)
+    #N = stackheight(csites) + stackheight(s)
+    __transfer_left_mpo(csites2, sites2)#::TransferMatrix{K,N,NTuple{2,Array{NTuple{N,Int},N}}}
 end
-sites(s::Tuple) = mapfoldr(sites,_split_lazy_v,s,init=())
+sites(s::Tuple) = mapfoldr(sites, _split_lazy_v, s, init=())
 
 # _split_lazy_v(s::Vector{<:LazySiteProduct}, ss::Tuple) = ([[mp] for mp in s[1].sites]..., ss...)
 # _split_lazy_v(ss::Tuple, s::Vector{<:LazySiteProduct}) = (ss..., [[mp] for mp in reverse(s[1].sites)]...,)
 
 function __transfer_left_mpo(csites::Tuple, s::Tuple)
+    K = mapreduce(s -> eltype(s[1]), promote_type, (csites..., s...))
+    #K = promote_type(eltype.(s)...,eltype.(csites)...)
+    N = length(csites) + length(s)
     itr = Base.product(Base.product((csites)...), Base.product((s)...))
-    _apply_transfer_matrices([_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr])
+    #println(collect(itr)[1])
+    Ts::Array{TransferMatrix{K,N,NTuple{2,NTuple{N,Int}}},N} = [_transfer_left_mpo_dense(cs, ss) for (cs, ss) in itr]
+    _apply_transfer_matrices(Ts)::TransferMatrix{K,N,NTuple{2,Array{NTuple{N,Int},N}}}
 end
 
 function transfer_matrix_bond(csites::Tuple, s::Tuple)
-    csites2 = foldl(_split_lazy_v, sites.(csites), init = ())
-    sites2 = foldr(_split_lazy_v, sites.(s), init = ())
-    K = promote_type(eltype.(s)...,eltype.(csites)...)
+    csites2 = foldl(_split_lazy_v, sites.(csites), init=())
+    sites2 = foldr(_split_lazy_v, sites.(s), init=())
+    K = promote_type(eltype.(s)..., eltype.(csites)...)
     #N = length(csites2) + length(sites2)
     N = stackheight(csites) + stackheight(s)
-    _transfer_matrix_bond(csites2, sites2)::TransferMatrix{N,K,<:Any,<:Any,NTuple{2,Array{NTuple{N,Int},N}}}
+    _transfer_matrix_bond(csites2, sites2)::TransferMatrix{K,N,NTuple{2,Array{NTuple{N,Int},N}}}
 end
 function _transfer_matrix_bond(csites::Tuple, s::Tuple)
     itr = Base.product(Base.product((csites)...), Base.product((s)...))
@@ -181,14 +186,14 @@ function dense(mpss::MPSSum{<:NTuple{<:Any,<:LCROpenMPS{T}},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation=truncation(mpss.states[1]), error=sum(error.(mpss.states)))
 end
 
 function LCROpenMPS(mpss::MPSSum{<:Any,<:AbstractSite{T},<:Any}) where {T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = truncation(mpss.states[1]), error = sum(error.(mpss.states)))
+    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation=truncation(mpss.states[1]), error=sum(error.(mpss.states)))
 end
 
 # function dense(sitesum::SiteSum{<:NTuple{<:Any,GenericSite},T}) where {T}

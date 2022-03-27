@@ -4,29 +4,33 @@ Base.eltype(::AbstractTransferMatrix{T}) where {T} = T
 Base.size(T::AbstractTransferMatrix) = T.sizes
 Base.size(T::AbstractTransferMatrix, i) = T.sizes[i]
 #Base.:*(T::TransferMatrix, v) = T.f(v)
-Base.:*(T::TransferMatrix{N,K,<:Any,<:Any,<:NTuple{2,Tuple}}, v) where {N,K} = T.f(v)::Array{K,N}
-Base.:*(T::TransferMatrix{N,K,<:Any,<:Any,<:NTuple{2,Array{<:Any,N}}}, v) where {N,K} = T.f(v)::BlockBoundaryVector{K,N}
+Base.:*(T::TransferMatrix{K,N,<:NTuple{2,Tuple}}, v::Array{K2,N}) where {N,K,K2} = T.f(v)::Array{promote_type(K, K2),N}
+Base.:*(T::TransferMatrix{K,N,<:NTuple{2,Array{<:Any,N}}}, v::BlockBoundaryVector{K2,N}) where {N,K,K2} = T.f(v)::BlockBoundaryVector{promote_type(K, K2),N}
+function Base.:*(T::TransferMatrix{K,N,<:NTuple{2,Array{<:Any,N}}}, v::Array{K2,N}) where {N,K,K2}
+    @assert size(T.sizes[2]) == Tuple(fill(1, N))
+    T.f(v)::Array{promote_type(K, K2),N}
+end
 
 Base.:*(T::CompositeTransferMatrix, v) = foldr(*, T.maps, init=v)
-Base.adjoint(T::TransferMatrix{N,K}) where {N,K} = TransferMatrix{N,K}(T.fa, T.f, (size(T, 2), size(T, 1)))
-Base.adjoint(T::CompositeTransferMatrix{<:Any,K,S}) where {K,S} = CompositeTransferMatrix{K,S}(reverse(adjoint.(T.maps)))
+Base.adjoint(T::TransferMatrix{K,N}) where {N,K} = TransferMatrix{K,N}(T.fa, T.f, (size(T, 2), size(T, 1)))
+Base.adjoint(T::CompositeTransferMatrix{K,N,S}) where {K,N,S} = CompositeTransferMatrix{K,N,S}(reverse(adjoint.(T.maps)))
 
 # Base.:*(x::Number, T::TransferMatrix) = TransferMatrix(y -> x * T.f(y), eltype(T), size(T))
-Base.:*(x::K, T::AbstractTransferMatrix) where {K<:Number} = TransferMatrix{K}(v -> x * v, v -> conj(x) * v, (size(T, 1), size(T, 1))) * T
+Base.:*(x::K, T::AbstractTransferMatrix{KT,N,S}) where {KT,N,S,K<:Number} = TransferMatrix{promote_type(K, KT),N}(v -> x * v, v -> conj(x) * v, (size(T, 1), size(T, 1))) * T
 # Base.:*(x::Number, T::TransferMatrixAdj) = TransferMatrix(y -> x * T.f(y), y -> conj(x) * T.fa(y), eltype(T), size(T))
 
 # Base.:*(T1::TransferMatrix, T2::TransferMatrix) = TransferMatrix(T1.f ∘ T2.f, promote_type(eltype.((T1, T2))...), (size(T1, 1), size(T2, 2)))
 
-Base.:*(T1::TransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1, T2))
-Base.:*(T1::TransferMatrix, T2::CompositeTransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1, T2.maps...))
-Base.:*(T1::CompositeTransferMatrix, T2::TransferMatrix) = CompositeTransferMatrix{promote_type(eltype(T1), eltype(T2))}(tuple(T1.maps..., T2))
+Base.:*(T1::TransferMatrix{K1,N,S}, T2::TransferMatrix{K2,N,S}) where {K1,K2,N,S} = CompositeTransferMatrix{promote_type(K1, K2),N,S}([T1, T2])
+Base.:*(T1::TransferMatrix{K1,N,S}, T2::CompositeTransferMatrix{K2,N,S}) where {K1,K2,N,S} = CompositeTransferMatrix{promote_type(K1, K2),N,S}([T1, T2.maps...])
+Base.:*(T1::CompositeTransferMatrix{K1,N,S}, T2::TransferMatrix{K2,N,S}) where {K1,K2,N,S} = CompositeTransferMatrix{promote_type(K1, K2),N,S}([T1.maps..., T2])
 
 # function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix}, v)
 #     out = foldr(*, Ts, init = v)
 #     return out::typeof(v)
 # end
 # TransferMatrix
-function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,NTuple{2,Array{NTuple{N,Int},N}}}}, v) where {T,N}
+function apply_transfer_matrices(Ts::Vector{<:AbstractTransferMatrix{T,N,NTuple{2,Array{NTuple{N,Int},N}}}}, v) where {T,N}
     out = foldr(*, Ts, init=v)
     return out::BlockBoundaryVector{T,N}
 end
@@ -38,7 +42,7 @@ end
 #Base.:*(T1::TransferMatrixAdj{F1,Fa1,K1,S}, T2::TransferMatrixAdj{F2,Fa2,K2,S}) where {F1,F2,Fa1,Fa2,K1,K2,S} = 
 # TransferMatrixAdj{ComposedFunction{F1,F2},ComposedFunction{Fa2,Fa1},promote_type(K1, K2),S}(T1.f ∘ T2.f, T2.fa ∘ T1.fa, (size(T1, 1), size(T2, 2)))
 
-IdentityTransferMatrix(T, s) = TransferMatrix(identity, identity, T, s)
+IdentityTransferMatrix(T, s) = TransferMatrix{T}(identity, identity, s)
 
 IdentityBoundary(T, sizes::Array{NTuple{2,Int},2}) = BlockBoundaryVector{T,2}([IdentityBoundary(T, size) for size in sizes])
 IdentityBoundary(T, size::NTuple{2,Int}) = Matrix(one(T)I, size...)
@@ -87,7 +91,7 @@ function blocksizes(dims::Vararg{Vector{Int},N}) where {N}
     [dim for dim in Base.product(dims...)]
 end
 blocksizes(dims::Vararg{Int,N}) where {N} = blocksizes(([d] for d in dims)...)
-function Matrix(T::AbstractTransferMatrix, olength::Int, idims::Dims{2})
+function Matrix(T::AbstractTransferMatrix, olength::Int, idims::Dims)
     v = vec(zeros(eltype(T), idims))
     v[1] = 1
     m = zeros(eltype(T), olength, prod(idims))
@@ -247,9 +251,9 @@ __transfer_left_mpo_adjoint(L::AbstractArray{<:Any,8}, Γ1::Array{<:Any,3},
                                            Γ2[bl, d, -8]
 
 __transfer_left_mpo(R::AbstractArray{<:Any,3}, Γ1::Array{<:Any,3}, Γ2::Array{<:Any,3}) =
-    (@tensoropt (t1, b1, -1, -3) temp[:] := R[t1,-2, b1] * Γ1[-1, c1, t1] * Γ2[-3, c1, b1])
-__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,3}, Γ1::Array{<:Any,3}, Γ2::Array{<:Any,3}) = 
-    @tensoropt (t1, b1, -1, -3) temp[:] := L[t1,-2, b1] * Γ1[t1, c1, -1] * Γ2[b1, c1, -3]
+    (@tensoropt (t1, b1, -1, -3) temp[:] := R[t1, -2, b1] * Γ1[-1, c1, t1] * Γ2[-3, c1, b1])
+__transfer_left_mpo_adjoint(L::AbstractArray{<:Any,3}, Γ1::Array{<:Any,3}, Γ2::Array{<:Any,3}) =
+    @tensoropt (t1, b1, -1, -3) temp[:] := L[t1, -2, b1] * Γ1[t1, c1, -1] * Γ2[b1, c1, -3]
 
 #NTuple{<:Any,Union{ScaledIdentityMPOsite,GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}}
 function _transfer_left_mpo_dense(Γ1::Tuple, Γ2::Tuple)
@@ -261,6 +265,7 @@ function _transfer_left_mpo_dense(Γ1::Tuple, Γ2::Tuple)
     # scale, Γ23 = foldr(_remove_identity, Γ22, init = (one(K), ()))
     g1 = data.(Γ1, :right)
     g2 = data.(Γ2, :right)
+    #TODO: Check if a multiple argument version of the transfer functions improves compile times
     f(R) = __transfer_left_mpo(R, conj.(g1)..., g2...)
     fadj(L) = __transfer_left_mpo_adjoint(L, g1..., conj.(g2)...)
     odims = tuple((size(x, 1) for x in Γ1)..., (size(x, 1) for x in Γ2)...)
@@ -269,131 +274,153 @@ function _transfer_left_mpo_dense(Γ1::Tuple, Γ2::Tuple)
     return TransferMatrix{K,N}(f, fadj, (odims, idims))
 end
 
-# function _transfer_left_mpo(Γ1::Tuple{GenericSite{T}}, Γ2::Tuple{GenericSite{K}}) where {T,K}
-#     f(R) = __transfer_left_mpo(R, Γ1, Γ2)
-#     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ2)
-#     return TransferMatrix(f, fadj, promote_type(T, K), ((size(Γ1, 1), size(Γ2, 1)), (size(Γ1, 3), size(Γ2, 3))))
-# end
-# function _transfer_left_mpo(Γ1::GenericSite{T}) where {T}
-#     f(R) = __transfer_left_mpo(R, Γ1, Γ1)
-#     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, Γ1)
-#     return TransferMatrix(f, fadj, T, ((size(Γ1, 1), size(Γ1, 1)), (size(Γ1, 3), size(Γ1, 3))))
-# end
-# function _transfer_left_mpo(Γ1::GenericSite{T}, mpo::MPOsite) where {T}
-#     f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ1)
-#     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ1)
-#     return TransferMatrix(f, fadj, T, ((size(Γ1, 1), size(mpo, 1), size(Γ1, 1)), (size(Γ1, 3), size(mpo, 4), size(Γ1, 3))))
-# end
-
-# _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
-# _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1)
-# function _transfer_left_mpo(Γ1::GenericSite{T1}, mpo::MPOsite{T2}, Γ2::GenericSite{T3}) where {T1,T2,T3}
-#     f(R) = __transfer_left_mpo(R, Γ1, mpo, Γ2)
-#     fadj(L) = __transfer_left_mpo_adjoint(L, Γ1, mpo, Γ2)
-#     return TransferMatrix(f, fadj, promote_type(T1, T2, T3), ((size(Γ1, 1), size(mpo, 1), size(Γ2, 1)), (size(Γ1, 3), size(mpo, 4), size(Γ2, 3))))
-# end
-
 #TODO Check performance vs ncon, or 'concatenated' versions. Ncon is slower. concatenated is faster
-function __transfer_left_mpo(mposites::NTuple{N,MPOsite}) where {N}
-    #sizes = size.(mposites)
-    rs = size.(mposites, 4)
-    ls = size.(mposites, 1)
-    #ds = size.(mposites,3)
-    us = size.(mposites, 2)
-    function contract(R::AbstractArray{<:Number,N})
-        site = data(mposites[1])
-        # temp = reshape(R, rs[1], prod(rs[2:N])) #0.014480 seconds (250 allocations: 3.682 MiB)
-        # @tensor temp[newdone, remaining, down, hat] := site[newdone,hat,down,rc] * temp[rc,remaining]
 
-        # temp = reshape(R, rs[1], prod(rs[2:N])) 0.013839 seconds (160 allocations: 3.674 MiB)
-        # @tensor temp[down, remaining, newdone, hat] := site[newdone,hat,down,rc] * temp[rc,remaining]
 
-        temp = reshape((R), rs[1], prod(rs[2:N]))
-        @tensor temp[down, remaining, hat, newdone] := site[newdone, hat, down, rc] * temp[rc, remaining]
-        for k in 2:N
-            site = data(mposites[k])
-
-            temp = reshape(temp, us[k], rs[k], prod(rs[k+1:N]), us[1], prod(ls[1:k-1]))
-            @tensor temp[down, remaining, hat, done, newdone] := site[newdone, upc, down, rc] * temp[upc, rc, remaining, hat, done] order = (upc, rc)
-
-            # temp = reshape(temp, us[k], rs[k], prod(rs[k+1:N]), prod(ls[1:k-1]), us[1])  0.013839 seconds (160 allocations: 3.674 MiB)
-            # @tensor temp[down, remaining, done,newdone,hat] := site[newdone,upc,down,rc] * temp[upc, rc,remaining,done,hat] order=(upc,rc)
-
-            # temp = reshape(temp, prod(ls[1:k-1]), rs[k], prod(rs[k+1:N]), us[k], us[1])  #0.014480 seconds (250 allocations: 3.682 MiB)
-            # @tensor temp[done, newdone, remaining, down, hat] := site[newdone,upc,down,rc] * temp[done,rc,remaining,upc,hat] order=(rc,upc)
-        end
-        if us[1] != 1
-            @tensor temp[:] := temp[1, -1, 1, -2, -3]
-        end
-        return reshape(temp, prod(ls))
+function __transfer_left_mpo(R::AbstractArray{<:Any,N}, sites::Vararg{Union{Array,Number,Bool},N}) where {N}
+    rs = size(R)
+    #ls = size.(sites, 1)
+    physical_sizes(sizes,newsite::Array) = (sizes...,size(newsite,2))
+    physical_sizes(sizes,newsite::Union{Number,Bool}) = (sizes...,sizes[end])
+    virtual_sizes(site::Array) = size(site, 1)
+    virtual_sizes(site::Union{Number,Bool}) = 1
+    us = foldl(physical_sizes,sites, init = (1,))
+    ls = virtual_sizes.(sites)
+    #us = size.(sites, 2)
+    temp = reshape(R, rs[1], prod(rs[2:N]))
+    @tensor s1[:] := sites[1][-1,-3,-4] * [1][-2]
+    @tensor sN[:] := sites[end][-1,-2,-4]*[1][-3]
+    @tensor temp[down, remaining, hat, newdone] := s1[newdone, hat, down, rc] * temp[rc, remaining]
+    for k in 2:N-1
+        #site = site[k]
+        temp = reshape(temp, us[k], rs[k], prod(rs[k+1:N]), us[1], prod(ls[1:k-1]))
+        temp = _absorb_site(temp, sites[k])
+        #@tensor temp[down, remaining, hat, done, newdone] := site[newdone, upc, down, rc] * temp[upc, rc, remaining, hat, done] order = (upc, rc)
     end
-    function adjoint_contract(R::AbstractArray{<:Number,N})
-        temp = reshape((R), ls[1], prod(ls[2:N]))
-        site = permutedims(conj(mposites[1]), [4, 2, 3, 1])
-        @tensor temp[down, remaining, hat, newdone] := site[newdone, hat, down, rc] * temp[rc, remaining]
-        for k in 2:N
-            site = permutedims(conj(mposites[k]), [4, 2, 3, 1])
-
-            temp = reshape(temp, us[k], ls[k], prod(ls[k+1:N]), us[1], prod(rs[1:k-1]))
-            @tensor temp[down, remaining, hat, done, newdone] := site[newdone, upc, down, rc] * temp[upc, rc, remaining, hat, done] order = (upc, rc)
-        end
-        if us[1] != 1
-            @tensor temp[:] := temp[1, -1, 1, -2, -3]
-        end
-        return reshape(temp, prod(rs))
+    temp = reshape(temp, us[N], rs[N], 1, us[1], prod(ls[1:N-1]))
+    temp = _absorb_site(temp, sN)
+    if us[1] != 1
+        @tensor temp[:] := temp[1, -1, 1, -2, -3]
     end
-    map = LinearMapAA(contract, adjoint_contract, (prod(ls), prod(rs));
-        idim=rs, odim=ls, T=promote_type(eltype.(mposites)...))
-    #LinearMap{promote_type(eltype.(mposites)...)}(contract, adjoint_contract, prod(ls), prod(rs))
-    return map
+    return reshape(temp, ls...)
 end
-
-function _transfer_left_mpo_ncon(mposites::Vararg{MPOsite,N}) where {N}
-    rs = size.(mposites, 4)
-    ls = size.(mposites, 1)
-    us = size.(mposites, 2)
-    function contract(R)
-        # index(1) = [-1,last,3,1]
-        # index(2) = [-2,3,5,2]
-        # index(3) = [-3,5,7,4] # or if last: [-3,5,6,4]
-        # index(4) = [-4, 7, 9, 6]
-        # index(N) = [-N], , , 
-        function index(k)
-            if N == 1
-                return [-1, 2, 2, 1]
-            elseif k == 1
-                return [-1, 2 * N, 3, 1]
-            elseif k == N
-                return [-k, 2 * k - 1, 2 * k, 2k - 2]
-            else
-                return [-k, 2 * k - 1, 2 * k + 1, 2k - 2]
-            end
-        end
-        indexR = [1, [2k - 2 for k in 2:N]...]
-        tens = reshape(R, rs)
-        ncon([tens, data.(mposites)...], [indexR, [index(k) for k in 1:N]...])
-        return reshape(tens, prod(ls))
+function __transfer_left_mpo_adj(R::Array{<:Any,N}, sites::Vararg{Union{Array,Number,Bool},N}) where {N}
+    rs = map(s -> size(s)[end], sites)
+    #ls = size.(mposites, 1)
+    #us = size.(mposites, 2)
+    physical_sizes(sizes,newsite::Array) = (sizes...,size(newsite,2))
+    physical_sizes(sizes,newsite::Union{Number,Bool}) = (sizes...,sizes[end])
+    virtual_sizes(site::Array) = size(site, 1)
+    virtual_sizes(site::Union{Number,Bool}) = 1
+    us = foldl(physical_sizes,sites, init = (1,))
+    ls = virtual_sizes.(sites)
+    temp = reshape(R, ls[1], prod(ls[2:N]))
+    site = permutedims(conj(sites[1]), [4, 2, 3, 1])
+    @tensor temp[down, remaining, hat, newdone] := site[newdone, hat, down, rc] * temp[rc, remaining]
+    for k in 2:N
+        site = permutedims(sites[k], [4, 2, 3, 1])
+        temp = reshape(temp, us[k], ls[k], prod(ls[k+1:N]), us[1], prod(rs[1:k-1]))
+        temp = _absorb_site(temp, sites[k])
+        #@tensor temp[down, remaining, hat, done, newdone] := site[newdone, upc, down, rc] * temp[upc, rc, remaining, hat, done] order = (upc, rc)
     end
-    function adjoint_contract(R)
-        function index(k)
-            if N == 1
-                return reverse([-1, 2, 2, 1])
-            elseif k == 1
-                return reverse([-1, 2 * N, 3, 1])
-            elseif k == N
-                return reverse([-k, 2 * k - 1, 2 * k, 2k - 2])
-            else
-                return reverse([-k, 2 * k - 1, 2 * k + 1, 2k - 2])
-            end
-        end
-        indexR = [1, [2k - 2 for k in 2:N]...]
-        tens = reshape(R, ls)
-        ncon([tens, conj.(data.(mposites))...], [indexR, [index(k) for k in 1:N]...])
-        return reshape(tens, prod(rs))
+    if us[1] != 1
+        @tensor temp[:] := temp[1, -1, 1, -2, -3]
     end
-    map = LinearMap{promote_type(eltype.(mposites)...)}(contract, adjoint_contract, prod(ls), prod(rs))
-    return map
+    return reshape(temp, prod(rs))
 end
+function _absorb_site(R, site::Array)
+    @tensor temp[down, remaining, hat, done, newdone] := site[newdone, upc, down, rc] * R[upc, rc, remaining, hat, done] order = (upc, rc)
+end
+function _absorb_site(R, site::Union{Number,Bool})
+    R*site
+end
+# function __transfer_left_mpo(mposites::NTuple{N,MPOsite}) where {N}
+#     #sizes = size.(mposites)
+#     rs = size.(mposites, 4)
+#     ls = size.(mposites, 1)
+#     #ds = size.(mposites,3)
+#     us = size.(mposites, 2)
+#     function contract(R::AbstractArray{<:Number,N})
+#         site = data(mposites[1])
+#         temp = reshape((R), rs[1], prod(rs[2:N]))
+#         @tensor temp[down, remaining, hat, newdone] := site[newdone, hat, down, rc] * temp[rc, remaining]
+#         for k in 2:N
+#             site = data(mposites[k])
+#             temp = reshape(temp, us[k], rs[k], prod(rs[k+1:N]), us[1], prod(ls[1:k-1]))
+#             @tensor temp[down, remaining, hat, done, newdone] := site[newdone, upc, down, rc] * temp[upc, rc, remaining, hat, done] order = (upc, rc)
+#         end
+#         if us[1] != 1
+#             @tensor temp[:] := temp[1, -1, 1, -2, -3]
+#         end
+#         return reshape(temp, prod(ls))
+#     end
+#     function adjoint_contract(R::AbstractArray{<:Number,N})
+#         temp = reshape((R), ls[1], prod(ls[2:N]))
+#         site = permutedims(conj(mposites[1]), [4, 2, 3, 1])
+#         @tensor temp[down, remaining, hat, newdone] := site[newdone, hat, down, rc] * temp[rc, remaining]
+#         for k in 2:N
+#             site = permutedims(conj(mposites[k]), [4, 2, 3, 1])
+
+#             temp = reshape(temp, us[k], ls[k], prod(ls[k+1:N]), us[1], prod(rs[1:k-1]))
+#             @tensor temp[down, remaining, hat, done, newdone] := site[newdone, upc, down, rc] * temp[upc, rc, remaining, hat, done] order = (upc, rc)
+#         end
+#         if us[1] != 1
+#             @tensor temp[:] := temp[1, -1, 1, -2, -3]
+#         end
+#         return reshape(temp, prod(rs))
+#     end
+#     map = LinearMapAA(contract, adjoint_contract, (prod(ls), prod(rs));
+#         idim=rs, odim=ls, T=promote_type(eltype.(mposites)...))
+#     #LinearMap{promote_type(eltype.(mposites)...)}(contract, adjoint_contract, prod(ls), prod(rs))
+#     return map
+# end
+
+# function _transfer_left_mpo_ncon(mposites::Vararg{MPOsite,N}) where {N}
+#     rs = size.(mposites, 4)
+#     ls = size.(mposites, 1)
+#     us = size.(mposites, 2)
+#     function contract(R)
+#         # index(1) = [-1,last,3,1]
+#         # index(2) = [-2,3,5,2]
+#         # index(3) = [-3,5,7,4] # or if last: [-3,5,6,4]
+#         # index(4) = [-4, 7, 9, 6]
+#         # index(N) = [-N], , , 
+#         function index(k)
+#             if N == 1
+#                 return [-1, 2, 2, 1]
+#             elseif k == 1
+#                 return [-1, 2 * N, 3, 1]
+#             elseif k == N
+#                 return [-k, 2 * k - 1, 2 * k, 2k - 2]
+#             else
+#                 return [-k, 2 * k - 1, 2 * k + 1, 2k - 2]
+#             end
+#         end
+#         indexR = [1, [2k - 2 for k in 2:N]...]
+#         tens = reshape(R, rs)
+#         ncon([tens, data.(mposites)...], [indexR, [index(k) for k in 1:N]...])
+#         return reshape(tens, prod(ls))
+#     end
+#     function adjoint_contract(R)
+#         function index(k)
+#             if N == 1
+#                 return reverse([-1, 2, 2, 1])
+#             elseif k == 1
+#                 return reverse([-1, 2 * N, 3, 1])
+#             elseif k == N
+#                 return reverse([-k, 2 * k - 1, 2 * k, 2k - 2])
+#             else
+#                 return reverse([-k, 2 * k - 1, 2 * k + 1, 2k - 2])
+#             end
+#         end
+#         indexR = [1, [2k - 2 for k in 2:N]...]
+#         tens = reshape(R, ls)
+#         ncon([tens, conj.(data.(mposites))...], [indexR, [index(k) for k in 1:N]...])
+#         return reshape(tens, prod(rs))
+#     end
+#     map = LinearMap{promote_type(eltype.(mposites)...)}(contract, adjoint_contract, prod(ls), prod(rs))
+#     return map
+# end
 #::Vararg{Union{AbstractMPOsite,AbstractSite},N}
 _transfer_right_mpo(csites::T1, sites::T2) where {T1<:Tuple,T2<:Tuple} = _transfer_left_mpo(reverse_direction.(csites)::T1, reverse_direction.(sites)::T2)
 reverse_direction(Γ::Array{<:Number,3}) = permutedims(Γ, [3, 2, 1])
@@ -609,7 +636,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, direction::S
 
     #Convert to CompositeTransferMatrix for type stability
     #CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites
-    return CompositeTransferMatrix{T}(Tuple(Ts))
+    return CompositeTransferMatrix{T}(Ts)
     #return mapfoldr(site -> CompositeTransferMatrix(transfer_matrix(site, direction)), *, sites)::CompositeTransferMatrix{<:NTuple{<:Any,AbstractTransferMatrix{T,<:Any}},T,<:NTuple{2,<:Any}}
     #return foldr(*, Ts)::CompositeTransferMatrix{_A,T,_B}
 end
@@ -624,7 +651,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, sites2::Abst
     if direction == :right
         Ts = reverse(Ts)
     end
-    return CompositeTransferMatrix{T}(Tuple(Ts))
+    return CompositeTransferMatrix{T}(Ts)
 end
 
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractMPO, direction::Symbol=:left) where {T}
@@ -636,7 +663,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::Abstract
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return CompositeTransferMatrix{T}(Tuple(Ts)) #Products of many linear operators cause long compile times!
+    return CompositeTransferMatrix{T}(Ts) #Products of many linear operators cause long compile times!
 end
 
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::AbstractSquareGate, direction::Symbol=:left) where {T}
@@ -648,5 +675,5 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite{T}}, op::Abstract
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return CompositeTransferMatrix{T}(Tuple(Ts)) #Products of many linear operators cause long compile times!
+    return CompositeTransferMatrix{T}(Ts) #Products of many linear operators cause long compile times!
 end

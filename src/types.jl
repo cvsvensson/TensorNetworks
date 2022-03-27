@@ -61,7 +61,7 @@ struct OrthogonalLinkSite{T} <: AbstractCenterSite{T}
     Γ::GenericSite{T}
     Λ1::LinkSite{T}
     Λ2::LinkSite{T}
-    function OrthogonalLinkSite(Λ1::LinkSite, Γ::GenericSite{T}, Λ2::LinkSite; check = false) where {T}
+    function OrthogonalLinkSite(Λ1::LinkSite, Γ::GenericSite{T}, Λ2::LinkSite; check=false) where {T}
         if check
             @assert isleftcanonical(Λ1 * Γ) "Error in constructing OrthogonalLinkSite: Is not left canonical"
             @assert isrightcanonical(Γ * Λ2) "Error in constructing OrthogonalLinkSite: Is not right canonical"
@@ -71,7 +71,7 @@ struct OrthogonalLinkSite{T} <: AbstractCenterSite{T}
         new{T}(Γ, Λ1, Λ2)
     end
 end
-Base.similar(site::OrthogonalLinkSite) = OrthogonalLinkSite(similar(site.Λ1), similar(site.Γ), similar(site.Λ2), check = false)
+Base.similar(site::OrthogonalLinkSite) = OrthogonalLinkSite(similar(site.Λ1), similar(site.Γ), similar(site.Λ2), check=false)
 
 abstract type AbstractMPS{T<:AbstractCenterSite} <: AbstractVector{T} end
 
@@ -90,7 +90,7 @@ mutable struct OpenMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     function OpenMPS(
         Γ::Vector{GenericSite{T}},
         Λ::Vector{LinkSite{T}};
-        truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION, error = 0.0) where {T}
+        truncation::TruncationArgs=DEFAULT_OPEN_TRUNCATION, error=0.0) where {T}
         new{T}(Γ, Λ, truncation, error)
     end
 end
@@ -108,8 +108,8 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
     center::Int
     function LCROpenMPS{T}(
         Γ::Vector{GenericSite{K}};
-        truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
-        error = 0.0
+        truncation::TruncationArgs=DEFAULT_OPEN_TRUNCATION,
+        error=0.0
     ) where {K,T}
         count = 1
         N = length(Γ)
@@ -132,10 +132,10 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
 end
 function LCROpenMPS(
     Γ::Vector{GenericSite{K}};
-    truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
-    error = 0.0
+    truncation::TruncationArgs=DEFAULT_OPEN_TRUNCATION,
+    error=0.0
 ) where {K}
-    LCROpenMPS{K}(Γ; truncation = truncation, error = error)
+    LCROpenMPS{K}(Γ; truncation=truncation, error=error)
 end
 LCROpenMPS(mps::LCROpenMPS) = mps
 mutable struct UMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
@@ -236,37 +236,42 @@ end
 #     return BlockBoundaryVector(bv)
 # end
 
-abstract type AbstractTransferMatrix{T,S} end
-struct TransferMatrix{N,T,F,Fa,S} <: AbstractTransferMatrix{T,S}
+abstract type AbstractTransferMatrix{T,N,S} end
+struct TransferMatrix{T,N,S,F,Fa} <: AbstractTransferMatrix{T,N,S}
     f::F
     fa::Fa
     sizes::S
 end
-TransferMatrix{T}(f::Function, s) where T = TransferMatrix{length(s[2]),T,typeof(f),Nothing,typeof(s)}(f, nothing, s)
-TransferMatrix{T,N}(f::Function, s) where {T,N} = (@assert N == length(size(s[2])); TransferMatrix{N,T,typeof(f),Nothing,typeof(s)}(f, nothing, s))
-TransferMatrix{T,N}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s::NTuple{2,Tuple}) where {N,T} =  (@assert N == length(s[2]); TransferMatrix{N,T,typeof(f),typeof(fa),typeof(s)}(f, fa, s))
-TransferMatrix{T,N}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s::NTuple{2,Array}) where {N,T} =  (@assert N == length(size(s[2])); TransferMatrix{N,T,typeof(f),typeof(fa),typeof(s)}(f, fa, s))
+TransferMatrix{T}(f::Function, s) where {T} = TransferMatrix{T,length(s[2]),typeof(s),typeof(f),Nothing}(f, nothing, s)
+TransferMatrix{T,N}(f::Function, s) where {T,N} = (@assert N == length(size(s[2])); TransferMatrix{T,N,typeof(s),typeof(f),Nothing}(f, nothing, s))
+TransferMatrix{T,N}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s::NTuple{2,Tuple}) where {N,T} = (@assert N == length(s[2]) "$N vs $(length(s[2]))"; TransferMatrix{T,N,typeof(s),typeof(f),typeof(fa)}(f, fa, s))
+TransferMatrix{T,N}(f::Union{Function,Nothing}, fa::Union{Function,Nothing}, s::NTuple{2,Array}) where {N,T} = (@assert N == length(size(s[2])) "$N vs $(length(size(s[2])))"; TransferMatrix{T,N,typeof(s),typeof(f),typeof(fa)}(f, fa, s))
 
 # TransferMatrix{T,N}(f::Function, s) where {T,N} = (@assert N == length(s[2]); TransferMatrix{N,T,typeof(f),Nothing,typeof(s)}(f, nothing, s))
 
 
-struct CompositeTransferMatrix{Maps,T,S} <: AbstractTransferMatrix{T,S}
-    maps::Maps
+struct CompositeTransferMatrix{T,N,S} <: AbstractTransferMatrix{T,N,S}
+    maps::Vector{TransferMatrix{T,N,S}}
     sizes::S
 end
-function CompositeTransferMatrix{T}(maps::Maps) where {Maps,T}
+function CompositeTransferMatrix{T,N,S}(maps::Vector{<:TransferMatrix{<:Any,N,S}}) where {T,N,S}
     s1 = size(maps[1], 1)
     s2 = size(maps[end], 2)
-    CompositeTransferMatrix{Maps,T,typeof(tuple(s1, s2))}(maps, (s1, s2))
+    CompositeTransferMatrix{T,N,S}(maps, (s1, s2))
 end
-function CompositeTransferMatrix(map::TransferMatrix{<:Any,<:Any,T,S}) where {T,S}
-    CompositeTransferMatrix{typeof(tuple(map)),T,S}(tuple(map), size(map))
-end
-function CompositeTransferMatrix{T,S}(maps::Maps) where {Maps,T,S}
+function CompositeTransferMatrix{T}(maps::Vector{<:TransferMatrix{<:Any,N,S}}) where {T,N,S}
     s1 = size(maps[1], 1)
     s2 = size(maps[end], 2)
-    CompositeTransferMatrix{Maps,T,S}(maps, (s1, s2))
+    CompositeTransferMatrix{T,N,typeof(tuple(s1, s2))}(maps, (s1, s2))
 end
+function CompositeTransferMatrix(map::TransferMatrix{T,N,S}) where {T,N,S}
+    CompositeTransferMatrix{T,N,S}([map], size(map))
+end
+# function CompositeTransferMatrix{T,S}(maps::Vector) where {Maps,T,S}
+#     s1 = size(maps[1], 1)
+#     s2 = size(maps[end], 2)
+#     CompositeTransferMatrix{T,S}(maps, (s1, s2))
+# end
 
 abstract type AbstractMPOsite{T} <: AbstractArray{T,4} end
 
@@ -358,8 +363,8 @@ end
 #numtype(ms::Vararg{<:AbstractMPS,N}) where N = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
 #numtype(::ScaledIdentityMPOsite{T}) where T = T 
-numtype(::AbstractMPOsite{T}) where T = T
-numtype(::AbstractMPO{T}) where T = T
+numtype(::AbstractMPOsite{T}) where {T} = T
+numtype(::AbstractMPO{T}) where {T} = T
 
 
 sites(mps::LCROpenMPS) = mps.Γ
