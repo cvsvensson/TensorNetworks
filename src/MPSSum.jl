@@ -82,10 +82,20 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
 end
 
 
+_split_lazy_v(s, ss::Tuple) = (s, ss...)
+_split_lazy_v(ss::Tuple, s) = (ss..., s)
+_split_lazy_v(s::Vector{<:LazySiteProduct}, ss::Tuple) = ([[mp] for mp in s[1].sites]..., ss...)
+_split_lazy_v(ss::Tuple, s::Vector{<:LazySiteProduct}) = (ss..., [[mp] for mp in reverse(s[1].sites)]...)
+# function itr_split_lazy(s::Tuple)
+#     [sites(s) for site in s]
+# end
+
 function _transfer_left_mpo(csites::Tuple, s::Tuple)
     csites2 = foldl(_split_lazy_v, sites.(csites), init = ())
     sites2 = foldr(_split_lazy_v, sites.(s), init = ())
-    __transfer_left_mpo(csites2, sites2)
+    K = promote_type(eltype.(s)...,eltype.(csites)...)
+    N = stackheight(csites) + stackheight(s)
+    __transfer_left_mpo(csites2, sites2)::TransferMatrix{N,K,<:Any,<:Any,NTuple{2,Array{NTuple{N,Int},N}}}
 end
 sites(s::Tuple) = mapfoldr(sites,_split_lazy_v,s,init=())
 

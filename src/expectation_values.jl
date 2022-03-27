@@ -107,12 +107,12 @@ function expectation_value(sites::Union{Vector{GenericSite{T}},Vector{Orthogonal
     @assert length(sites) == operatorlength(gate)
     #Λ = data(sites[1].Λ1) .^ 2
     TΛ = transfer_matrix_bond((sites[1],), (sites[1],))
-    transfer = _local_transfer_matrix(sites, gate, sites, :left) #transfer_matrix(sites, gate, :left)
+    transfer = TensorNetworks._local_transfer_matrix(sites, gate, sites, :left) #transfer_matrix(sites, gate, :left)
     DL = size(sites[1], 1)
     DR = size(sites[end], 3)
-    idL = Matrix{T}(I, DL, DL)
-    idR = Matrix{T}(I, DR, DR)
-    return dot(idL, TΛ * (transfer * idR))
+    idL = TensorNetworks.BlockBoundaryVector(Matrix{T}(I, DL, DL))
+    idR = TensorNetworks.BlockBoundaryVector(Matrix{T}(I, DR, DR))
+    return inner(idL, TΛ * (transfer * idR))
 end
 # function expectation_value(sites::Vector{GenericSite{T}}, gate::AbstractSquareGate) where {T}
 #     @assert length(sites) == operatorlength(gate) "Error in 'expectation value': length(sites) != operatorlength(gate)"

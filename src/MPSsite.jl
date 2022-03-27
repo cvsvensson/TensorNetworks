@@ -18,7 +18,7 @@ Base.conj(s::OrthogonalLinkSite) = OrthogonalLinkSite(s.Λ1, conj(s.Γ), s.Λ2)
 
 sites(site::GenericSite) = [site]
 sites(site::OrthogonalLinkSite) = [site]
-sites(site::SiteSum) = site.sites
+sites(site::SiteSum) = [site.sites...]
 sites(site::LazySiteProduct) = [sites.(site.sites)...]#[site]#Base.product(sites.(site.sites)...)
 
 #Base.isapprox(s1::AbstractSite,s2::AbstractSite) = isapprox(data(s1),data(s2))

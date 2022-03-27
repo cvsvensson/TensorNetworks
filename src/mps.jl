@@ -13,13 +13,13 @@ function _sites_from_tuple(mps_stack::Tuple,k)
     map(mps->mps[k],mps_stack)
 end
 function _horizontal_contraction(mps1::Tuple, mps2::Tuple)
-    s1 = _sites_from_tuple(mps1,1)
-    s2 = _sites_from_tuple(mps2,1)
-    Tb = transfer_matrix_bond(s1,s2)
+    s1 = TensorNetworks._sites_from_tuple(mps1,1)
+    s2 = TensorNetworks._sites_from_tuple(mps2,1)
+    Tb = TensorNetworks.transfer_matrix_bond(s1,s2)
     L =  boundary(mps1, mps2, :left)
     vr = boundary(mps1, mps2, :right)
     vl =  Tb*L
-    s = _local_transfer_matrix(_sites_from_tuple(mps1,2),_sites_from_tuple(mps2,2), :left)
+    #s = TensorNetworks._local_transfer_matrix(TensorNetworks._sites_from_tuple(mps1,2),TensorNetworks._sites_from_tuple(mps2,2), :left)
     vr2 = mapfoldr(k->_local_transfer_matrix(_sites_from_tuple(mps1,k),_sites_from_tuple(mps2,k), :left),*,1:length(mps1[1]),init=vr)
     return inner(vl, vr2)#apply_transfer_matrices(Ts,vr))
 end

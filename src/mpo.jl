@@ -204,10 +204,10 @@ end
 Base.show(io::IO, lp::LazySiteProduct) =
     print(io, "LazySiteProduct\nSites: ", typeof.(lp.sites))
 Base.show(io::IO, m::MIME"text/plain", lp::LazySiteProduct) = show(io, lp)
-Base.copy(lp::LazySiteProduct) = LazySiteProduct(copy.(lp.sites)...)
+Base.copy(lp::LazySiteProduct{N}) where N = LazySiteProduct{N}(copy.(lp.sites))
 Base.eltype(::LazySiteProduct{<:Any,T}) where {T} = T
 ispurification(lp::LazySiteProduct) = any([ispurification(s) for s in lp.sites if s isa AbstractSite])
-reverse_direction(lp::LazySiteProduct) = LazySiteProduct(reverse_direction.(lp.sites)...)
+reverse_direction(lp::LazySiteProduct{N}) where N = LazySiteProduct{N}(reverse_direction.(lp.sites)...)
 
 Base.:*(o::AbstractMPOsite, s::Union{AbstractSite,AbstractMPOsite}) = LazySiteProduct{2}([o, s])
 Base.:*(o::AbstractMPOsite, lp::LazySiteProduct{N}) where {N} = LazySiteProduct{N+1}([o, lp.sites...])

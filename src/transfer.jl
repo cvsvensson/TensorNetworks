@@ -145,23 +145,6 @@ _transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::AbstractMatr
 
 #NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}}
 
-function transfer_matrix_bond(csites::Tuple, s::Tuple)
-    csites2 = foldl(_split_lazy_v, sites.(csites), init = ())
-    sites2 = foldr(_split_lazy_v, sites.(s), init = ())
-    # println(typeof(csites2))
-    # println("_")
-    # println.(typeof.(sites2))
-    _transfer_matrix_bond(csites2, sites2)
-end
-_split_lazy_v(s, ss::Tuple) = (s, ss...)
-_split_lazy_v(ss::Tuple, s) = (ss..., s)
-_split_lazy_v(s::Vector{<:LazySiteProduct}, ss::Tuple) = ([[mp] for mp in s[1].sites]..., ss...)
-_split_lazy_v(ss::Tuple, s::Vector{<:LazySiteProduct}) = (ss..., [[mp] for mp in reverse(s[1].sites)]...)
-function _transfer_matrix_bond(csites::Tuple, s::Tuple) #where {N1,N2,N3,N4}
-    itr = Base.product(Base.product(csites...), Base.product(s...))
-    _apply_transfer_matrices([transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr])
-end
-
 function transfer_matrix_bond_dense(csites::Tuple, sites::Tuple)
     K = promote_type(eltype.(sites)...)
     N = length(csites) + length(sites)
@@ -440,9 +423,9 @@ end
 #     return _apply_transfer_matrices(Ts)
 # end
 
-function _transfer_right_gate(Γ1::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}}, gate::GenericSquareGate, Γ2::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}})
-    _transfer_right_gate_dense(Γ1, gate, Γ2)
-end
+# function _transfer_right_gate(Γ1::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}}, gate::GenericSquareGate, Γ2::AbstractVector{<:Union{<:GenericSite,<:OrthogonalLinkSite}})
+#     _transfer_right_gate_dense(Γ1, gate, Γ2)
+# end
 
 # _transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate)
 _transfer_right_gate_dense(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:OrthogonalLinkSite}) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate, [GenericSite(Γ, :left) for Γ in Γ2])
@@ -457,7 +440,7 @@ function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::G
     s_start2 = size(Γ2[1])[1]
     s_final1 = size(Γ1[oplength])[3]
     s_final2 = size(Γ2[oplength])[3]
-    function T_on_vec(invec::AbstractArray{<:Number,2}) #FIXME Compare performance to a version where the gate is applied between the top and bottom layer of sites
+    function T_on_vec(invec::Array{<:Number,2}) #FIXME Compare performance to a version where the gate is applied between the top and bottom layer of sites
         v = reshape((invec), 1, s_start1, s_start2)
         for k in 1:oplength
             @tensoropt (1, 2) v[:] := conj(data(Γ1[k]))[1, -2, -4] * v[-1, 1, 2] * data(Γ2[k])[2, -3, -5]
@@ -469,7 +452,7 @@ function _transfer_right_gate_dense(Γ1::AbstractVector{GenericSite{T}}, gate::G
         return vout
     end
     #TODO Define adjoint
-    return TransferMatrix(T_on_vec, T, ((s_final1, s_final2), (s_start1, s_start2)))#LinearMapAA(T_on_vec, (s_final1 * s_final2, s_start1 * s_start2);
+    return TransferMatrix{T}(T_on_vec, ((s_final1, s_final2), (s_start1, s_start2)))#LinearMapAA(T_on_vec, (s_final1 * s_final2, s_start1 * s_start2);
     #odim = (s_final1, s_final2), idim = (s_start1, s_start2), T = T)
 end
 

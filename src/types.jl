@@ -341,6 +341,19 @@ struct ScaledIdentityMPO{T} <: AbstractMPO{T}
     end
 end
 
+# struct VerticalSiteStack{T,N,C,S}
+#     cs::C
+#     ss::S
+#     function VerticalStack(cs::Tuple, ss::Tuple)
+#         T = promote_type(eltype.(cs)...,eltype.(ss)...)
+#         cs2 = foldl(_split_lazy_v, sites.(csites), init = ())
+#         ss2 = foldr(_split_lazy_v, sites.(s), init = ())
+#         K = promote_type(eltype.(s)...,eltype.(csites)...)
+#         #N = length(csites2) + length(sites2)
+#         N = stackheight(csites) + stackheight(s)
+#         new{T,N,typeof(cs2),typeof(ss2)}(cs2,ss2)
+# end
+
 #numtype(ms::Vararg{<:AbstractMPS,Val{1}}) = promote_type(numtype(ms)...)
 #numtype(ms::Vararg{<:AbstractMPS,N}) where N = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
