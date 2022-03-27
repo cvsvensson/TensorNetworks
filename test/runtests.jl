@@ -162,7 +162,7 @@ end
         D = 5
         mps = randomOpenMPS(N, d, D)
         T0 = Matrix(transfer_matrix(mps))
-        @test T0 == Matrix(transfer_matrix(mps, id))
+        @test T0 ≈ Matrix(transfer_matrix(mps, id))
         #@test z * T0 ≈ Matrix(transfer_matrix(mps, zid)) #
     end
     test(2)

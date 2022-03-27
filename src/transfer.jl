@@ -53,7 +53,7 @@ function IdentityBoundary(T, sizes::NTuple{N,Int}) where {N}
     tp::Array{T,N} = tensor_product(idmat, idvecs...)
     return permutedims(tp, perm)
 end
-function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Array{NTuple{N,Int},K}}}) where {Num,N,K}
+function Matrix(T::AbstractTransferMatrix{Num,N,NTuple{2,Array{NTuple{N,Int},K}}}) where {Num,N,K}
     s = size(T)
     idim = sum(prod.(s[2]))
     odim = sum(prod.(s[1]))
@@ -66,7 +66,7 @@ function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,Array{NTuple{N,Int},K}}})
     end
     return m
 end
-function Matrix(T::AbstractTransferMatrix{Num,NTuple{2,NTuple{N,Int}}}) where {Num,N}
+function Matrix(T::AbstractTransferMatrix{Num,N,NTuple{2,NTuple{N,Int}}}) where {Num,N}
     odims, idims = size(T)
     v = vec(zeros(Num, idims))
     v[1] = 1
