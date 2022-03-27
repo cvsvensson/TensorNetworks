@@ -142,10 +142,30 @@ _transfer_matrix_bond(R::Array{<:Number,3}, d1::AbstractMatrix, d2::AbstractMatr
     @tensor out[:] := d1[-1, 1] * d2[-2, 2] * d3 * R[1, 2, -3]
 
 #NTuple{<:Any,Union{GenericSite,OrthogonalLinkSite,MPOsite,LazySiteProduct}}
+
+function transfer_matrix_bond(csites::Tuple, s::Tuple)
+    csites2 = foldl(_split_lazy_v, sites.(csites), init = ())
+    sites2 = foldr(_split_lazy_v, sites.(s), init = ())
+    # println(typeof(csites2))
+    # println("_")
+    # println.(typeof.(sites2))
+    _transfer_matrix_bond(csites2, sites2)
+end
+_split_lazy_v(s, ss::Tuple) = (s, ss...)
+_split_lazy_v(ss::Tuple, s) = (ss..., s)
+_split_lazy_v(s::Vector{<:LazySiteProduct}, ss::Tuple) = ([[mp] for mp in s[1].sites]..., ss...)
+_split_lazy_v(ss::Tuple, s::Vector{<:LazySiteProduct}) = (ss..., [[mp] for mp in reverse(s[1].sites)]...)
+function _transfer_matrix_bond(csites::Tuple, s::Tuple) #where {N1,N2,N3,N4}
+    itr = Base.product(Base.product(csites...), Base.product(s...))
+    _apply_transfer_matrices([transfer_matrix_bond_dense(cs, ss) for (cs, ss) in itr])
+end
+
 function transfer_matrix_bond_dense(csites::Tuple, sites::Tuple)
     K = promote_type(eltype.(sites)...)
-    newcsites3 = foldl(_split_lazy, csites, init=())
-    newsites3 = foldr(_split_lazy, sites, init=())
+    # newcsites3 = foldl(_split_lazy, csites, init=())
+    # newsites3 = foldr(_split_lazy, sites, init=())
+    newcsites3 = csites
+    newsites3 = sites
     # cscale, newcsites3 = foldl(_remove_identity, newcsites2, init = (one(K), ()))
     # scale, newsites3 = foldr(_remove_identity, newsites2, init = (one(K), ()))
     #(scale * cscale) *

@@ -130,7 +130,7 @@ infinite_environment(L::Vector{V}, R::Vector{V}) where {V} = InfiniteEnvironment
 
 
 function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, dir::Symbol)
-    T = numtype(mps1, mps2)
+    #T = numtype(mps1, mps2)
     Ts = transfer_matrices((mps1,), (mpo, mps2), reverse_direction(dir))
     V = boundary((mps1,), (mpo, mps2), dir)
     N = length(mps1)
@@ -198,9 +198,9 @@ function environment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     end
 end
 
-# environment(mps1::AbstractMPS, mps2::AbstractMPS) = environment(mps1, IdentityMPO(length(mps1)), mps2)
+environment(mps1::AbstractMPS, mps2::AbstractMPS) = environment(mps1, IdentityMPO(length(mps1)), mps2)
 environment(mps::AbstractMPS, mpo::AbstractMPO) = environment(mps, mpo, mps)
-# environment(mps::AbstractMPS) = environment(mps, IdentityMPO(length(mps)), mps)
+environment(mps::AbstractMPS) = environment(mps, mps)
 
 # function update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::AbstractMPOsite, mps2::AbstractSite, site::Integer)
 #     site == length(env) || (env.L[site+1] = reshape(transfer_matrix(mps1, mpo, mps2, :right)*vec(env.L[site]), size(mps1,3), size(mpo,4), size(mps2,3)))
