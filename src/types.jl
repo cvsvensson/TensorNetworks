@@ -117,7 +117,7 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
         while count < N + 1 && isrightcanonical(data(Γ[count]))
             count += 1
         end
-        @assert count == N + 1 "LCROpenMPS is not LR canonical"
+        @assert count == N + 1 "LCROpenMPS is not LR canonical. $count != $(N+1)"
         new{T}(Γ, truncation, error, center)
     end
 end
