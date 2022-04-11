@@ -581,11 +581,11 @@ end
 #     return vals
 # end
 
-function renyi(mps) #FIXME implement transfer_matrix_squared
+function renyi(mps;tol=1e-6) #FIXME implement transfer_matrix_squared
 	#N = length(mps.Γ)
 	#T = eltype(mps.Γ[1])
     T = transfer_matrix_squared(mps,:right)
-    vals,vecs, info = eigsolve(T,size(T,2),1,tol=1e-6,maxiter=6,krylovdim=8)#,1)eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
+    vals,vecs, info = eigsolve(T,size(T,2),1,tol=tol,maxiter=6,krylovdim=8)#,1)eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
 	println(info)
     return -log2(vals[1])
 end
