@@ -234,7 +234,7 @@ OrthogonalLinkSite(Γ::GenericSite, Λ1::LinkSite, Λ2::LinkSite; check = false)
 
 Contract and compress the two sites using the svd. Return two U,S,V,err where U is a LeftOrthogonalSite, S is a LinkSite and V is a RightOrthogonalSite
 """
-compress(Γ1::AbstractSite, Γ2::AbstractSite, args::TruncationArgs) = apply_two_site_gate(Γ1, Γ2, IdentityGate(2), args)
+compress(Γ1::AbstractSite, Γ2::AbstractSite, args::TruncationArgs) = apply_two_site_gate(Γ1, Γ2, IdentityGate(Val(2)), args)
 
 """
 	apply_two_site_gate(Γ1::GenericSite, Γ2::GenericSite, gate, args::TruncationArgs)

@@ -53,7 +53,7 @@ function apply_layer(sites::AbstractVector{<:OrthogonalLinkSite}, gates, parity,
     return newsites, total_error[]
 end
 
-apply_identity_layer(sites::AbstractVector{<:OrthogonalLinkSite}, parity, truncation; kwargs...) = apply_layer(sites, [IdentityGate(2) for k in 1:length(sites)], parity, truncation; kwargs...)
+apply_identity_layer(sites::AbstractVector{<:OrthogonalLinkSite}, parity, truncation; kwargs...) = apply_layer(sites, [IdentityGate(Val(2)) for k in 1:length(sites)], parity, truncation; kwargs...)
 
 function apply_layer!(sites::AbstractVector{<:OrthogonalLinkSite}, gates, parity, truncation; isperiodic = false)
     N = length(sites)
@@ -87,7 +87,7 @@ function apply_layer_nonunitary!(sites::AbstractVector{<:OrthogonalLinkSite}, ga
         if (k < N - 1 && k > 1) || isperiodic
             k1 = mod1.(k + dir, N)
             k2 = mod1.(k + 1 + dir, N)
-            sites[k1], sites[k2], error = apply_two_site_gate(sites[k1], sites[k2], IdentityGate(2), truncation)
+            sites[k1], sites[k2], error = apply_two_site_gate(sites[k1], sites[k2], IdentityGate(Val(2)), truncation)
             total_error += error
         end
     end
@@ -96,7 +96,7 @@ function apply_layer_nonunitary!(sites::AbstractVector{<:OrthogonalLinkSite}, ga
         total_error += error
         k1 = mod1.(N + dir, N)
         k2 = mod1.(N + 1 + dir, N)
-        sites[k1], sites[k2], error = apply_two_site_gate(sites[k1], sites[k2], IdentityGate(2), truncation)
+        sites[k1], sites[k2], error = apply_two_site_gate(sites[k1], sites[k2], IdentityGate(Val(2)), truncation)
         total_error += error
     end
     return sites, total_error
@@ -163,16 +163,17 @@ end
 
 Return the layers of a 4:th order Trotter scheme
 """
-function frgates(dt, gates::Vector{<:AbstractSquareGate})
+function frgates(dt, gates::Vector{G}) where G<:AbstractSquareGate
     theta = 1 / (2 - 2^(1 / 3))
-    W = Vector{Vector{AbstractSquareGate}}(undef, 7)
-    times = [theta / 2 theta (1 - theta) / 2 (1 - 2 * theta)]
+    #W = Vector{Vector{G}}(undef, 7)
+    times = [theta / 2, theta, (1 - theta) / 2, (1 - 2 * theta)]
     exponentiate(t) = [exp(t * 1im * dt * g) for g in gates]
-    W[1:4] = exponentiate.(times)
-    W[5] = W[3]
-    W[6] = W[2]
-    W[7] = W[1]
-    return W
+    Ws = exponentiate.(times)
+    # W[1:4] = exponentiate.(times)
+    # W[5] = W[3]
+    # W[6] = W[2]
+    # W[7] = W[1]
+    return vcat(Ws, [Ws[3],Ws[2],Ws[1]])
 end
 
 """
@@ -180,13 +181,14 @@ end
 
 Return the layers of a 2:nd order Trotter scheme
 """
-function st2gates(dt, gates::Vector{<:AbstractSquareGate})
-    W = Vector{Vector{AbstractSquareGate}}(undef, 3)
+function st2gates(dt, gates::Vector{G}) where G<:AbstractSquareGate
+    #W = Vector{Vector{G}}(undef, 3)
     times = [1 / 2 1]
     exponentiate(t) = [exp(t * 1im * dt * g) for g in gates]
-    W[1:2] = exponentiate.(times)
-    W[3] = W[1]
-    return W
+    Ws = exponentiate.(times)
+    # W[1:2] = exponentiate.(times)
+    # W[3] = W[1]
+    return [Ws[1],Ws[2],Ws[1]]
 end
 
 """
@@ -194,9 +196,10 @@ end
 
 Return the layers of a 1:st order Trotter scheme
 """
-function st1gates(dt, gates::Vector{<:AbstractSquareGate})
-    W = Vector{Vector{AbstractSquareGate}}(undef, 2)
-    W[1] = [exp(1im * dt * g) for g in gates]
-    W[2] = W[1]
-    return W
+function st1gates(dt, gates::Vector{G}) where G<:AbstractSquareGate
+    #W = Vector{Vector{G}}(undef, 2)
+    W = [exp(1im * dt * g) for g in gates]
+    # W[1] = [exp(1im * dt * g) for g in gates]
+    # W[2] = W[1]
+    return [W,W]
 end
