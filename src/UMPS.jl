@@ -419,7 +419,7 @@ function canonicalize_cell(mps::UMPS{K}) where {K}
         sevl = sqrt.(evl)
         X = Diagonal(sevr)[abs.(sevr).>sqrt(mps.truncation.tol), :] * Ur'
         Y = Diagonal(sevl)[abs.(sevl).>sqrt(mps.truncation.tol), :] * Ul'
-        println(minimum(abs.(sevr)))
+        #println(minimum(abs.(sevr)))
     end
     F = try
         svd!(Y * data(mps.Λ[1]) * transpose(X))
@@ -462,7 +462,7 @@ function canonicalize(mps::UMPS)
         mpsout = mps
     elseif N == 2
         #Γ[1],Λ2,Γ[2], err = apply_two_site_identity(mps.Γ, mps.Λ[mod1.(1:3,2)], mps.truncation)
-        ΓL, ΓR, err = apply_two_site_gate(mps[1], mps[2], IdentityGate(2), mps.truncation)
+        ΓL, ΓR, err = apply_two_site_gate(mps[1], mps[2], IdentityGate(Val(2)), mps.truncation)
         mpsout = UMPS([ΓL, ΓR], truncation = mps.truncation, error = err)
     else
         error("Canonicalizing $N unit sites not implemented")
@@ -581,12 +581,57 @@ end
 #     return vals
 # end
 
-# function renyi(mps::UMPS) #FIXME implement transfer_matrix_squared
-# 	N = length(mps.Γ)
-# 	T = eltype(mps.Γ[1])
-#     transfer_matrix = transfer_matrix_squared(mps,:right)
-# 	return -log2(eigsolve(transfer_matrix,1)[1])
-# end
+function renyi(mps;tol=1e-6) #FIXME implement transfer_matrix_squared
+	#N = length(mps.Γ)
+	#T = eltype(mps.Γ[1])
+    T = transfer_matrix_squared(mps,:right)
+    vals,vecs, info = eigsolve(T,size(T,2),1,tol=tol,maxiter=6,krylovdim=8)#,1)eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
+	println(info)
+    return -log2(vals[1])
+end
+function transfer_matrix_squared(mps,dir=:left)
+    Ts = transfer_matrices_squared(mps, dir)
+    if dir ==:right
+        return foldr(*,reverse(Ts))
+    else
+        return foldr(*,Ts)
+    end
+end
+function transfer_matrices_squared(mps,dir)
+    [_local_transfer_matrix_squared(site,dir) for site in mps]
+end
+function _local_transfer_matrix_squared(site,dir)
+    if dir==:right
+        return _transfer_matrix_right_squared(data(site, reverse_direction(dir)))
+    elseif dir==:left
+        return _transfer_matrix_right_squared(reverse_direction(data(site, reverse_direction(dir))))
+    else
+        @error "Choose direction :left or :right"
+    end
+end
+function _transfer_matrix_right_squared(s)
+    ss=size(s)
+    A = reshape(s,ss[1],Int(sqrt(ss[2])),Int(sqrt(ss[2])),ss[3])
+    sA=size(A)
+    function contract(R)
+        temp = reshape(R,sA[1],sA[1],sA[1],sA[1])
+        # @tensoropt (r1,r2,r3,r4) out[:] := conj(A[r1,u,c1,-1])*A[r2,c1,c2,-2]*conj(A[r3,c2,c3,-3])*A[r4,c3,u,-4]*temp[r1,r2,r3,r4]
+        @tensor out[:] := conj(A[r1,u,c1,-1])*(A[r2,c1,c2,-2]*(conj(A[r3,c2,c3,-3])*(A[r4,c3,u,-4]*temp[r1,r2,r3,r4])))
+        #@tullio out[a,b,c,d] := conj(A[r1,u,c1,a])*(A[r2,c1,c2,b]*(conj(A[r3,c2,c3,c])*(A[r4,c3,u,d]*temp[r1,r2,r3,r4])))
+        return vec(out)
+        # @tensoropt (r,-2,-3,-4) begin
+        #     temp[:] := temp[r,-2,-3,-4]*conj(A[r,-5,-6,-1])
+        #     temp[:] := temp[-1,r,-3,-4,c,-6]*A[r,c,-5,-2]
+        #     temp[:] := temp[-1,-2,r,-4,c,-6]*conj(A[r,-5,c,-3])
+        #     temp[:] := temp[-1,-2,-3,r,c,-6]*A[r,c,-5,-4]
+        #     temp[:] := temp[-1,-2,-3,-4,c,c]
+        # end
+        #st = size(temp)
+        # return vec(temp)
+    end
+    T = LinearMap{ComplexF64}(contract,sA[4]^4,sA[1]^4)
+    return T
+end
 
 # %%
 function saveUMPS(mps, filename)

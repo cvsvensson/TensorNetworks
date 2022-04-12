@@ -9,7 +9,7 @@ isunitary(gate::GenericSquareGate) = gate.isunitary
 isunitary(mat::AbstractArray{<:Number,2}) = mat' * mat ≈ one(mat) && mat * mat' ≈ one(mat)
 Base.complex(::Type{<:GenericSquareGate{T,N}}) where {T,N} = GenericSquareGate{complex(T),N}
 
-Base.:*(x::K, g::ScaledIdentityGate{T,N}) where {T,N,K<:Number} = ScaledIdentityGate(x * data(g), div(N, 2))
+Base.:*(x::K, g::ScaledIdentityGate{T,N}) where {T,N,K<:Number} = ScaledIdentityGate(x * data(g), Val(div(N, 2)))
 Base.:*(g::ScaledIdentityGate, x::K) where {K<:Number} = x * g
 Base.:*(x::K, g::GenericSquareGate) where {K<:Number} = GenericSquareGate(x * data(g))
 Base.:*(g::GenericSquareGate, x::K) where {K<:Number} = GenericSquareGate(x * data(g))
@@ -17,7 +17,7 @@ Base.:/(g::GenericSquareGate, x::K) where {K<:Number} = inv(x) * g
 Base.:/(g::ScaledIdentityGate, x::K) where {K<:Number} = inv(x) * g
 
 function Base.:*(g1::GenericSquareGate{<:Any,N}, g2::GenericSquareGate{<:Any,N}) where {N}
-    Gate(gate(Matrix(g1) * Matrix(g2), Int(N / 2)))
+    Gate(gate(Matrix(g1) * Matrix(g2), Val(Int(N / 2))))
 end
 Base.:*(g1::AbstractSquareGate{<:Any,N}, g2::ScaledIdentityGate{<:Any,N}) where {N} = g1 * data(g2)
 Base.:*(g2::ScaledIdentityGate{<:Any,N}, g1::AbstractSquareGate{<:Any,N}) where {N} = g1 * data(g2)
@@ -37,7 +37,7 @@ end
 function Base.kron(g1::ScaledIdentityGate, g2::ScaledIdentityGate)
     l1 = operatorlength(g1)
     l2 = operatorlength(g2)
-    return data(g1) * data(g2) * IdentityGate(l1 + l2)
+    return data(g1) * data(g2) * IdentityGate(Val(l1 + l2))
 end
 
 function repeatedgate(g::AbstractSquareGate, n)
@@ -55,23 +55,23 @@ function reverse_direction(g::GenericSquareGate{<:Any,N}) where {N}
 end
 
 Base.:+(g1::GenericSquareGate{K,N}, g2::GenericSquareGate{T,N}) where {T,K,N} = GenericSquareGate(data(g1) + data(g2))
-Base.:+(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1) + data(g2), operatorlength(g1))
+Base.:+(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1) + data(g2), Val(operatorlength(g1)))
 Base.:+(g1::ScaledIdentityGate{T,N}, g2::GenericSquareGate{K,N}) where {T,K,N} = data(g1) * one(data(g2)) + data(g2)
 Base.:+(g1::GenericSquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2) * one(data(g1)) + data(g1)
 
 Base.:-(g1::GenericSquareGate{K,N}, g2::GenericSquareGate{T,N}) where {T,K,N} = GenericSquareGate(data(g1) - data(g2))
-Base.:-(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1) - data(g2), operatorlength(g1))
+Base.:-(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1) - data(g2), Val(operatorlength(g1)))
 Base.:-(g1::ScaledIdentityGate{T,N}, g2::GenericSquareGate{K,N}) where {T,K,N} = data(g1) * one(data(g2)) - data(g2)
 Base.:-(g1::GenericSquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2) * one(data(g1)) - data(g1)
 
 Base.:-(g::GenericSquareGate) = Gate(-data(g))
 
-Base.exp(g::GenericSquareGate{T,N}) where {T,N} = GenericSquareGate(gate(exp(Matrix(g)), div(N, 2)))
-Base.exp(g::ScaledIdentityGate{T,N}) where {T,N} = ScaledIdentityGate(exp(data(g)), div(N, 2))
+Base.exp(g::GenericSquareGate{T,N}) where {T,N} = GenericSquareGate(gate(exp(Matrix(g)), Val(div(N, 2))))
+Base.exp(g::ScaledIdentityGate{T,N}) where {T,N} = ScaledIdentityGate(exp(data(g)), Val(div(N, 2)))
 
-Base.adjoint(g::GenericSquareGate{T,N}) where {T,N} = GenericSquareGate(gate(Matrix(g)', div(N, 2)))
+Base.adjoint(g::GenericSquareGate{T,N}) where {T,N} = GenericSquareGate(gate(Matrix(g)', Val(div(N, 2))))
 
-Base.adjoint(g::ScaledIdentityGate{T,N}) where {T,N} = ScaledIdentityGate(data(g)', div(N, 2))
+Base.adjoint(g::ScaledIdentityGate{T,N}) where {T,N} = ScaledIdentityGate(data(g)', Val(div(N, 2)))
 Base.transpose(g::ScaledIdentityGate) = g
 
 data(gate::GenericSquareGate) = gate.data
@@ -99,10 +99,11 @@ function Base.Matrix(g::GenericSquareGate)
     reshape(data(g), D, D)
 end
 
-function gate(matrix::AbstractMatrix, sites::Integer)
+#gate(matrix::AbstractMatrix, sites::Integer) = gate(matrix,Val(sites))
+function gate(matrix::AbstractMatrix, ::Val{N}) where N
     sm = size(matrix)
-    d = Int(sm[1]^(1 / sites))
-    reshape(matrix, repeat([d], 2 * sites)...)
+    d = Int(sm[1]^(1 / N))
+    Array(reshape(matrix, fill(d, 2 * N)...))::Array{eltype(matrix),2*N}
 end
 
 """

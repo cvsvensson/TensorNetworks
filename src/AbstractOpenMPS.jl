@@ -43,7 +43,7 @@ function apply_identity_layer(::OpenBoundary, mpsin::AbstractMPS{GenericSite}; k
     truncation = get(kwargs, :truncation, mpsin.truncation)
     mps = set_center(mpsin, 1)
     for k in 1:length(mps)-1
-        A, S, B, err = apply_two_site_gate(mps[k], mps[k+1], IdentityGate(2), truncation)
+        A, S, B, err = apply_two_site_gate(mps[k], mps[k+1], IdentityGate(Val(2)), truncation)
         mps.center += 1
         mps[k] = A
         mps[k+1] = S * B

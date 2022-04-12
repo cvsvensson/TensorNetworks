@@ -12,11 +12,12 @@ struct ScaledIdentityGate{T,N} <: AbstractSquareGate{T,N}
     data::T
     ishermitian::Bool
     isunitary::Bool
-    function ScaledIdentityGate(scaling::T, n::Integer) where {T}
-        new{T,2 * n}(scaling, isreal(scaling), scaling' * scaling ≈ 1)
+    function ScaledIdentityGate(scaling::T, ::Val{N}) where {T,N}
+        new{T,2 * N}(scaling, isreal(scaling), scaling' * scaling ≈ 1)
     end
 end
-IdentityGate(n) = ScaledIdentityGate(true, n)
+IdentityGate(n::Integer) = ScaledIdentityGate(true, Val(n))
+IdentityGate(::Val{N}) where N = ScaledIdentityGate(true, Val(N))
 
 Base.show(io::IO, g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))
 Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))

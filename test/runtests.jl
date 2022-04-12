@@ -41,7 +41,7 @@ end
     @test isunitary(op) == isunitary(g)
     @test isunitary(Gate(U))
 
-    id = IdentityGate(1);
+    id = IdentityGate(Val(1));
     z = rand(ComplexF64)
     @test data(z*id) == z
     @test data(id*z) == z
@@ -64,12 +64,12 @@ end
     site = qubit(rand(),rand())
     expval = vec(data(site))'*op*vec(data(site))
     @test expectation_value([site],g) ≈ expval
-    g2 = Gate(TensorNetworks.gate(kron(op,op),2));
+    g2 = Gate(TensorNetworks.gate(kron(op,op),Val(2)));
     @test expectation_value([site,site],g2) ≈ expval^2
 
-    @test expectation_value([site], z*IdentityGate(1)) ≈ z
-    @test expectation_value([site,site], z*IdentityGate(2)) ≈ z
-    @test expectation_value([site,site,site], z*IdentityGate(3)) ≈ z
+    @test expectation_value([site], z*IdentityGate(Val(1))) ≈ z
+    @test expectation_value([site,site], z*IdentityGate(Val(2))) ≈ z
+    @test expectation_value([site,site,site], z*IdentityGate(Val(3))) ≈ z
 
     # D = 10;
     # d = 2;
@@ -292,26 +292,26 @@ end
         @test transpose(Matrix(T)) ≈ Matrix(transfer_matrix(site,:right))
 
         z = rand(ComplexF64)
-        @test Matrix(T) ≈ Matrix(transfer_matrix(site,IdentityGate(1)))
-        @test z*Matrix(T) ≈ Matrix(transfer_matrix(site,z*IdentityGate(1)))
+        @test Matrix(T) ≈ Matrix(transfer_matrix(site,IdentityGate(Val(1))))
+        @test z*Matrix(T) ≈ Matrix(transfer_matrix(site,z*IdentityGate(Val(1))))
 
         T1 = transfer_matrix(site,MPOsite(sz));
         @test size(T1) == (D^2,D^2)
         #@test Matrix(T1') ≈ Matrix(T1)'
 
-        g2 = Gate(TensorNetworks.gate(kron(sz,sz),2));
+        g2 = Gate(TensorNetworks.gate(kron(sz,sz),Val(2)));
         T2 = prod(transfer_matrices([site,site], g2));
         @test Matrix(T2) ≈ Matrix(T1*T1)
         @test transpose(Matrix(T2)) ≈ Matrix(prod(transfer_matrices([site,site], g2,:right)))
 
-        g3 = Gate(TensorNetworks.gate(kron(sz,sz,sz),3));
+        g3 = Gate(TensorNetworks.gate(kron(sz,sz,sz),Val(3)));
         T3 = prod(transfer_matrices([site,site,site], g3));
         @test Matrix(T3) ≈ Matrix(T1*T1*T1)
         @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]))))
         @test Matrix(T3) ≈ Matrix(prod(transfer_matrices([site,site,site], Gate.([sz,sz,sz]), [site,site,site])))
         @test transpose(Matrix(T3)) ≈ Matrix(prod(transfer_matrices([site,site,site], g3,:right)))
 
-        g4 = Gate(TensorNetworks.gate(kron(sz,sz,sz,sz),4));
+        g4 = Gate(TensorNetworks.gate(kron(sz,sz,sz,sz),Val(4)));
         T4 = prod(transfer_matrices([site,site,site,site], g4));
         @test Matrix(T4) ≈ Matrix(T1*T1*T1*T1)
         @test transpose(Matrix(T4)) ≈ Matrix(prod(transfer_matrices([site,site,site,site], g4,:right)))
@@ -340,7 +340,7 @@ end
     L = gL*vec(data(ΓL));
     R = gR*vec(data(ΓR));
 
-    g = Gate(TensorNetworks.gate(kron(gR,gL),2));
+    g = Gate(TensorNetworks.gate(kron(gR,gL),Val(2)));
     ΓL, S, ΓR, err = apply_two_site_gate(ΓL,ΓR,g, mps.truncation);
     @test err < 1e-16
     @test data(S) ≈ [1]

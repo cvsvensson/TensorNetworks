@@ -133,7 +133,7 @@ Return the two-site expectation values
 
 See also: [`connected_correlator`](@ref)
 """
-function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string = IdentityGate(1)) #Check if it works for MPSsum and for OrthogonalLinksites
+function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string = IdentityGate(Val(1))) #Check if it works for MPSsum and for OrthogonalLinksites
     N = length(mps)
     oplength1 = operatorlength(op1)
     oplength2 = operatorlength(op2)
