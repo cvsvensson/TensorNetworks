@@ -53,6 +53,8 @@ function _transfer_left_mpo(Γ1::GenericSite)
     dims = size(Γ1)
     Γ = data(Γ1)
     function func(Rvec)
+        #TODO: Try a non-allocating version
+        #TODO: Maybe remove tensoropt
         Rtens = reshape(Rvec, dims[3], dims[3])
         @tensoropt (t1, b1, -1, -2) temp[:] := Rtens[t1, b1] * conj(Γ[-1, c1, t1]) * Γ[-2, c1, b1]
         return vec(temp)
@@ -330,8 +332,8 @@ function __local_transfer_matrix(sites::Tuple, direction::Symbol = :left)
     end
 end
 
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol = :left) = data(op) * prod(transfer_matrices(site1, direction))
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * prod(transfer_matrices(site1, site2, direction))
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol = :left) = data(op) * foldr(*,transfer_matrices(site1, direction))
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * foldr(*,transfer_matrices(site1, site2, direction))
 function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     @assert length(site1) == length(site2) == operatorlength(op)
     if ispurification(site1[1])

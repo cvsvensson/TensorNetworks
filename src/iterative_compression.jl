@@ -43,7 +43,7 @@ function shift_center!(mps, j, dir, SE::SubspaceExpand; mpo, env, kwargs...)
     mps.center += dirval
     mps.Γ[j] = A
     mps.Γ[j+dirval] = B
-    T = prod(transfer_matrices(mps[j1:j2], mpo[j1:j2], mps[j1:j2], :left))
+    T = foldr(*,transfer_matrices(mps[j1:j2], mpo[j1:j2], mps[j1:j2], :left))
     truncmin = transpose(T * vec(env.R[j2])) * vec(env.L[j1])
 
 

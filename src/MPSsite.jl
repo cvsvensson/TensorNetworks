@@ -124,7 +124,8 @@ function to_left_orthogonal(site::GenericSite; full = false, method = :qr, trunc
     V = VirtualSite(R)
     return orthSite, V
 end
-function to_right_orthogonal(site::GenericSite; full = false, method = :qr)
+function to_right_orthogonal(site::GenericSite; full = false, method = :qr) 
+    #FIXME: reverse_direction needs memory allocation. So write a specialized version instead.
     #M = permutedims(site,[3,2,1])
     L, V = to_left_orthogonal(reverse_direction(site), full = full, method = method)
     reverse_direction(L), transpose(V)
@@ -191,6 +192,7 @@ end
 function Base.:*(Γ::GenericSite, G::VirtualSite)
     sG = size(G)
     sΓ = size(Γ)
+    #FIXME: check whether tullio can be faster or allocate less.
     Γnew = reshape(reshape(data(Γ), sΓ[1] * sΓ[2], sΓ[3]) * data(G), sΓ[1], sΓ[2], sG[2])
     # @tensor Γnew[:] := data(Γ)[-1,-2,1] * data(G)[1,-3]
     GenericSite(Γnew, Γ.purification)
