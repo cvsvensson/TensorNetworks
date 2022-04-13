@@ -133,6 +133,8 @@ update_environment!(env::AbstractFiniteEnvironment, mps::AbstractSite, site::Int
 # end
 
 #TODO check performance and compare to matrix multiplication and Tullio
+local_mul!(out,envL, envR, mposite::AbstractMPOsite, site::AbstractArray{<:Number,3}) = @tensor out[:] = (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
+
 local_mul(envL, envR, mposite::AbstractMPOsite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
 local_mul(envL, envR, mposite::AbstractMPOsite, site::GenericSite) = GenericSite(local_mul(envL, envR, mposite, data(site)), ispurification(site))
 local_mul(envL, envR, mposite::AbstractMPOsite, site::OrthogonalLinkSite) = local_mul(envL, envR, mposite, site.Λ1 * site * site.Λ2)

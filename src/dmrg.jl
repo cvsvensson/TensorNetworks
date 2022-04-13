@@ -48,13 +48,14 @@ end
 
 function effective_hamiltonian(mposite, hl, hr, orthvecs)
     szmps = (size(hl, 3), size(mposite, 3), size(hr, 3))
-    overlap2(o, v) = 100 * o * (o' * v) #TODO make weight choosable
-    function f(v)
+    function f(vout, v)
         A = reshape(v, szmps)
-        HA = local_mul(hl, hr, mposite, A)
-        overlap(o) = overlap2(o, v)
-        OA = sum(overlap, orthvecs; init = zero(v))
-        return vec(HA) + OA
+        tensout = reshape(vout,szmps)
+        local_mul!(tensout, hl, hr, mposite, A)
+        for o in orthvecs
+            vout .+= 100 * o .* (o' * v) #TODO make weight choosable
+        end
+        return vec(tensout)
     end
     return LinearMap{eltype(hl)}(f, prod(szmps), ishermitian = true)
 end
@@ -289,10 +290,10 @@ function twosite_sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFinit
     return mps::LCROpenMPS{T}
 end
 
-function twosite_mpo_application(hl, hr, mpol, mpor, twosite)
+function twosite_mpo_application!(out,hl, hr, mpol, mpor, twosite)
     #@tensoropt (lm,dc,rd,-1,-4) out[-1,-2,-3,-4] := hl[-1,lm,ld] * mpol[lm,-2,msl,c] * mpor[c,-3,msr,rm] * sitel[ld, msl, dc]*siter[dc,msr,rd] * hr[-4,rm,rd] 
     # println.(size.([hl,mpol,mpor,twosite,hr]))
-    @tensoropt (lm, rd, -1, -4) out[-1, -2, -3, -4] := hl[-1, lm, ld] * mpol[lm, -2, msl, c] * mpor[c, -3, msr, rm] * twosite[ld, msl, msr, rd] * hr[-4, rm, rd]
+    @tensoropt (lm, rd, -1, -4) out[-1, -2, -3, -4] = hl[-1, lm, ld] * mpol[lm, -2, msl, c] * mpor[c, -3, msr, rm] * twosite[ld, msl, msr, rd] * hr[-4, rm, rd]
 end
 function twosite_orthvec(L, R, sl, sr)
     @tensoropt (lm, dc, rd, -1, -4) out[-1, -2, -3, -4] := L[-1, ld] * sl[ld, -2, dc] * sr[dc, -3, rd] * R[-4, rd]
@@ -301,13 +302,15 @@ end
 
 function twosite_effective_hamiltonian(mpol, mpor, hl, hr, orthvecs)
     blocksize = (size(hl, 3), size(mpol, 3), size(mpor, 3), size(hr, 3))
-    overlap2(o, v) = 100 * o * (o' * v) #TODO make weight choosable
-    function f(v)
+    #overlap2(o, v) = 100 * o * (o' * v) 
+    function f(vout, v)
         A = reshape(v, blocksize)
-        HA = twosite_mpo_application(hl, hr, data(mpol), data(mpor), A)
-        overlap(o) = overlap2(o, v)
-        OA = sum(overlap, orthvecs; init = zero(v))
-        return vec(HA) + OA
+        tensout = reshape(vout,blocksize)
+        twosite_mpo_application!(tensout, hl, hr, data(mpol), data(mpor), A)
+        for o in orthvecs
+            vout .+= 100 * o .* (o' * v) #TODO make weight choosable
+        end
+        return vec(tensout)
     end
     return LinearMap{eltype(hl)}(f, prod(blocksize), ishermitian = true)
 end

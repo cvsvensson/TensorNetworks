@@ -30,9 +30,10 @@ function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
     R = vec(boundary(mps, mpo, :right))
     Ts = transfer_matrices(mps, mpo, :left)
     Tc = transfer_matrix_bond(mps, mps, 1, :right)
-    for k in length(mps):-1:1
-        R = Ts[k] * R
-    end
+    R = prod(Ts)*R
+    # for k in length(mps):-1:1
+    #     R = Ts[k] * R
+    # end
     return transpose(R) * (Tc * L)
 end
 function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
@@ -42,9 +43,10 @@ function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     R = vec(boundary(mps1, mpo, mps2, :right))
     Ts = transfer_matrices(mps1, mpo, mps2, :left)
     Tc = transfer_matrix_bond(mps1, mps2, 1, :right)
-    for k in length(mps1):-1:1
-        R = Ts[k] * R
-    end
+    R = prod(Ts)*R
+    # for k in length(mps1):-1:1
+    #     R = Ts[k] * R
+    # end
     return transpose(R) * (Tc * L)
 end
 

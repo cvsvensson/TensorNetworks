@@ -8,28 +8,7 @@ Base.kron(a::UniformScaling, b::UniformScaling) = a * b
 Base.kron(a::UniformScaling, b::AbstractMatrix) = Diagonal(a, size(b, 1)) * b
 Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
 # %% Transfer Matrices
-"""
-	transfer_left(Γ)
 
-Returns the left transfer matrix of a single site
-
-See also: [`transfer_right`](@ref)
-"""
-# function transfer_left2(Γ::Array{T,3}) where {T}
-#     dims = size(Γ)
-#     function func(Rvec)
-#         Rtens = reshape(Rvec,dims[3],dims[3])
-#         @tensoropt (t1,b1,-1,-2) temp[:] := Rtens[t1,b1]*conj(Γ[-1, c1, t1])*Γ[-2, c1, b1]
-#         return vec(temp)
-#     end
-# 	function func_adjoint(Lvec)
-# 		Ltens = reshape(Lvec,dims[1],dims[1])
-# 		@tensoropt (t1,b1,-1,-2) temp[:] := Ltens[t1,b1]*Γ[t1, c1, -1]*conj(Γ[b1, c1, -2])
-# 		return vec(temp)
-# 	end
-#     return LinearMap{T}(func,func_adjoint, dims[1]^2,dims[3]^2)
-# end
-# _transfer_left_mpo(Γ1::MPOsite, Γ2::MPOsite) = _transfer_left_mpo(data(Γ1), data(Γ2))
 _transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s2, :right))
 _transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s1, :right))
 _transfer_left_mpo(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), GenericSite(s2, :right))
@@ -37,14 +16,16 @@ _transfer_left_mpo(s::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s, :r
 function _transfer_left_mpo(Γ1::GenericSite, Γ2::GenericSite)
     dims1 = size(Γ1)
     dims2 = size(Γ2)
-    function func(Rvec)
+    function func(Rout,Rvec)
+        temp = reshape(Rout, dims1[1], dims2[1])
         Rtens = reshape(Rvec, dims1[3], dims2[3])
-        @tensoropt (t1, b1, -1, -2) temp[:] := Rtens[t1, b1] * conj(data(Γ1)[-1, c1, t1]) * data(Γ2)[-2, c1, b1]
+        @tensoropt (t1, b1, -1, -2) temp[:] = Rtens[t1, b1] * conj(data(Γ1)[-1, c1, t1]) * data(Γ2)[-2, c1, b1]
         return vec(temp)
     end
-    function func_adjoint(Lvec)
+    function func_adjoint(Lout,Lvec)
+        temp = reshape(Lout, dims1[3], dims2[3])
         Ltens = reshape(Lvec, dims1[1], dims2[1])
-        @tensoropt (t1, b1, -1, -2) temp[:] := Ltens[t1, b1] * data(Γ1)[t1, c1, -1] * conj(data(Γ2)[b1, c1, -2])
+        @tensoropt (t1, b1, -1, -2) temp[:] = Ltens[t1, b1] * data(Γ1)[t1, c1, -1] * conj(data(Γ2)[b1, c1, -2])
         return vec(temp)
     end
     return LinearMap{eltype(Γ1)}(func, func_adjoint, dims1[1] * dims2[1], dims1[3] * dims2[3])
@@ -52,55 +33,21 @@ end
 function _transfer_left_mpo(Γ1::GenericSite)
     dims = size(Γ1)
     Γ = data(Γ1)
-    function func(Rvec)
-        #TODO: Try a non-allocating version
-        #TODO: Maybe remove tensoropt
+    function func(Rout,Rvec)
+        temp = reshape(Rout, dims[1], dims[1])
         Rtens = reshape(Rvec, dims[3], dims[3])
-        @tensoropt (t1, b1, -1, -2) temp[:] := Rtens[t1, b1] * conj(Γ[-1, c1, t1]) * Γ[-2, c1, b1]
+        @tensoropt (t1, b1, -1, -2) temp[:] = Rtens[t1, b1] * conj(Γ[-1, c1, t1]) * Γ[-2, c1, b1]
         return vec(temp)
     end
-    function func_adjoint(Lvec)
+    function func_adjoint(Lout,Lvec)
+        temp = reshape(Lout, dims[3], dims[3])
         Ltens = reshape(Lvec, dims[1], dims[1])
-        @tensoropt (t1, b1, -1, -2) temp[:] := Ltens[t1, b1] * Γ[t1, c1, -1] * conj(Γ[b1, c1, -2])
+        @tensoropt (t1, b1, -1, -2) temp[:] = Ltens[t1, b1] * Γ[t1, c1, -1] * conj(Γ[b1, c1, -2])
         return vec(temp)
     end
     return LinearMap{eltype(Γ1)}(func, func_adjoint, dims[1]^2, dims[3]^2)
 end
 
-# function __transfer_left_mpo(Rvec,g1,g2,s1,s2)
-# 	Rtens = reshape(Rvec,s1[3],s2[3])
-# 	R2 = reshape(g1*Rtens, s1[1], s1[2]*s1[3])
-# 	return vec(R2*g2)
-# end
-# function __transfer_left_adjoint_mpo(Lvec,g1l,g2l,s1,s2)
-# 	Ltens = transpose(reshape(Lvec,s1[1],s2[1]))
-# 	L2 = reshape(Ltens*g1l, s2[1]*s1[2],s1[3])
-# 	return vec(transpose(g2l*L2))
-# end
-# function _transfer_left_mpo(Γ1::GenericSite, Γ2::GenericSite)
-#     s1 = size(Γ1)
-# 	s2 = size(Γ2)
-# 	g1 = reshape(data(Γ1), s1[1]*s1[2],s1[3])
-# 	g2 = reshape(permutedims(data(Γ2),[2,3,1]),s2[2]*s2[3],s2[1])
-
-# 	g1l = reshape(conj(data(Γ1)), s1[1],s1[2]*s1[3])
-# 	g2l = reshape(permutedims(conj(data(Γ2)),[3,1,2]),s2[3],s2[2]*s2[1])
-# 	func(R) = __transfer_left_mpo(R,g1,g2,s1,s2)
-# 	func_adjoint(L) = __transfer_left_adjoint_mpo(L,g1l,g2l,s1,s2)
-#     return LinearMap{eltype(Γ1)}(func,func_adjoint, s1[1]*s2[1],s1[3]*s2[3])
-# end
-# function _transfer_left_mpo(Γ1::GenericSite)
-#     s1 = size(Γ1)
-# 	s2 = size(Γ1)
-# 	g1 = reshape(data(Γ1), s1[1]*s1[2],s1[3])
-# 	g2 = reshape(permutedims(data(Γ1),[2,3,1]),s2[2]*s2[3],s2[1])
-
-# 	g1l = reshape(conj(data(Γ1)), s1[1],s1[2]*s1[3])
-# 	g2l = reshape(permutedims(conj(data(Γ1)),[3,1,2]),s2[3],s2[2]*s2[1])
-# 	func(R) = __transfer_left_mpo(R,g1,g2,s1,s2)
-# 	func_adjoint(L) = __transfer_left_adjoint_mpo(L,g1l,g2l,s1,s2)
-#     return LinearMap{eltype(Γ1)}(func,func_adjoint, s1[1]*s2[1],s1[3]*s2[3])
-# end
 _transfer_left_mpo(Γ1::GenericSite, mpo::MPOsite) = _transfer_left_mpo(Γ1, mpo, Γ1)
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1)
@@ -109,14 +56,16 @@ function _transfer_left_mpo(Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite)
     dims2 = size(Γ2)
     smpo = size(mpo)
     T = promote_type(eltype(Γ1), eltype(mpo), eltype(Γ2))
-    function func(Rvec)
+    function func(Rout,Rvec)
+        temp = reshape(Rout, dims1[1], smpo[1], dims2[1])
         Rtens = reshape(Rvec, dims1[3], smpo[4], dims2[3])
-        @tensoropt (tr, br, -1, -2, -3) temp[:] := conj(data(Γ1)[-1, u, tr]) * data(mpo)[-2, u, d, cr] * data(Γ2)[-3, d, br] * Rtens[tr, cr, br]
+        @tensoropt (tr, br, -1, -2, -3) temp[:] = conj(data(Γ1)[-1, u, tr]) * data(mpo)[-2, u, d, cr] * data(Γ2)[-3, d, br] * Rtens[tr, cr, br]
         return vec(temp)
     end
-    function func_adjoint(Lvec)
+    function func_adjoint(Lout,Lvec)
+        temp = reshape(Lout, dims1[3], smpo[4], dims2[3])
         Ltens = reshape(Lvec, dims1[1], smpo[1], dims2[1])
-        @tensoropt (bl, tl, -1, -2, -3) temp[:] := Ltens[tl, cl, bl] * data(Γ1)[tl, u, -1] * conj(data(mpo)[cl, u, d, -2]) * conj(data(Γ2)[bl, d, -3])
+        @tensoropt (bl, tl, -1, -2, -3) temp[:] = Ltens[tl, cl, bl] * data(Γ1)[tl, u, -1] * conj(data(mpo)[cl, u, d, -2]) * conj(data(Γ2)[bl, d, -3])
         return vec(temp)
     end
     return LinearMap{T}(func, func_adjoint, smpo[1] * dims1[1] * dims2[1], smpo[4] * dims1[3] * dims2[3])
@@ -263,7 +212,8 @@ function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::Generic
     s_start2 = size(Γ2[1])[1]
     s_final1 = size(Γ1[oplength])[3]
     s_final2 = size(Γ2[oplength])[3]
-    function T_on_vec(invec) #FIXME Compare performance to a version where the gate is applied between the top and bottom layer of sites
+    function T_on_vec(outvec,invec) #TODO Compare performance to a version where the gate is applied between the top and bottom layer of sites
+        outtens = reshape(outvec, s_final1, s_final2)
         v = reshape(invec, 1, s_start1, s_start2)
         for k in 1:oplength
             @tensoropt (1, 2) v[:] := conj(data(Γ1[k]))[1, -2, -4] * v[-1, 1, 2] * data(Γ2[k])[2, -3, -5]
@@ -271,9 +221,9 @@ function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::Generic
             v = reshape(v, prod(sv[1:3]), sv[4], sv[5])
         end
         #return transpose(opvec)*reshape(v,size(v,1),size(v,2)*size(v,3))
-        @tensor vout[:] := v[1, -1, -2] * opvec[1]
+        @tensor outtens[:] = v[1, -1, -2] * opvec[1]
         # @tullio vout[a,b] := v[c,a,b] * opvec[c]
-        return vec(vout)
+        return vec(outtens)
     end
     #TODO Define adjoint
     return LinearMap{T}(T_on_vec, s_final1 * s_final2, s_start1 * s_start2)
@@ -287,15 +237,16 @@ function _transfer_right_gate(Γ::AbstractVector{GenericSite{T}}, gate::GenericS
     opvec = vec(permutedims(op, perm))
     s_start = size(Γ[1])[1]
     s_final = size(Γ[oplength])[3]
-    function T_on_vec(invec)
+    function T_on_vec(outvec,invec)
+        outtens = reshape(outvec, s_final, s_final)
         v = reshape(invec, 1, s_start, s_start)
         for k in 1:oplength
             @tensoropt (1, 2) v[:] := conj(data(Γ[k])[1, -2, -4]) * v[-1, 1, 2] * data(Γ[k])[2, -3, -5]
             sv = size(v)
             v = reshape(v, prod(sv[1:3]), sv[4], sv[5])
         end
-        @tensor v[:] := v[1, -1, -2] * opvec[1]
-        return vec(v)
+        @tensor outtens[:] = v[1, -1, -2] * opvec[1]
+        return vec(outtens)
     end
     #TODO Define adjoint
     return LinearMap{T}(T_on_vec, s_final^2, s_start^2)
