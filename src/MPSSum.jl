@@ -70,7 +70,7 @@ function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, �
     N1 = length(Γ1[1])
     N2 = length(Γ2[1])
     Ts = [_transfer_right_gate(getindex.(Γ1, n1), gate, getindex.(Γ2, n2)) for n1 in 1:N1, n2 in 1:N2]
-    return _apply_transfer_matrices(Ts)
+    return blockdiagonal(Ts) #LinearMaps.blockdiag(Ts...) #_apply_transfer_matrices(Ts)
 end
 _transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
 _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:AbstractSite}) = _transfer_right_gate(Γ1, gate, SiteSum.(Γ2))
@@ -86,19 +86,24 @@ function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
     N1 = length(Γ1)
     N2 = length(Γ2)
     Ts = [_transfer_left_mpo(Γ1[n1], op, Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
-    return _apply_transfer_matrices(Ts)
+    return blockdiagonal(Ts)
+    #return _apply_transfer_matrices(Ts)
 end
 function _transfer_left_mpo(Γ1::SiteSum, Γ2::SiteSum)
     N1 = length(Γ1)
     N2 = length(Γ2)
     Ts = [_transfer_left_mpo(Γ1[n1], Γ2[n2]) for n1 in 1:N1, n2 in 1:N2]
-    return _apply_transfer_matrices(Ts)
+    return blockdiagonal(Ts)
+    #return _apply_transfer_matrices(Ts)
 end
 function _transfer_left_mpo(Γ1::SiteSum)
     N1 = length(Γ1)
     Ts = [_transfer_left_mpo(Γ1[n1], Γ1[n2]) for n1 in 1:N1, n2 in 1:N1]
-    return _apply_transfer_matrices(Ts)
+    return blockdiagonal(Ts)
+    #return LinearMaps.blockdiag(Ts...)
+    #return _apply_transfer_matrices(Ts)
 end
+blockdiagonal(Ts::Array{<:LinearMap{T}}) where T = LinearMaps.BlockDiagonalMap{T}(vec(Ts))
 
 # function _transfer_left_mpo(Γ::AbstractSite)
 #     Ts = [_transfer_left_mpo(block) for block in blocks(Γ)]

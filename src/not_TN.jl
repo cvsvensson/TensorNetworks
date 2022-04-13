@@ -17,7 +17,7 @@ function local_ham_eigs(ham_gate::AbstractArray{T}, N; nev = 2) where {T}
         tens0 = tensify(invec)
         tens = zeros(T, size(tens0))
         for k in 1:N
-            tens += permutedims(tensify(block * blockify(permutedims(tens0, circshift(indices, k)))), circshift(indices, -k))
+            tens .+= permutedims(tensify(block * blockify(permutedims(tens0, circshift(indices, k)))), circshift(indices, -k))
         end
         return vec(tens)
     end
@@ -32,7 +32,7 @@ function local_ham_eigs(ham_gate::AbstractArray{T}, N; nev = 2) where {T}
     # mat = (d^N < 10 ? Matrix(map) : map)
     return eigsolve(map, d^N, nev, :SR, ishermitian = true) #eigs(map, nev=nev, which=:SR)
 end
-
+#using SparseArrays
 function local_ham_eigs_sparse(ham_mat::AbstractArray{T}, d, N; nev = 2) where {T}
     Nh = Int(log(d, size(ham_mat, 1)))
     id = sparse(1.0I, d^(N - Nh), d^(N - Nh))
@@ -42,7 +42,7 @@ function local_ham_eigs_sparse(ham_mat::AbstractArray{T}, d, N; nev = 2) where {
     function apply_ham(invec)
         sum = zeros(T, size(invec))
         for k in 1:N
-            sum += shifts[N+1-k] * (ham * invec)
+            sum .+= shifts[N+1-k] * (ham * invec)
             invec = shifts[1] * invec
         end
         return sum
@@ -99,7 +99,7 @@ function local_ham_eigs2(ham_mat, d, N; nev = 2)
     function apply_ham(invec)
         sum = zeros(eltype(ham_mat), size(invec))
         for k in 1:N-1
-            sum += bighams[k] * invec
+            sum .+= bighams[k] * invec
             #invec = shift*invec
         end
         return sum
