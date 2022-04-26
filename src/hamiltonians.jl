@@ -288,31 +288,3 @@ function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type = ComplexF64)
     mposite[4, :, :, 5] = Sz(S)
     return mposite
 end
-
-"""
-    TwoSiteHamToMPO(ham,L)
-
-Returns the MPO for a 2-site Hamiltonian
-"""
-function TwoSiteHamToMPO(ham, L)
-    d = size(ham)[1]
-    mpo = Array{Any}(L)
-    tmp = reshape(permutedims(ham, [1, 3, 2, 4]), d * d, d * d)
-    U, S, V = svd(tmp)
-    U = reshape(U * Diagonal(sqrt.(S)), d, d, size(S)[1])
-    V = reshape(Diagonal(sqrt.(S)) * V', size(S)[1], d, d)
-    mpo[1] = permutedims(reshape(U, d, d, size(S), 1), [1, 4, 3, 2])
-    mpo[L] = permutedims(reshape(V, size(S), d, d, 1), [2, 1, 4, 3])
-    @tensor begin
-        tmpEven[-1, -2, -3, -4] := V[-2, -1, 1] * U[1, -4, -3]
-        tmpOdd[-1, -2, -3, -4] := U[-1, 1, -3] * V[-2, 1, -4]
-    end
-    for i = 2:L-1
-        if iseven(i)
-            mpo[i] = tmpEven
-        else
-            mpo[i] = tmpOdd
-        end
-    end
-    return mpo
-end
