@@ -84,7 +84,7 @@ IsingMPO(lattice sites, J, transverse, longitudinal[, shift=0])
 
 Returns the Ising hamiltonian as an MPO
 """
-function IsingMPO(L, J, h, g, shift = 0)
+function IsingMPO(L, J, h, g, shift=0)
     T = promote_type(eltype.((J, h, g))...)
     mpo = Vector{Array{T,4}}(undef, L)
     mpo[1] = zeros(T, 1, 2, 2, 3)
@@ -137,28 +137,28 @@ Returns the Kitaev spin chain
 #     return MPO(mpo)
 # end
 
-function KitaevMPO(N, t, Δ, U, μ; type = ComplexF64)
-    center = _KitaevMPO_center(t, Δ, U, μ, type = type)
+function KitaevMPO(N, t, Δ, U, μ; type=ComplexF64)
+    center = _KitaevMPO_center(t, Δ, U, μ, type=type)
     mpo = fill(center, N)
-    mpo[1] = _KitaevMPO_left(t, Δ, U, μ, type = type)
-    mpo[N] = _KitaevMPO_right(t, Δ, U, μ, type = type)
+    mpo[1] = _KitaevMPO_left(t, Δ, U, μ, type=type)
+    mpo[N] = _KitaevMPO_right(t, Δ, U, μ, type=type)
     return MPO(mpo)
 end
 
-function KitaevMPO(t, Δ, U, μs::Array; type = ComplexF64)
+function KitaevMPO(t, Δ, U, μs::Array; type=ComplexF64)
     N = length(μs)
-    mpo = [_KitaevMPO_center(t, Δ, U, μ, type = type) for μ in μs]
-    mpo[1] = _KitaevMPO_left(t, Δ, U, μs[1], type = type)
-    mpo[N] = _KitaevMPO_right(t, Δ, U, μs[N], type = type)
+    mpo = [_KitaevMPO_center(t, Δ, U, μ, type=type) for μ in μs]
+    mpo[1] = _KitaevMPO_left(t, Δ, U, μs[1], type=type)
+    mpo[N] = _KitaevMPO_right(t, Δ, U, μs[N], type=type)
     return MPO(mpo)
 end
 
-function DisorderedKitaevMPO(N, t, Δ, U, μ::Tuple{K,T}; type = ComplexF64) where {K,T}
+function DisorderedKitaevMPO(N, t, Δ, U, μ::Tuple{K,T}; type=ComplexF64) where {K,T}
     (mμ, sμ) = μ
     μs = sμ * randn(N) .+ mμ
-    mpo = [_KitaevMPO_center(t, Δ, U, μ, type = type) for μ in μs]
-    mpo[1] = _KitaevMPO_left(t, Δ, U, μs[1], type = type)
-    mpo[N] = _KitaevMPO_right(t, Δ, U, μs[N], type = type)
+    mpo = [_KitaevMPO_center(t, Δ, U, μ, type=type) for μ in μs]
+    mpo[1] = _KitaevMPO_left(t, Δ, U, μs[1], type=type)
+    mpo[N] = _KitaevMPO_right(t, Δ, U, μs[N], type=type)
     return MPO(mpo)
 end
 
@@ -173,7 +173,7 @@ _KitaevGate_center(t, Δ, U, μ) = -gXX * (t + Δ) / 2 + gYY * (Δ - t) / 2 + U 
 _KitaevGate_left(t, Δ, U, μ) = -gXX * (t + Δ) / 2 + gYY * (Δ - t) / 2 + U * gZZ - μ / 2 * gZI
 _KitaevGate_right(t, Δ, U, μ1, μ2) = -gXX * (t + Δ) / 2 + gYY * (Δ - t) / 2 + U * gZZ - μ1 / 2 * gZI - μ2 / 2 * gIZ
 
-function _KitaevMPO_center(t, Δ, U, μ; type = ComplexF64)
+function _KitaevMPO_center(t, Δ, U, μ; type=ComplexF64)
     D = 5
     mposite = zeros(type, D, 2, 2, D)
     mposite[1, :, :, :] = [si -sx * (t + Δ) / 2 sy * (Δ - t) / 2 U * sz -μ / 2 * sz]
@@ -183,13 +183,13 @@ function _KitaevMPO_center(t, Δ, U, μ; type = ComplexF64)
     mposite[D, :, :, D] = si
     return mposite
 end
-function _KitaevMPO_left(t, Δ, U, μ; type = ComplexF64)
+function _KitaevMPO_left(t, Δ, U, μ; type=ComplexF64)
     D = 5
     mposite = zeros(type, 1, 2, 2, D)
     mposite[1, :, :, :] = reshape([si -sx * (t + Δ) / 2 sy * (Δ - t) / 2 U * sz -μ / 2 * sz], 2, 2, D)
     return mposite
 end
-function _KitaevMPO_right(t, Δ, U, μ; type = ComplexF64)
+function _KitaevMPO_right(t, Δ, U, μ; type=ComplexF64)
     D = 5
     mposite = zeros(type, D, 2, 2, 1)
     mposite[1, :, :, 1] = -μ / 2 * sz
@@ -252,10 +252,10 @@ Returns the Heisenberg hamiltonian as an MPO
 #     return MPO(-mpo)
 # end
 
-function HeisenbergMPO(S, L, Jx, Jy, Jz, h; type = ComplexF64)
-    center = _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type = type)
-    left = _HeisenbergMPO_left(S, Jx, Jy, Jz, h; type = type)
-    right = _HeisenbergMPO_right(S, Jx, Jy, Jz, h; type = type)
+function HeisenbergMPO(S, L, Jx, Jy, Jz, h; type=ComplexF64)
+    center = _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=type)
+    left = _HeisenbergMPO_left(S, Jx, Jy, Jz, h; type=type)
+    right = _HeisenbergMPO_right(S, Jx, Jy, Jz, h; type=type)
     mpo = Vector{Array{type,4}}(undef, L)
     mpo = fill(center, L)
     mpo[1] = left
@@ -263,20 +263,20 @@ function HeisenbergMPO(S, L, Jx, Jy, Jz, h; type = ComplexF64)
     return MPO(mpo)
 end
 
-function _HeisenbergMPO_left(S, Jx, Jy, Jz, h; type = ComplexF64)
+function _HeisenbergMPO_left(S, Jx, Jy, Jz, h; type=ComplexF64)
     s2 = Int(2S)
     L = zeros(type, 1, s2 + 1, s2 + 1, 5)
     L[1, :, :, :] = reshape([Matrix{type}(I, s2 + 1, s2 + 1) Jx * Sx(S) Jy * Sy(S) Jz * Sz(S) h * Sx(S)], s2 + 1, s2 + 1, 5)
     return L
 end
-function _HeisenbergMPO_right(S, Jx, Jy, Jz, h; type = ComplexF64)
+function _HeisenbergMPO_right(S, Jx, Jy, Jz, h; type=ComplexF64)
     s2 = Int(2S)
     R = zeros(type, 5, s2 + 1, s2 + 1, 1)
     R[:, :, :, 1] = permutedims(reshape([-h * Sx(S) Sx(S) Sy(S) Sz(S) Matrix{type}(I, s2 + 1, s2 + 1)], s2 + 1, s2 + 1, 5), [3, 1, 2])
     return R
 end
 
-function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type = ComplexF64)
+function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=ComplexF64)
     mposite = zeros(type, 5, 2S + 1, 2S + 1, 5)
     mposite[1, :, :, 1] = mposite[5, :, :, 5] = Matrix{type}(I, 2S + 1, 2S + 1)
     mposite[1, :, :, 2] = Jx * Sx(S)
@@ -286,5 +286,44 @@ function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type = ComplexF64)
     mposite[2, :, :, 5] = Sx(S)
     mposite[3, :, :, 5] = Sy(S)
     mposite[4, :, :, 5] = Sz(S)
+    return mposite
+end
+
+function _BD1MPO_center(μ, t, α, Δ, Δ1, U, V; type=ComplexF64)
+    D = 12
+    d = 4
+    mposite = zeros(type, D, d, d, D)
+    mposite[1, :, :, 1] = mposite[D, :, :, D] = Matrix{type}(I, d, d)
+    mposite[1, :, :, D] = (-μ - h) / 2 * ZI + (-μ + h) / 2 * IZ + Δ * (XX-YY) + U/4 * (ZI+IZ+ZZ) + V / 2 (ZI+IZ) #(SmSm * ZI - SpSp * ZI)
+
+    #Kinetic terms
+    dk = 2
+    mposite[1, :, :, dk] = t / 2 * XZ
+    mposite[dk, :, :, D] = XI
+    mposite[1, :, :, dk+1] = t / 2 * YZ
+    mposite[dk+1, :, :, D] = YI
+    mposite[1, :, :, dk+2] = t / 2 * IX
+    mposite[dk+2, :, :, D] = ZX
+    mposite[1, :, :, dk+3] = t / 2 * IY
+    mposite[dk+3, :, :, D] = ZY
+
+    #Spin orbit and Intersite superconductivity
+    dsoc = dk + 4
+    mposite[1, :, :, dsoc] = (Δ1 + α) / 2 * XZ
+    mposite[dsoc, :, :, D] = ZX
+    mposite[1, :, :, dsoc+1] = (-Δ1 + α) / 2 * YZ
+    mposite[dsoc+1, :, :, D] = ZY
+    mposite[1, :, :, dsoc+2] = (-Δ1 + α) / 2 * IX
+    mposite[dsoc+2, :, :, D] = XI
+    mposite[1, :, :, dsoc+3] = (Δ1 + α) / 2 * IY
+    mposite[dsoc+3, :, :, D] = YI
+
+    #Intersite interaction
+    dinter = dsoc + 4
+    mposite[1, :, :, dinter] = V / 4 * ZI
+    mposite[dinter, :, :, D] = ZI
+    mposite[1, :, :, dinter+1] =  V / 4 * IZ
+    mposite[dinter+1, :, :, D] = IZ
+
     return mposite
 end
