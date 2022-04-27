@@ -201,7 +201,13 @@ function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=ComplexF64)
     return mposite
 end
 
-function _BD1MPO_center(μ, t, α, Δ, Δ1, U, V; type=ComplexF64)
+function BD1MPO(N,μ,h, t, α, Δ, Δ1, U, V; type=ComplexF64)
+    center = _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type)
+    #mpo = Vector{Array{type,4}}(undef, N)
+    mpo = fill(center, N)
+    return MPO(mpo)
+end
+function _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=ComplexF64)
     D = 12
     d = 4
     mposite = zeros(type, D, d, d, D)

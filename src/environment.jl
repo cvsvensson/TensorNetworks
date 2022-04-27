@@ -27,7 +27,7 @@ infinite_environment(L::Vector{Array{T,N}}, R::Vector{Array{T,N}}) where {T,N} =
 function halfenvironment(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS, dir::Symbol)
     T = numtype(mps1)
     Ts = transfer_matrices(mps1, mpo, mps2, reverse_direction(dir))
-    V::Vector{T} = boundary((mps1,), (mpo, mps2), dir)
+    V = boundary((mps1,), (mpo, mps2), dir)
     N = length(mps1)
     env = Vector{Array{T,3}}(undef, N)
     if dir == :left
