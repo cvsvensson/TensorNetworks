@@ -46,8 +46,8 @@ end
 Return the identity MPO
 """
 function IdentityMPO(L, d) #FIXME Type stability. Maybe introduce a new type IdentityMPO?
-    # mpo = Array{Array{Complex{Float32},4}}(L)
-    mpo = Array{Any}(L)
+    mpo = Array{Array{ComplexF64,4}}(undef,L)
+    #mpo = Array{Any}(L)
     for i = 1:L
         mpo[i] = Array{ComplexF64}(1, d, d, 1)
         mpo[i][1, :, :, 1] = eye(d)
@@ -61,12 +61,8 @@ end
 Returns a translationally invariant one-site mpo
 """
 function translationMPO(L, M)
-    mpo = Array{Any}(L)
-    mpo[1] = Array{ComplexF64}(1, 2, 2, 2)
-    mpo[1][1, :, :, :] = reshape([si M], 2, 2, 2)
-    mpo[L] = Array{ComplexF64}(2, 2, 2, 1)
-    mpo[L][:, :, :, 1] = permutedims(reshape([M si], 2, 2, 2), [3, 1, 2])
-    for i = 2:L-1
+    mpo = Array{Array{ComplexF64,4}}(undef, L)
+    for i = 1:L
         # hardcoded implementation of index structure (a,i,j,b):
         help = Array{Complex128}(2, 2, 2, 2)
         help[1, :, :, 1] = help[2, :, :, 2] = si
@@ -87,11 +83,11 @@ Returns the Ising hamiltonian as an MPO
 function IsingMPO(L, J, h, g, shift=0)
     T = promote_type(eltype.((J, h, g))...)
     mpo = Vector{Array{T,4}}(undef, L)
-    mpo[1] = zeros(T, 1, 2, 2, 3)
-    mpo[1][1, :, :, :] = reshape([si -J * sz -h * sx - g * sz + shift * si / L], 2, 2, 3)
-    mpo[L] = zeros(T, 3, 2, 2, 1)
-    mpo[L][:, :, :, 1] = permutedims(reshape([-h * sx - g * sz + shift * si / L sz si], 2, 2, 3), [3, 1, 2])
-    for i = 2:L-1
+    # mpo[1] = zeros(T, 1, 2, 2, 3)
+    # mpo[1][1, :, :, :] = reshape([si -J * sz -h * sx - g * sz + shift * si / L], 2, 2, 3)
+    # mpo[L] = zeros(T, 3, 2, 2, 1)
+    # mpo[L][:, :, :, 1] = permutedims(reshape([-h * sx - g * sz + shift * si / L sz si], 2, 2, 3), [3, 1, 2])
+    for i = 1:L
         # hardcoded implementation of index structure (a,i,j,b):
         help = zeros(T, 3, 2, 2, 3)
         help[1, :, :, 1] = help[3, :, :, 3] = si #Maybe this should not be here at i=L-1?
@@ -110,46 +106,15 @@ KitaevMPO(N, t, Δ, U, μ)
 
 Returns the Kitaev spin chain
 """
-# function KitaevMPO3(N, t, Δ, U, μ)
-#     T = complex(promote_type(eltype.(((t+Δ)/2,(Δ-t)/2,U,μ/2))...))
-#     mpo = Vector{Array{T,4}}(undef,N)
-#     D = 5
-#     firstrow = [si  -sx*(t+Δ)/2  sy*(Δ-t)/2  U*sz  -μ/2*sz]
-#     mpo[1] = zeros(T,1,2,2,D)
-#     mpo[1][1,:,:,:] = reshape(firstrow,2,2,D)
-#     for i=2:N-1
-#         help = zeros(T,D,2,2,D)
-#         help[1,:,:,:] = firstrow
-#         help[2,:,:,D] = sx
-#         help[3,:,:,D] = sy
-#         help[4,:,:,D] = sz
-#         help[D,:,:,D] = si
-#         # help[9,:,:,9] = si
-#         mpo[i] = help
-#     end
-#     mpo[N] = zeros(T,D,2,2,1)
-#     mpo[N][1,:,:,1] = -μ/2 *sz
-#     mpo[N][2,:,:,1] = sx
-#     mpo[N][3,:,:,1] = sy
-#     mpo[N][4,:,:,1] = sz
-#     mpo[N][D,:,:,1] = si
-
-#     return MPO(mpo)
-# end
-
 function KitaevMPO(N, t, Δ, U, μ; type=ComplexF64)
     center = _KitaevMPO_center(t, Δ, U, μ, type=type)
     mpo = fill(center, N)
-    mpo[1] = _KitaevMPO_left(t, Δ, U, μ, type=type)
-    mpo[N] = _KitaevMPO_right(t, Δ, U, μ, type=type)
     return MPO(mpo)
 end
 
 function KitaevMPO(t, Δ, U, μs::Array; type=ComplexF64)
     N = length(μs)
     mpo = [_KitaevMPO_center(t, Δ, U, μ, type=type) for μ in μs]
-    mpo[1] = _KitaevMPO_left(t, Δ, U, μs[1], type=type)
-    mpo[N] = _KitaevMPO_right(t, Δ, U, μs[N], type=type)
     return MPO(mpo)
 end
 
@@ -157,8 +122,6 @@ function DisorderedKitaevMPO(N, t, Δ, U, μ::Tuple{K,T}; type=ComplexF64) where
     (mμ, sμ) = μ
     μs = sμ * randn(N) .+ mμ
     mpo = [_KitaevMPO_center(t, Δ, U, μ, type=type) for μ in μs]
-    mpo[1] = _KitaevMPO_left(t, Δ, U, μs[1], type=type)
-    mpo[N] = _KitaevMPO_right(t, Δ, U, μs[N], type=type)
     return MPO(mpo)
 end
 
@@ -199,67 +162,16 @@ function _KitaevMPO_right(t, Δ, U, μ; type=ComplexF64)
     mposite[D, :, :, 1] = si
     return mposite
 end
+
 """
     HeisenbergMPO(lattice sites,Jx,Jy,Jz,transverse)
 
 Returns the Heisenberg hamiltonian as an MPO
 """
-# function HeisenbergMPO(L, Jx, Jy, Jz, h)
-#     mpo = Vector{Array{ComplexF64,4}}(undef,L)
-#     mpo[1] = zeros(ComplexF64,1,2,2,5)
-#     mpo[1][1,:,:,:] = reshape([si Jx*sx Jy*sy Jz*sz h*sx], 2,2,5)
-#     mpo[L] =zeros(ComplexF64,5,2,2,1)
-#     mpo[L][:,:,:,1] = permutedims(reshape([h*sx sx sy sz si], 2,2,5), [3,1,2])
-
-#     for i=2:L-1
-#         # hardcoded implementation of index structure (a,i,j,b):
-#         help = zeros(ComplexF64,5,2,2,5)
-#         help[1,:,:,1] = help[5,:,:,5] = si
-#         help[1,:,:,2] = Jx*sx
-#         help[1,:,:,3] = Jy*sy
-#         help[1,:,:,4] = Jz*sz
-#         help[1,:,:,5] = h*sx
-#         help[2,:,:,5] = sx
-#         help[3,:,:,5] = sy
-#         help[4,:,:,5] = sz
-#         #help[2,:,:,1:4] = help[3,:,:,1:4] = help[4,:,:,1:4] = help[5,:,:,1:4] = s0
-#         mpo[i] = help
-#     end
-#     return MPO(mpo)
-# end
-
-# function HeisenbergS1MPO(L, Jx, Jy, Jz, h)
-#     mpo = Vector{Array{ComplexF64,4}}(undef,L)
-#     id = Matrix{ComplexF64}(I,3,3)
-#     mpo[1] = zeros(ComplexF64,1,3,3,5)
-#     mpo[1][1,:,:,:] = reshape([id Jx*sx1 Jy*sy1 Jz*sz1 h*sx1], 3,3,5)
-#     mpo[L] =zeros(ComplexF64,5,3,3,1)
-#     mpo[L][:,:,:,1] = permutedims(reshape([h*sx1 sx1 sy1 sz1 id], 3,3,5), [3,1,2])
-#     for i=2:L-1
-#         # hardcoded implementation of index structure (a,i,j,b):
-#         help = zeros(ComplexF64,5,3,3,5)
-#         help[1,:,:,1] = help[5,:,:,5] = id
-#         help[1,:,:,2] = Jx*sx1
-#         help[1,:,:,3] = Jy*sy1
-#         help[1,:,:,4] = Jz*sz1
-#         help[1,:,:,5] = h*sx1
-#         help[2,:,:,5] = sx1
-#         help[3,:,:,5] = sy1
-#         help[4,:,:,5] = sz1
-#         #help[2,:,:,1:4] = help[3,:,:,1:4] = help[4,:,:,1:4] = help[5,:,:,1:4] = s0
-#         mpo[i] = help
-#     end
-#     return MPO(-mpo)
-# end
-
 function HeisenbergMPO(S, L, Jx, Jy, Jz, h; type=ComplexF64)
     center = _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=type)
-    left = _HeisenbergMPO_left(S, Jx, Jy, Jz, h; type=type)
-    right = _HeisenbergMPO_right(S, Jx, Jy, Jz, h; type=type)
     mpo = Vector{Array{type,4}}(undef, L)
     mpo = fill(center, L)
-    mpo[1] = left
-    mpo[end] = right
     return MPO(mpo)
 end
 
@@ -294,7 +206,7 @@ function _BD1MPO_center(μ, t, α, Δ, Δ1, U, V; type=ComplexF64)
     d = 4
     mposite = zeros(type, D, d, d, D)
     mposite[1, :, :, 1] = mposite[D, :, :, D] = Matrix{type}(I, d, d)
-    mposite[1, :, :, D] = (-μ - h) / 2 * ZI + (-μ + h) / 2 * IZ + Δ * (XX-YY) + U/4 * (ZI+IZ+ZZ) + V / 2 (ZI+IZ) #(SmSm * ZI - SpSp * ZI)
+    mposite[1, :, :, D] = (-μ - h) / 2 * ZI + (-μ + h) / 2 * IZ + Δ * (XX - YY) + U / 4 * (ZI + IZ + ZZ) + V / 2*(ZI + IZ) #(SmSm * ZI - SpSp * ZI)
 
     #Kinetic terms
     dk = 2
@@ -322,7 +234,7 @@ function _BD1MPO_center(μ, t, α, Δ, Δ1, U, V; type=ComplexF64)
     dinter = dsoc + 4
     mposite[1, :, :, dinter] = V / 4 * ZI
     mposite[dinter, :, :, D] = ZI
-    mposite[1, :, :, dinter+1] =  V / 4 * IZ
+    mposite[1, :, :, dinter+1] = V / 4 * IZ
     mposite[dinter+1, :, :, D] = IZ
 
     return mposite

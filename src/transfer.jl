@@ -2,8 +2,15 @@
 # transfer_matrix_bond(mps1::AbstractMPS{_braket(OrthogonalLinkSite)}, mps2::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = kron(Diagonal(data(mps1.Λ[site])),Diagonal(data(mps2.Λ[site])))
 
 transfer_matrix_bond(mps::AbstractVector{<:OrthogonalLinkSite}, site::Integer, dir::Symbol) = data(link(mps[site], :left))
-transfer_matrix_bond(mps::AbstractVector{<:GenericSite}, site::Integer, dir::Symbol) = I#Diagonal(I,size(mps[site],1))
-transfer_matrix_bond(mps1::AbstractMPS, mps2::AbstractMPS, site::Integer, dir::Symbol) = kron(transfer_matrix_bond(mps1, site, dir), transfer_matrix_bond(mps2, site, dir))
+transfer_matrix_bond(mps::AbstractVector{<:GenericSite}, site::Integer, dir::Symbol) = LinearMap(I,size(mps[site],1))#Diagonal(I,size(mps[site],1))
+transfer_matrix_bond(mpo::AbstractMPO, site::Integer, dir::Symbol) = LinearMap(I,size(mpo[site],1))#Diagonal(I,size(mps[site],1))
+
+#transfer_matrix_bond(mps1::AbstractMPS, mps2::AbstractMPS, site::Integer, dir::Symbol) = kron(transfer_matrix_bond(mps1, site, dir), transfer_matrix_bond(mps2, site, dir))
+
+transfer_matrix_bond(cmpss::Tuple, mpss::Tuple,k, side::Symbol) = kron(
+    (transfer_matrix_bond(cm,k, side) for cm in cmpss)..., (transfer_matrix_bond(m,k, side) for m in mpss)...)
+
+
 Base.kron(a::UniformScaling, b::UniformScaling) = a * b
 Base.kron(a::UniformScaling, b::AbstractMatrix) = Diagonal(a, size(b, 1)) * b
 Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
@@ -283,8 +290,8 @@ function __local_transfer_matrix(sites::Tuple, direction::Symbol = :left)
     end
 end
 
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol = :left) = data(op) * foldr(*,transfer_matrices(site1, direction))
-_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * foldr(*,transfer_matrices(site1, site2, direction))
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, direction::Symbol = :left) = data(op) * prod(transfer_matrices(site1, direction))
+_local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::ScaledIdentityGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left) = data(op) * prod(transfer_matrices(site1, site2, direction))
 function _local_transfer_matrix(site1::AbstractVector{<:AbstractSite}, op::AbstractSquareGate, site2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     @assert length(site1) == length(site2) == operatorlength(op)
     if ispurification(site1[1])
@@ -392,7 +399,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::Abs
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return foldr(*,Ts) #Products of many linear operators cause long compile times!
+    return prod(Ts) #Products of many linear operators cause long compile times!
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, direction)
@@ -403,7 +410,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symb
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return foldr(*,Ts) #Products of many linear operators cause long compile times!
+    return prod(Ts) #Products of many linear operators cause long compile times!
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, op, direction)
@@ -414,7 +421,7 @@ function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return foldr(*,Ts) #Products of many linear operators cause long compile times!
+    return prod(Ts) #Products of many linear operators cause long compile times!
 end
 
 # transfer_matrix(sites1::AbstractVector{<:AbstractSite}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = transfer_matrix(sites1, IdentityMPO(length(sites1)), sites2, direction)

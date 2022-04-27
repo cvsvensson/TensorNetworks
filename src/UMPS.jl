@@ -150,8 +150,8 @@ function transfer_spectrum(mps::UMPS{K}, direction::Symbol = :left; nev = 1) whe
     nev::Int = min(D^2, nev)
     if D < 4
         vals, vecs = eigen(Matrix(T))
-        vals = vals[end:-1:1]
-        vecs = vecs[:, end:-1:1]
+        vals::Vector{K} = vals[end:-1:1]
+        vecs::Matrix{K} = vecs[:, end:-1:1]
     else
         x0 = vec(Matrix{K}(I, D, D))
         vals, vecsvec = eigsolve(T, x0, nev, :LM)#eigs(T,nev=nev)
@@ -166,10 +166,11 @@ function transfer_spectrum(mps::UMPS{K}, direction::Symbol = :left; nev = 1) whe
     # 	tensors[i] = reshape(vecs[:,i],D,D)
     # end
     nev = min(length(vals), nev)
-    tensors::Vector{Matrix{K}} = [reshape(vecs[:, k], D, D) for k in 1:nev]
-    return K.(vals[1:nev])::Vector{K}, canonicalize_eigenoperator.(tensors) #canonicalize_eigenoperator.(tensors)
+    tensors::Vector{Matrix{K}} = [canonicalize_eigenoperator(reshape(vecs[:, k], D, D)) for k in 1:nev]
+    return (vals[1:nev])::Vector{K}, (tensors) #canonicalize_eigenoperator.(tensors)
 end
-function transfer_spectrum(mps1::UMPS, mps2::UMPS, direction::Symbol = :left; nev = 1)
+function transfer_spectrum(mps1::UMPS{K1}, mps2::UMPS{K2}, direction::Symbol = :left; nev = 1) where {K1,K2}
+    K = promote_type(K1,K2)
     T = transfer_matrix(mps1, mps2, direction)
     D1 = size(mps1[end], 3)
     D2 = size(mps2[end], 3)
@@ -184,8 +185,8 @@ function transfer_spectrum(mps1::UMPS, mps2::UMPS, direction::Symbol = :left; ne
         vecs = reduce(hcat, vecsvec)
     end
     nev = min(length(vals), nev)
-    tensors = [reshape(vecs[:, k], D1, D2) for k in 1:nev]
-    return vals[1:nev], tensors #canonicalize_eigenoperator.(tensors)
+    tensors::Vector{Matrix{K}} = [reshape(vecs[:, k], D1, D2) for k in 1:nev]
+    return vals[1:nev]::Vector{K}, tensors #canonicalize_eigenoperator.(tensors)
 end
 """
 	transfer_spectrum(mps::UMPS, mpo::AbstractMPO, direction=:left; nev=1)
@@ -592,9 +593,9 @@ end
 function transfer_matrix_squared(mps,dir=:left)
     Ts = transfer_matrices_squared(mps, dir)
     if dir ==:right
-        return foldr(*,reverse(Ts))
+        return prod(reverse(Ts))
     else
-        return foldr(*,Ts)
+        return prod(Ts)
     end
 end
 function transfer_matrices_squared(mps,dir)

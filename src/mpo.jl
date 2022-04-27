@@ -222,12 +222,14 @@ end
 function Matrix(mpo::MPO)
     n = length(mpo)
     T = eltype(mpo[1])
-    tens = SparseArray(ones(T, 1, 1, 1))
+    vl = boundary(OpenBoundary(),mpo,:left)
+    tens = SparseArray(reshape(vl,1,1,length(vl)))
     for site in mpo[1:n]
         dat = SparseArray(data(site))
         @tensor tens[out, newout, in, newin, right] := tens[out, in, c] * dat[c, newout, newin, right]
         st = size(tens)
         tens = SparseArray(reshape(tens, st[1] * st[2], st[3] * st[4], st[5]))
     end
-    return tens[:, :, 1]
+    vr = SparseArray(boundary(OpenBoundary(),mpo,:right))
+    return @tensor out[:] := tens[-1, -2, 1] * vr[1]
 end

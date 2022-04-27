@@ -8,14 +8,14 @@ Base.show(io::IO, mps::AbstractMPS) =
 Base.show(io::IO, m::MIME"text/plain", mps::AbstractMPS) = show(io, mps)
 
 function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
-    K = promote_type(numtype.((mps1, mps2))...)
-    Ts::Vector{LinearMap{K}} = transfer_matrices(mps1, mps2)
-    vl = transfer_matrix_bond(mps1, mps2, 1, :right) * boundaryvec(mps1, mps2, :left)
-    vr::Vector{K} = boundaryvec(mps1, mps2, :right)
-    for k in length(mps1):-1:1
-        vr = Ts[k] * vr
-    end
-    return transpose(vr) * vl
+    #K = promote_type(numtype.((mps1, mps2))...)
+    T = transfer_matrix(mps1, mps2,:left)
+    vl = transfer_matrix_bond((mps1,), (mps2,), 1, :right) * boundary((mps1,), (mps2,), :left)
+    vr = boundary((mps1,),(mps2,), :right)
+    # for k in length(mps1):-1:1
+    #     vr = Ts[k] * vr
+    # end
+    return transpose(T*vr) * vl
 end
 
 LinearAlgebra.norm(mps::AbstractMPS) = sqrt(abs(scalar_product(mps, mps)))
