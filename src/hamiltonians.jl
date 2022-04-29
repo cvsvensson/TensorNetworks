@@ -106,19 +106,19 @@ KitaevMPO(N, t, Δ, U, μ)
 
 Returns the Kitaev spin chain
 """
-function KitaevMPO(N, t, Δ, U, μ; type=ComplexF64)
+function KitaevMPO(N, t, Δ, U, μ; type=Float64)
     center = _KitaevMPO_center(t, Δ, U, μ, type=type)
     mpo = fill(center, N)
     return MPO(mpo)
 end
 
-function KitaevMPO(t, Δ, U, μs::Array; type=ComplexF64)
+function KitaevMPO(t, Δ, U, μs::Array; type=Float64)
     N = length(μs)
     mpo = [_KitaevMPO_center(t, Δ, U, μ, type=type) for μ in μs]
     return MPO(mpo)
 end
 
-function DisorderedKitaevMPO(N, t, Δ, U, μ::Tuple{K,T}; type=ComplexF64) where {K,T}
+function DisorderedKitaevMPO(N, t, Δ, U, μ::Tuple{K,T}; type=Float64) where {K,T}
     (mμ, sμ) = μ
     μs = sμ * randn(N) .+ mμ
     mpo = [_KitaevMPO_center(t, Δ, U, μ, type=type) for μ in μs]
@@ -136,30 +136,14 @@ _KitaevGate_center(t, Δ, U, μ) = -gXX * (t + Δ) / 2 + gYY * (Δ - t) / 2 + U 
 _KitaevGate_left(t, Δ, U, μ) = -gXX * (t + Δ) / 2 + gYY * (Δ - t) / 2 + U * gZZ - μ / 2 * gZI
 _KitaevGate_right(t, Δ, U, μ1, μ2) = -gXX * (t + Δ) / 2 + gYY * (Δ - t) / 2 + U * gZZ - μ1 / 2 * gZI - μ2 / 2 * gIZ
 
-function _KitaevMPO_center(t, Δ, U, μ; type=ComplexF64)
+function _KitaevMPO_center(t, Δ, U, μ; type=Float64)
     D = 5
     mposite = zeros(type, D, 2, 2, D)
-    mposite[1, :, :, :] = [si -sx * (t + Δ) / 2 sy * (Δ - t) / 2 U * sz -μ / 2 * sz]
+    mposite[1, :, :, :] = [si -sx * (t + Δ) / 2 sy*(1im) * (Δ - t) / 2 U * sz -μ / 2 * sz]
     mposite[2, :, :, D] = sx
-    mposite[3, :, :, D] = sy
+    mposite[3, :, :, D] = sy*(-1im)
     mposite[4, :, :, D] = sz
     mposite[D, :, :, D] = si
-    return mposite
-end
-function _KitaevMPO_left(t, Δ, U, μ; type=ComplexF64)
-    D = 5
-    mposite = zeros(type, 1, 2, 2, D)
-    mposite[1, :, :, :] = reshape([si -sx * (t + Δ) / 2 sy * (Δ - t) / 2 U * sz -μ / 2 * sz], 2, 2, D)
-    return mposite
-end
-function _KitaevMPO_right(t, Δ, U, μ; type=ComplexF64)
-    D = 5
-    mposite = zeros(type, D, 2, 2, 1)
-    mposite[1, :, :, 1] = -μ / 2 * sz
-    mposite[2, :, :, 1] = sx
-    mposite[3, :, :, 1] = sy
-    mposite[4, :, :, 1] = sz
-    mposite[D, :, :, 1] = si
     return mposite
 end
 
@@ -168,46 +152,33 @@ end
 
 Returns the Heisenberg hamiltonian as an MPO
 """
-function HeisenbergMPO(S, L, Jx, Jy, Jz, h; type=ComplexF64)
+function HeisenbergMPO(S, L, Jx, Jy, Jz, h; type=Float64)
     center = _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=type)
     mpo = Vector{Array{type,4}}(undef, L)
     mpo = fill(center, L)
     return MPO(mpo)
 end
 
-function _HeisenbergMPO_left(S, Jx, Jy, Jz, h; type=ComplexF64)
-    s2 = Int(2S)
-    L = zeros(type, 1, s2 + 1, s2 + 1, 5)
-    L[1, :, :, :] = reshape([Matrix{type}(I, s2 + 1, s2 + 1) Jx * Sx(S) Jy * Sy(S) Jz * Sz(S) h * Sx(S)], s2 + 1, s2 + 1, 5)
-    return L
-end
-function _HeisenbergMPO_right(S, Jx, Jy, Jz, h; type=ComplexF64)
-    s2 = Int(2S)
-    R = zeros(type, 5, s2 + 1, s2 + 1, 1)
-    R[:, :, :, 1] = permutedims(reshape([-h * Sx(S) Sx(S) Sy(S) Sz(S) Matrix{type}(I, s2 + 1, s2 + 1)], s2 + 1, s2 + 1, 5), [3, 1, 2])
-    return R
-end
-
-function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=ComplexF64)
+function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=Float64)
     mposite = zeros(type, 5, 2S + 1, 2S + 1, 5)
     mposite[1, :, :, 1] = mposite[5, :, :, 5] = Matrix{type}(I, 2S + 1, 2S + 1)
     mposite[1, :, :, 2] = Jx * Sx(S)
-    mposite[1, :, :, 3] = Jy * Sy(S)
+    mposite[1, :, :, 3] = Jy * Sy(S)*(1im)
     mposite[1, :, :, 4] = Jz * Sz(S)
     mposite[1, :, :, 5] = h * Sx(S)
     mposite[2, :, :, 5] = Sx(S)
-    mposite[3, :, :, 5] = Sy(S)
+    mposite[3, :, :, 5] = Sy(S)*(-1im)
     mposite[4, :, :, 5] = Sz(S)
     return mposite
 end
 
-function BD1MPO(N,μ,h, t, α, Δ, Δ1, U, V; type=ComplexF64)
+function BD1MPO(N,μ,h, t, α, Δ, Δ1, U, V; type=Float64)
     center = _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type)
     #mpo = Vector{Array{type,4}}(undef, N)
     mpo = fill(center, N)
     return MPO(mpo)
 end
-function _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=ComplexF64)
+function _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=Float64)
     D = 12
     d = 4
     mposite = zeros(type, D, d, d, D)
@@ -218,23 +189,23 @@ function _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=ComplexF64)
     dk = 2
     mposite[1, :, :, dk] = t / 2 * XZ
     mposite[dk, :, :, D] = XI
-    mposite[1, :, :, dk+1] = t / 2 * YZ
-    mposite[dk+1, :, :, D] = YI
+    mposite[1, :, :, dk+1] = t / 2 * YZ *(1im) #Multiply with i to make everything real
+    mposite[dk+1, :, :, D] = YI *(-1im)
     mposite[1, :, :, dk+2] = t / 2 * IX
     mposite[dk+2, :, :, D] = ZX
-    mposite[1, :, :, dk+3] = t / 2 * IY
-    mposite[dk+3, :, :, D] = ZY
+    mposite[1, :, :, dk+3] = t / 2 * IY *(1im)
+    mposite[dk+3, :, :, D] = ZY *(-1im)
 
     #Spin orbit and Intersite superconductivity
     dsoc = dk + 4
     mposite[1, :, :, dsoc] = (Δ1 + α) / 2 * XZ
     mposite[dsoc, :, :, D] = ZX
-    mposite[1, :, :, dsoc+1] = (-Δ1 + α) / 2 * YZ
-    mposite[dsoc+1, :, :, D] = ZY
+    mposite[1, :, :, dsoc+1] = (-Δ1 + α) / 2 * YZ *(1im)
+    mposite[dsoc+1, :, :, D] = ZY *(-1im)
     mposite[1, :, :, dsoc+2] = (-Δ1 + α) / 2 * IX
     mposite[dsoc+2, :, :, D] = XI
-    mposite[1, :, :, dsoc+3] = (Δ1 + α) / 2 * IY
-    mposite[dsoc+3, :, :, D] = YI
+    mposite[1, :, :, dsoc+3] = (Δ1 + α) / 2 * IY *(1im)
+    mposite[dsoc+3, :, :, D] = YI *(-1im)
 
     #Intersite interaction
     dinter = dsoc + 4

@@ -393,35 +393,26 @@ transfer_matrices(sites::AbstractVector{<:AbstractSite}, direction::Symbol = :le
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, sites2::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, op, sites2, direction)
     N = length(Ts)
-    if N > 20
-        @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
-    end
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return prod(Ts) 
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, direction)
     N = length(Ts)
-    if N > 20
-        @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
-    end
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return prod(Ts) 
 end
 function transfer_matrix(sites1::AbstractVector{<:AbstractSite}, op, direction::Symbol = :left)
     Ts = transfer_matrices(sites1, op, direction)
     N = length(Ts)
-    if N > 20
-        @warn "Calculating the product of $N transfer_matrices. Products of many linearmaps may cause long compile times!"
-    end
     if direction == :right
         Ts = @view Ts[N:-1:1]
     end
-    return prod(Ts) #Products of many linear operators cause long compile times!
+    return prod(Ts) 
 end
 
 # transfer_matrix(sites1::AbstractVector{<:AbstractSite}, sites2::AbstractVector{<:AbstractSite}, direction::Symbol=:left) = transfer_matrix(sites1, IdentityMPO(length(sites1)), sites2, direction)
