@@ -550,3 +550,16 @@ end
         @test wf ≈ transpose(sites[1][1,n1,:]) * sites[2][:,n2,1]
     end 
 end
+
+@testset "BD1" begin
+    μ,t,h,α,Δ,Δ1,U,V = [1,1,.1,1.5,.2,-.5,3,7]
+    ham = TensorNetworks.BD1MPO(1,μ,h, t, α, Δ, Δ1, U, V)
+
+    TensorNetworks.expectation_value(LCROpenMPS([qubit(0,1)*qubit(0,1)]), ham) == -2μ+U
+    TensorNetworks.expectation_value(LCROpenMPS([qubit(0,1)*qubit(0,1)]), ham) == -2μ+U
+
+    state = LCROpenMPS([qubit(0,1)*qubit(0,1), qubit(0,1)*qubit(0,1)])
+    ham = TensorNetworks.BD1MPO(2,μ,h, t, α, Δ, Δ1, U, V)
+    TensorNetworks.expectation_value(state, ham)
+
+end

@@ -173,6 +173,9 @@ function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=Float64)
 end
 
 function BD1MPO(N,μ,h, t, α, Δ, Δ1, U, V; type=Float64)
+    if N==1
+        V=0;
+    end
     center = _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type)
     #mpo = Vector{Array{type,4}}(undef, N)
     mpo = fill(center, N)
@@ -183,7 +186,7 @@ function _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=Float64)
     d = 4
     mposite = zeros(type, D, d, d, D)
     mposite[1, :, :, 1] = mposite[D, :, :, D] = Matrix{type}(I, d, d)
-    mposite[1, :, :, D] = (-μ - h) / 2 * ZI + (-μ + h) / 2 * IZ + Δ * (XX - YY) + U / 4 * (ZI + IZ + ZZ) + V / 2*(ZI + IZ) #(SmSm * ZI - SpSp * ZI)
+    mposite[1, :, :, D] = (-μ - h) / 2 * (ZI+II) + (-μ + h) / 2 * (IZ+II) + Δ * (XX - YY) + U / 4 * (II + ZI + IZ + ZZ) + V / 2*(ZI + IZ) #(SmSm * ZI - SpSp * ZI)
 
     #Kinetic terms
     dk = 2
