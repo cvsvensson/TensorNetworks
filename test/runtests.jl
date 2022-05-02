@@ -552,14 +552,68 @@ end
 end
 
 @testset "BD1" begin
-    μ,t,h,α,Δ,Δ1,U,V = [1,1,.1,1.5,.2,-.5,3,7]
-    ham = TensorNetworks.BD1MPO(1,μ,h, t, α, Δ, Δ1, U, V)
+    μ,t,h,α,Δ,Δ1,U,V = [1.01,1,.1,1.5,.2,-.55,pi,7]
+    ham = TensorNetworks.BD1MPO(1,μ,h, t, α, Δ, Δ1, U, V);
+    @test norm(Matrix(ham) - Matrix(ham)') < 1e-12
+    s1 = qubit(0,0)
+    s0 = qubit(pi/2,0)
+    s11 = LCROpenMPS([(-1)*s1*s1])
+    s00 = LCROpenMPS([s0*s0])
+    s10 = LCROpenMPS([s1*s0])
+    s01 = LCROpenMPS([s0*s1])
+    @test expectation_value(s11, ham) ≈ -2μ+U
+    @test abs(expectation_value(s00, ham)) < 1e-8
+    @test expectation_value(s10, ham) ≈ -μ-h 
+    @test expectation_value(s01, ham) ≈ -μ+h 
 
-    TensorNetworks.expectation_value(LCROpenMPS([qubit(0,1)*qubit(0,1)]), ham) == -2μ+U
-    TensorNetworks.expectation_value(LCROpenMPS([qubit(0,1)*qubit(0,1)]), ham) == -2μ+U
+    @test matrix_element(s00,ham,s11) ≈ Δ
+    @test abs(matrix_element(s01,ham,s10)) < 1e-8
+    @test abs(matrix_element(s01,ham,s10)) < 1e-8
 
-    state = LCROpenMPS([qubit(0,1)*qubit(0,1), qubit(0,1)*qubit(0,1)])
-    ham = TensorNetworks.BD1MPO(2,μ,h, t, α, Δ, Δ1, U, V)
-    TensorNetworks.expectation_value(state, ham)
+    _qubit(n) = n==1 ? s1 : s0
+    state(a,b,c,d) = LCROpenMPS([_qubit(a)*_qubit(b), (-1)^(a*b+c*(a+b)+d*(a+b+c))*_qubit(c)*_qubit(d)])
+    me(a,b) = matrix_element(state(a...),ham2,state(b...))
+    # s1100 = LCROpenMPS([s1*s1, s0*s0])
+    # s0011 = LCROpenMPS([s0*s0, s1*s1])
+    # s1010 = LCROpenMPS([s1*s0, s1*s0])
+    # s0101 = LCROpenMPS([s0*s1, s0*s1])
+    # s1001 = LCROpenMPS([s1*s0, s0*s1])
+    # s0110 = LCROpenMPS([s0*s1, s1*s0])
+    # s0100 = LCROpenMPS([s0*s1, s0*s0])
+    # s0010 = LCROpenMPS([s0*s0, s1*s0])
+    # s0001 = LCROpenMPS([s0*s0, s0*s1])
+    # s1000 = LCROpenMPS([s1*s0, s0*s0])
+    # s0111 = LCROpenMPS([s0*s1, s1*s1])
+    # s1101 = LCROpenMPS([s1*s1, s0*s1])
+    ham2 = TensorNetworks.BD1MPO(2,μ,h, t, α, Δ, Δ1, U, V);
+    @test norm(Matrix(ham2) - Matrix(ham2)') < 1e-12
+    @test me((1,1,0,0),(1,1,0,0)) ≈ -2μ + U
+    ### Spin orbit
+    # spin up jumps left
+    @test me((1,1,0,0),(1,0,1,0)) ≈ α/2
+    @test me((0,1,0,0),(0,0,1,0)) ≈ α/2
+    @test me((0,1,0,1),(0,0,1,1)) ≈ α/2
+    # spin up jumps right
+    @test me((0,0,0,1),(1,0,0,0)) ≈ -α/2
+    @test me((0,1,0,1),(1,1,0,0)) ≈ α/2 #extra minus sign from jumping over a fermion
+    @test me((0,0,1,1),(1,0,1,0)) ≈ α/2 #extra minus sign from jumping over a fermion
 
+    ### Hopping
+    @test me((1,0,0,0),(0,0,1,0)) ≈ -t/2
+    @test me((1,1,0,0),(0,1,1,0)) ≈ t/2 #extra minus sign from jumping over a fermion
+    @test me((0,1,1,1),(1,1,0,1)) ≈ t/2 #extra minus sign from jumping over a fermion
+    @test me((0,1,1,0),(0,0,1,1)) ≈ t/2
+    @test me((1,0,0,1),(1,1,0,0)) ≈ -t/2 
+
+    #superconductivity
+    @test me((0,0,0,0),(0,0,1,1)) ≈ Δ
+    @test me((1,0,0,0),(1,0,1,1)) ≈ Δ
+    @test me((0,0,0,0),(1,0,0,1)) ≈ Δ1
+    @test me((0,0,0,0),(0,1,1,0)) ≈ -Δ1
+    @test abs(me((0,0,0,0),(0,1,0,1))) < 1e-12
+
+    #interactions
+    @test me((1,1,1,1),(1,1,1,1)) ≈ (2U + 2V - 4μ)
+    @test me((1,0,1,1),(1,0,1,1)) ≈ (U + V - 3μ - h)
+    @test me((1,1,0,1),(1,1,0,1)) ≈ (U + V - 3μ + h)
 end

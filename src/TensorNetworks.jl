@@ -20,7 +20,7 @@ export OpenMPS, randomOpenMPS, identityOpenMPS
 export LCROpenMPS, randomLCROpenMPS, identityLCROpenMPS
 export UMPS, randomUMPS, identityUMPS, transfer_spectrum, boundary, productUMPS
 export canonicalize, canonicalize!, iscanonical
-export expectation_value, expectation_values, correlator, connected_correlator
+export expectation_value, expectation_values, correlator, connected_correlator, matrix_element
 export transfer_matrix, transfer_matrices
 export prepare_layers, norm, apply_layers
 export DMRG, eigenstates
