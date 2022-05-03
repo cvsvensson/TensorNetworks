@@ -551,7 +551,7 @@ end
     end 
 end
 
-@testset "BD1" begin
+@testset "BD1MPO" begin
     μ,t,h,α,Δ,Δ1,U,V = [1.01,1,.1,1.5,.2,-.55,pi,7]
     ham = TensorNetworks.BD1MPO(1,μ,h, t, α, Δ, Δ1, U, V);
     @test norm(Matrix(ham) - Matrix(ham)') < 1e-12
@@ -573,18 +573,7 @@ end
     _qubit(n) = n==1 ? s1 : s0
     state(a,b,c,d) = LCROpenMPS([_qubit(a)*_qubit(b), (-1)^(a*b+c*(a+b)+d*(a+b+c))*_qubit(c)*_qubit(d)])
     me(a,b) = matrix_element(state(a...),ham2,state(b...))
-    # s1100 = LCROpenMPS([s1*s1, s0*s0])
-    # s0011 = LCROpenMPS([s0*s0, s1*s1])
-    # s1010 = LCROpenMPS([s1*s0, s1*s0])
-    # s0101 = LCROpenMPS([s0*s1, s0*s1])
-    # s1001 = LCROpenMPS([s1*s0, s0*s1])
-    # s0110 = LCROpenMPS([s0*s1, s1*s0])
-    # s0100 = LCROpenMPS([s0*s1, s0*s0])
-    # s0010 = LCROpenMPS([s0*s0, s1*s0])
-    # s0001 = LCROpenMPS([s0*s0, s0*s1])
-    # s1000 = LCROpenMPS([s1*s0, s0*s0])
-    # s0111 = LCROpenMPS([s0*s1, s1*s1])
-    # s1101 = LCROpenMPS([s1*s1, s0*s1])
+
     ham2 = TensorNetworks.BD1MPO(2,μ,h, t, α, Δ, Δ1, U, V);
     @test norm(Matrix(ham2) - Matrix(ham2)') < 1e-12
     @test me((1,1,0,0),(1,1,0,0)) ≈ -2μ + U
@@ -616,4 +605,20 @@ end
     @test me((1,1,1,1),(1,1,1,1)) ≈ (2U + 2V - 4μ)
     @test me((1,0,1,1),(1,0,1,1)) ≈ (U + V - 3μ - h)
     @test me((1,1,0,1),(1,1,0,1)) ≈ (U + V - 3μ + h)
+end
+
+@testset "KitaevMPO" begin
+    μ,t,Δ,U = [1.01,1,.1,pi]
+    ham = TensorNetworks.KitaevMPO(2,t, Δ, U, μ)
+    @test norm(Matrix(ham) - Matrix(ham)') < 1e-12
+    s1 = qubit(0,0)
+    s0 = qubit(pi/2,0)
+    _qubit(n) = n==1 ? s1 : s0
+    state(a,b) = LCROpenMPS([_qubit(a),(-1)^(a*b)*_qubit(b)])
+    me(a,b) = matrix_element(state(a...),ham,state(b...))
+    @test me((1,1),(1,1)) ≈ -μ + U
+    @test me((0,0),(0,0)) ≈ μ + U
+    ### Hopping
+    @test me((1,0),(0,1)) ≈ -t
+    @test me((0,0),(1,1)) ≈ Δ
 end
