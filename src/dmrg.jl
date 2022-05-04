@@ -121,7 +121,7 @@ function _eigs_small(heff)
     return T.(vals)::Vector{T}, vecs::Matrix{T}
 end
 function _eigs_large(heff::LinearMap, x0, nev, prec)
-    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = 100*prec, ishermitian = true, maxiter = 3, krylovdim = 10)
+    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = 10*prec, ishermitian = true, maxiter = 3, krylovdim = 20)
     evecsvec::Matrix{eltype(heff)} = reduce(hcat, evecs)
     return evals, evecsvec
 end

@@ -64,10 +64,10 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     TI0 = transfer_matrices(mps, :left)
     TJW = transfer_matrices(mps, MPOsite(JW), mps2, :left)
     TJW0 = transfer_matrices(mps, MPOsite(JW), :left)
-    result1::Array{ComplexF64,2} = zeros(ComplexF64, N, nmaj)
-    result2::Array{Float64,4} = zeros(Float64, N, N, nmaj, nmaj)
-    result3::Array{ComplexF64,6} = zeros(ComplexF64, N, N, N, nmaj, nmaj, nmaj)
-    result4::Array{Float64,8} = zeros(Float64, N, N, N,N, nmaj, nmaj, nmaj,nmaj)
+    result1::Array{complex(T),2} = zeros(complex(T), N, nmaj)
+    result2::Array{real(T),4} = zeros(real(T), N, N, nmaj, nmaj)
+    result3::Array{complex(T),6} = zeros(complex(T), N, N, N, nmaj, nmaj, nmaj)
+    result4::Array{real(T),8} = zeros(real(T), N, N, N,N, nmaj, nmaj, nmaj,nmaj)
 
     majops = maj_ops(nmaj)#[TensorNetworks.XI,TensorNetworks.YI,-TensorNetworks.ZX,-TensorNetworks.ZY]
     majopsJW = maj_opsJW(nmaj)#[-1im*TensorNetworks.YZ, 1im*TensorNetworks.XZ, 1im * TensorNetworks.IY, -1im*TensorNetworks.IX]
@@ -76,28 +76,30 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     T10 = [[transfer_matrix(mps[r], MPOsite(majops[i]), :left) for i in 1:nmaj] for r in 1:N]
     T1JW = [[transfer_matrix(mps[r], MPOsite(majopsJW[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
     T1JW0 = [[transfer_matrix(mps[r], MPOsite(majopsJW[i]), :left) for i in 1:nmaj] for r in 1:N]
-
-    T2indices = vcat([[(k1,k2) for k2 in (1:nmaj)[k1+1:end]] for k1 in 1:nmaj]...)
+    
+    Ttype = typeof(1*T1[1][1])
+    
+    T2indices::Vector{NTuple{2, Int64}} = vcat([[(k1,k2) for k2 in (1:nmaj)[k1+1:end]] for k1 in 1:nmaj]...)
     T2indicesitr = Base.product(1:nmaj,1:nmaj)
     T2stack(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]), mps2[r], :left)
     T2stack0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]), :left)
     T2stackJW(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majopsJW[j]), mps2[r], :left)
     T2stackJW0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majopsJW[j]), :left)
-    T2stacked = [[T2stack(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
-    T2stacked0 = [[T2stack0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
-    T2stackedJW = [[T2stackJW(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
-    T2stackedJW0 = [[T2stackJW0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+    T2stacked::Vector{Array{Ttype,2}} = [[T2stack(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+    T2stacked0::Vector{Array{Ttype,2}} = [[T2stack0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+    T2stackedJW::Vector{Array{Ttype,2}} = [[T2stackJW(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+    T2stackedJW0::Vector{Array{Ttype,2}} = [[T2stackJW0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
 
-    T3indices = [vcat([vcat([[(k1,k2,k3) for k3 in (1:nmaj)[k2+1:end]] for k2 in (1:nmaj)[k1+1:end]]...) for k1 in 1:nmaj]...)...]
+    T3indices::Vector{NTuple{3, Int64}} = [vcat([vcat([[(k1,k2,k3) for k3 in (1:nmaj)[k2+1:end]] for k2 in (1:nmaj)[k1+1:end]]...) for k1 in 1:nmaj]...)...]
     T3stack(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majops[k]), mps2[r], :left)
     T3stack0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majops[k]), :left)
     T3stackJW(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majopsJW[k]), mps2[r], :left)
     T3stackJW0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majopsJW[k]), :left)
     T3indicesitr = Base.product(1:nmaj,1:nmaj,1:nmaj)
-    T3stacked = [[T3stack(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
-    T3stacked0 = [[T3stack0(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
+    T3stacked::Vector{Array{Ttype,3}} = [[T3stack(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
+    T3stacked0::Vector{Array{Ttype,3}} = [[T3stack0(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
     #T3stackedJW = [[T3stackJW(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
-    T3stackedJW0 = [[T3stackJW0(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
+    T3stackedJW0::Vector{Array{Ttype,3}} = [[T3stackJW0(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
 
     #T4stacked0 = [transfer_matrix(mps[r], MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), :left) for r in 1:N]
     Threads.@threads for r in 1:N
@@ -169,11 +171,11 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
         end
     end
 
-    result2 = antisymmetrise(result2)
-    result3 = antisymmetrise(result3)
-    result4 = antisymmetrise(result4)
+    r2 = antisymmetrise(result2)
+    r3 = antisymmetrise(result3)
+    r4 = antisymmetrise(result4)
 
-    return result1, result2, result3,result4#, abmap!,abcmap! #lsola, lsolb, lsolai, lsolbi
+    return result1, r2, r3,r4#, abmap!,abcmap! #lsola, lsolb, lsolai, lsolbi
 end
 
 function three_body_noninteracting(a,r2)
@@ -184,13 +186,13 @@ end
 function majorana_map(rr2::Array{T,4},rr4) where T
     N = size(rr2,1)
     nmaj = size(rr2,3)
-    ag2 = zeros(T,N,N,N,nmaj,nmaj,nmaj)
-    bg2a = zeros(T,N,nmaj)
-    bg4 = zeros(T,N,N,N,nmaj,nmaj,nmaj)
+    # ag2::Array{T,6} = zeros(T,N,N,N,nmaj,nmaj,nmaj)
+    # bg2a::Array{T,2} = zeros(T,N,nmaj)
+    # bg4::Array{T,6} = zeros(T,N,N,N,nmaj,nmaj,nmaj)
     function _abmap!(a,b)
-        @tensor ag2[:] = a[-1,-4] * rr2[-2,-3, -5, -6]
-        @tensor bg2a[:] = b[-1, 1, 2, -2, 3, 4] * rr2[1,2,3,4]
-        @tensor bg4[:] = b[-1,1,2,-4,3,4]*rr4[-2,-3,1,2,-5,-6,3,4]
+        @tensor ag2[:] := a[-1,-4] * rr2[-2,-3, -5, -6]
+        @tensor bg2a[:] := b[-1, 1, 2, -2, 3, 4] * rr2[1,2,3,4]
+        @tensor bg4[:] := b[-1,1,2,-4,3,4]*rr4[-2,-3,1,2,-5,-6,3,4]
         a .= a - 3*bg2a 
         b .= 3*b + antisymmetrise(-ag2/2 - 3*bg4/2)
         return a,b
