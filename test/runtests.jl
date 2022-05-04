@@ -629,8 +629,8 @@ end
     μ = .5
     Δ = t
     U = 0.0
-    Dmax = 20
-    tol = 1e-12
+    Dmax = 50
+    tol = 1e-14
     truncation= TruncationArgs(Dmax, tol, true)
     initialmps = canonicalize(randomLCROpenMPS(N, 2, Dmax; truncation=truncation, T=Float64))
     set_center!(initialmps, 1)
@@ -641,8 +641,8 @@ end
     @time r1, r2, r3,r4 = majorana_measurements(gs1, gs2, N);
     a,b = majorana_coefficients(r1,r2,r3,r4,tol=1e-14);
    
-    @test norm(b) < 100*tol
-    @test norm(r1 .- a) < 100*tol
-    @test norm(r3 - TensorNetworks.three_body_noninteracting(r1,r2)) < 1000*tol
+    @test norm(b) < sqrt(tol)
+    @test norm(r1 .- a) < sqrt(tol)
+    @test norm(r3 - TensorNetworks.three_body_noninteracting(r1,r2)) < sqrt(tol)
     @test abs(sum((exp.(diff(log.(abs.(r1[:,1])))) ./ (μ/(2t)))[1:3])/3 - 1) < 1e-6
 end

@@ -76,7 +76,7 @@ function _eigs_small(heff)
     return T.(vals)::Vector{T}, vecs::Matrix{T}
 end
 function _eigs_large(heff::LinearMap, x0, nev, prec)
-    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
+    evals::Vector{eltype(heff)}, evecs::Vector{Vector{eltype(heff)}} = eigsolve(heff, vec(x0), nev, :SR, tol = 100*prec, ishermitian = true, maxiter = 3, krylovdim = 10)
     evecsvec::Matrix{eltype(heff)} = reduce(hcat, evecs)
     return evals, evecsvec
 end
@@ -97,7 +97,7 @@ function eigensite(site::GenericSite, mposite, hl, hr, orthvecs, prec)
 end
 
 """ sweeps from left to right in the DMRG algorithm """
-function sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
+function sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir::Symbol, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
     L::Int = length(mps)
     shifter = get(kwargs, :shifter, ShiftCenter())
     precision = get(kwargs, :precision, DEFAULT_DMRG_precision)
@@ -203,14 +203,9 @@ function subspace_expand(alpha, site, nextsite, env, mposite, trunc, dir)
 end
 
 
+function DMRG2(mpo, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T<:Number}
 
-function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
-    ### input: canonical random mps
-    ### output: ground state mps, ground state energy
-    precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
-    maxsweeps::Int = get(kwargs, :maxsweeps, 5)
-    maxbonds::Vector{Int} = get(kwargs, :maxbonds, [mps_input.truncation.Dmax])
-    mps = canonicalize(copy(mps_input))
+    mps::LCROpenMPS{T} = canonicalize(copy(mps_input))
     #canonicalize!(mps)
     set_center!(mps, 1)
     L = length(mps_input)
@@ -218,12 +213,18 @@ function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} =
     direction = :right
     Henv = environment(mps, mpo)
     orthenv = [environment(state, mps) for state in orth]
+    mpsout, Eout = do_sweeps2(mps,mpo,Henv,orthenv,direction,orth;kwargs...)
+    return mpsout::LCROpenMPS{T}, Eout
+end
+function do_sweeps2(mps,mpo,Henv,orthenv,direction,orth; kwargs...)
+    precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
+    maxsweeps::Int = get(kwargs, :maxsweeps, 5)
+    maxbonds::Vector{Int} = get(kwargs, :maxbonds, [mps.truncation.Dmax])
     Hsquared = multiplyMPOs(mpo, mpo)
-    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+    E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
-    count = 1
-
+    count=1
     while count <= maxsweeps
         Eprev = E
         if count <= length(maxbonds)
@@ -246,9 +247,54 @@ function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} =
             break
         end
     end
-
-    return canonicalize(mps)::LCROpenMPS{T}, E
+    return mps, E
 end
+
+# function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
+#     ### input: canonical random mps
+#     ### output: ground state mps, ground state energy
+#     precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
+#     maxsweeps::Int = get(kwargs, :maxsweeps, 5)
+#     maxbonds::Vector{Int} = get(kwargs, :maxbonds, [mps_input.truncation.Dmax])
+#     mps::LCROpenMPS{T} = canonicalize(copy(mps_input))
+#     #canonicalize!(mps)
+#     set_center!(mps, 1)
+#     L = length(mps_input)
+#     @assert (norm(mps_input) ≈ 1 && L == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
+#     direction = :right
+#     Henv = environment(mps, mpo)
+#     orthenv = [environment(state, mps) for state in orth]
+#     Hsquared = multiplyMPOs(mpo, mpo)
+#     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+#     var = H2 - E^2
+#     println("E, var = ", E, ", ", var)
+#     count = 1
+
+#     while count <= maxsweeps
+#         Eprev = E
+#         if count <= length(maxbonds)
+#             mps.truncation.Dmax = maxbonds[count]
+#         end
+#         mps = twosite_sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
+#         #mps = canonicalize(mps)
+#         direction = reverse_direction(direction)
+#         E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+#         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
+#         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
+#             E, H2 = real(E), real(H2)
+#         else
+#             @warn "Energies are not real"
+#         end
+#         var = H2 - E^2
+#         println("Sweep: ", count, ". E, var, ΔE/E = ", E, ", ", var, ", ", (Eprev - E) / E, ". Max bonddim: ", maximum(size.(mps, 1)))
+#         count = count + 1
+#         if abs((Eprev - E) / E) < precision && var / E^2 < precision #&& count>10
+#             break
+#         end
+#     end
+
+#     return canonicalize(mps)::LCROpenMPS{T}, E
+# end
 
 """ sweeps from left to right in the DMRG algorithm """
 function twosite_sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}

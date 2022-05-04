@@ -179,9 +179,10 @@ function _transfer_left_mpo_ncon(mposites::Vararg{MPOsite,N}) where {N}
     return map
 end
 
-_transfer_right_mpo(sites::Vararg{Union{AbstractMPOsite,AbstractSite},N}) where {N} = _transfer_left_mpo(reverse_direction.(sites)...)
+_transfer_right_mpo(sites::Vararg{Union{AbstractMPOsite,AbstractSite},N}) where {N} = _transfer_left_mpo(map(reverse_direction,sites)...)
 reverse_direction(Γ::Array{<:Number,3}) = permutedims(Γ, [3, 2, 1])
 reverse_direction(Γs::AbstractVector{<:Union{AbstractMPOsite,AbstractSite}}) = reverse(reverse_direction.(Γs))
+
 function _transfer_left_gate(Γ1, gate::AbstractSquareGate, Γ2)
     # oplength = operatorlength(gate)
     # Γnew1 = copy(reverse([Γ1...]))
@@ -276,7 +277,7 @@ function _local_transfer_matrix(sites::Tuple, direction::Symbol)
     # scaling::K = prod([K(data(site)) for site in sites if site isa ScaledIdentityMPOsite], init=one(K))
     # return (scaling*__local_transfer_matrix(newsites,direction))::LinearMap{K}
     purify::Bool = any(([ispurification(site) for site in sites if site isa AbstractSite]))
-    newsites = _purify_site.(sites, purify)
+    newsites = map(s->_purify_site(s,purify),sites)#_purify_site.(sites, purify)
     return __local_transfer_matrix(newsites, direction)
 end
 function __local_transfer_matrix(sites::Tuple, direction::Symbol = :left)
