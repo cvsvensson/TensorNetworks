@@ -1,5 +1,5 @@
 module TensorNetworks
-using LinearAlgebra
+using LinearAlgebra, Combinatorics
 using TensorOperations
 using LinearMaps
 # using DataFrames
@@ -15,26 +15,28 @@ using Tullio
 
 # import Distributed.pmap
 
-export TruncationArgs, identityMPS, MPOsite, MPO
-export OpenMPS, randomOpenMPS, identityOpenMPS
-export LCROpenMPS, randomLCROpenMPS, identityLCROpenMPS
-export UMPS, randomUMPS, identityUMPS, transfer_spectrum, boundary, productUMPS
-export canonicalize, canonicalize!, iscanonical
-export expectation_value, expectation_values, correlator, connected_correlator, matrix_element
-export transfer_matrix, transfer_matrices
-export prepare_layers, norm, apply_layers
-export DMRG, eigenstates
-export isingHamBlocks, isingHamGates, IdentityMPO, IsingMPO, HeisenbergMPO
-export get_thermal_states, TEBD!, apply_layers_nonunitary, apply_layer_nonunitary!, apply_two_site_gate
-export sx, sy, sz, si, s0, ZZ, ZI, IZ, XI, IX,YI,IY, XY, YX, II, Sx, Sy, Sz, XZ,ZX,ZY,YZ
-export OrthogonalLinkSite, GenericSite, VirtualSite, LinkSite
-export GenericSquareGate, AbstractSquareGate, AbstractGate, Gate
-export isleftcanonical, isrightcanonical, data, isunitary
-export scalar_product, set_center, set_center!, entanglement_entropy
-export entanglement_entropy, IdentityGate, data, compress, qubit
-export randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, randomGenericSite
-export IdentityMPOsite, environment, update_environment!
-export ShiftCenter, SubspaceExpand, getindex, setindex!, kron, repeatedgate, *, +, vec
+
+export TruncationArgs, identityMPS, MPOsite, MPO,
+OpenMPS, randomOpenMPS, identityOpenMPS,
+LCROpenMPS, randomLCROpenMPS, identityLCROpenMPS,
+UMPS, randomUMPS, identityUMPS, transfer_spectrum, boundary, productUMPS,
+canonicalize, canonicalize!, iscanonical,
+expectation_value, expectation_values, correlator, connected_correlator, matrix_element,
+transfer_matrix, transfer_matrices,
+prepare_layers, norm, apply_layers,
+DMRG, eigenstates,
+isingHamBlocks, isingHamGates, IdentityMPO, IsingMPO, HeisenbergMPO,
+get_thermal_states, TEBD!, apply_layers_nonunitary, apply_layer_nonunitary!, apply_two_site_gate,
+sx, sy, sz, si, s0, ZZ, ZI, IZ, XI, IX,YI,IY, XY, YX, II, Sx, Sy, Sz, XZ,ZX,ZY,YZ,
+OrthogonalLinkSite, GenericSite, VirtualSite, LinkSite,
+GenericSquareGate, AbstractSquareGate, AbstractGate, Gate,
+isleftcanonical, isrightcanonical, data, isunitary,
+scalar_product, set_center, set_center!, entanglement_entropy,
+entanglement_entropy, IdentityGate, data, compress, qubit,
+randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, randomGenericSite,
+IdentityMPOsite, environment, update_environment!,
+ShiftCenter, SubspaceExpand, getindex, setindex!, kron, repeatedgate, *, +, vec,
+majorana_coefficients, majorana_measurements
 
 include("types.jl")
 include("pauli.jl")
@@ -59,5 +61,5 @@ include("dmrg.jl")
 include("expectation_values.jl")
 include("states.jl")
 include("evaluate_wavefunction.jl")
-
+include("majorana.jl")
 end # module
