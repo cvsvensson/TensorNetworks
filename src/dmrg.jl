@@ -3,29 +3,34 @@
 
 Use DMRG to calculate the lowest energy eigenstate orthogonal to `orth`
 """
-function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
-    ### input: canonical random mps
-    ### output: ground state mps, ground state energy
-    precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
-    maxsweeps::Int = get(kwargs, :maxsweeps, 5)
-
-    mps = canonicalize(copy(mps_input))
-    set_center!(mps, 1)
+function DMRG(mpo, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T<:Number}
+    mps::LCROpenMPS{T} = canonicalize(copy(mps_input))
     #canonicalize!(mps)
+    set_center!(mps, 1)
     L = length(mps_input)
     @assert (norm(mps_input) ≈ 1 && L == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
     direction = :right
     Henv = environment(mps, mpo)
     orthenv = [environment(state, mps) for state in orth]
+    mpsout, Eout = do_sweeps(mps,mpo,Henv,orthenv,direction,orth;kwargs...)
+    return mpsout::LCROpenMPS{T}, Eout
+end
+function do_sweeps(mps,mpo,Henv,orthenv,direction,orth; kwargs...)
+    precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
+    maxsweeps::Int = get(kwargs, :maxsweeps, 5)
+    #maxbonds::Vector{Int} = get(kwargs, :maxbonds, [mps.truncation.Dmax])
     Hsquared = multiplyMPOs(mpo, mpo)
-    E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+    E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
     var = H2 - E^2
     println("E, var = ", E, ", ", var)
-    count = 1
-    while count <= maxsweeps #TODO make maxcount choosable
+    count=1
+    while count <= maxsweeps
         Eprev = E
+        #if count <= length(maxbonds)
+        #    mps.truncation.Dmax = maxbonds[count]
+        #end
         mps = sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
-        mps = canonicalize(mps, center = center(mps))
+        #mps = canonicalize(mps)
         direction = reverse_direction(direction)
         E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
@@ -35,15 +40,55 @@ function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = 
             @warn "Energies are not real"
         end
         var = H2 - E^2
-        println("E, var, ΔE/E = ", E, ", ", var, ", ", (Eprev - E) / E)
+        println("Sweep: ", count, ". E, var, ΔE/E = ", E, ", ", var, ", ", (Eprev - E) / E, ". Max bonddim: ", maximum(size.(mps, 1)))
         count = count + 1
         if abs((Eprev - E) / E) < precision && var / E^2 < precision #&& count>10
             break
         end
     end
-
-    return mps::LCROpenMPS{T}, E
+    return mps, E
 end
+# function DMRG(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
+#     ### input: canonical random mps
+#     ### output: ground state mps, ground state energy
+#     precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
+#     maxsweeps::Int = get(kwargs, :maxsweeps, 5)
+
+#     mps = canonicalize(copy(mps_input))
+#     set_center!(mps, 1)
+#     #canonicalize!(mps)
+#     L = length(mps_input)
+#     @assert (norm(mps_input) ≈ 1 && L == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
+#     direction = :right
+#     Henv = environment(mps, mpo)
+#     orthenv = [environment(state, mps) for state in orth]
+#     Hsquared = multiplyMPOs(mpo, mpo)
+#     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+#     var = H2 - E^2
+#     println("E, var = ", E, ", ", var)
+#     count = 1
+#     while count <= maxsweeps #TODO make maxcount choosable
+#         Eprev = E
+#         mps = sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
+#         mps = canonicalize(mps, center = center(mps))
+#         direction = reverse_direction(direction)
+#         E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
+#         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
+#         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
+#             E, H2 = real(E), real(H2)
+#         else
+#             @warn "Energies are not real"
+#         end
+#         var = H2 - E^2
+#         println("E, var, ΔE/E = ", E, ", ", var, ", ", (Eprev - E) / E)
+#         count = count + 1
+#         if abs((Eprev - E) / E) < precision && var / E^2 < precision #&& count>10
+#             break
+#         end
+#     end
+
+#     return mps::LCROpenMPS{T}, E
+# end
 
 
 function effective_hamiltonian(mposite, hl, hr, orthvecs)
@@ -250,51 +295,6 @@ function do_sweeps2(mps,mpo,Henv,orthenv,direction,orth; kwargs...)
     return mps, E
 end
 
-# function DMRG2(mpo::MPO, mps_input::LCROpenMPS{T}, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
-#     ### input: canonical random mps
-#     ### output: ground state mps, ground state energy
-#     precision::Float64 = get(kwargs, :precision, DEFAULT_DMRG_precision)
-#     maxsweeps::Int = get(kwargs, :maxsweeps, 5)
-#     maxbonds::Vector{Int} = get(kwargs, :maxbonds, [mps_input.truncation.Dmax])
-#     mps::LCROpenMPS{T} = canonicalize(copy(mps_input))
-#     #canonicalize!(mps)
-#     set_center!(mps, 1)
-#     L = length(mps_input)
-#     @assert (norm(mps_input) ≈ 1 && L == length(mpo)) "ERROR in DMRG: non-normalized MPS as input or wrong length"
-#     direction = :right
-#     Henv = environment(mps, mpo)
-#     orthenv = [environment(state, mps) for state in orth]
-#     Hsquared = multiplyMPOs(mpo, mpo)
-#     E::real(T), H2::real(T) = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
-#     var = H2 - E^2
-#     println("E, var = ", E, ", ", var)
-#     count = 1
-
-#     while count <= maxsweeps
-#         Eprev = E
-#         if count <= length(maxbonds)
-#             mps.truncation.Dmax = maxbonds[count]
-#         end
-#         mps = twosite_sweep(mps, mpo, Henv, orthenv, direction, orth; kwargs...)
-#         #mps = canonicalize(mps)
-#         direction = reverse_direction(direction)
-#         E, H2 = real(expectation_value(mps, mpo)), real(expectation_value(mps, Hsquared))
-#         #E, H2 = mpoExpectation(mps,mpo), mpoSquaredExpectation(mps,mpo)
-#         if isapprox(E, real(E); atol = precision) && isapprox(H2, real(H2); atol = precision)
-#             E, H2 = real(E), real(H2)
-#         else
-#             @warn "Energies are not real"
-#         end
-#         var = H2 - E^2
-#         println("Sweep: ", count, ". E, var, ΔE/E = ", E, ", ", var, ", ", (Eprev - E) / E, ". Max bonddim: ", maximum(size.(mps, 1)))
-#         count = count + 1
-#         if abs((Eprev - E) / E) < precision && var / E^2 < precision #&& count>10
-#             break
-#         end
-#     end
-
-#     return canonicalize(mps)::LCROpenMPS{T}, E
-# end
 
 """ sweeps from left to right in the DMRG algorithm """
 function twosite_sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnvironment, orthenv, dir, orth::Vector{LCROpenMPS{T}} = LCROpenMPS{T}[]; kwargs...) where {T}
