@@ -5,6 +5,7 @@ version = "2.0.1"
 
 [deps]
 ArnoldiMethod = "ec485272-7323-5ecc-a04f-4719b315124d"
+Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 DoubleFloats = "497a8b3b-efae-58df-a0af-a86822472b78"
 GenericSchur = "c145ed77-6b09-5dd9-b285-bf645a82121e"
 KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"

@@ -617,3 +617,26 @@ end
     @test me((1,0,1,1),(1,0,1,1)) ≈ (U + V - 3μ - h)
     @test me((1,1,0,1),(1,1,0,1)) ≈ (U + V - 3μ + h)
 end
+
+@testset "Majorana" begin
+    N = 10
+    t = 1.0
+    μ = .5
+    Δ = 0.0
+    Dmax = 20
+    tol = 1e-12
+    truncation= TruncationArgs(Dmax, tol, true)
+    initialmps = canonicalize(randomLCROpenMPS(N, 2, Dmax; truncation=truncation, T=Float64))
+    set_center!(initialmps, 1)
+    ham = TensorNetworks.KitaevMPO(N,t, t, Δ, μ)
+    states, energies = TensorNetworks.eigenstates2(ham, initialmps, 2, precision=tol, maxsweeps=10, maxbonds=[5, 10, 20]);
+    gs1 = TensorNetworks.parity_projection(states[1], sign(TensorNetworks.parity(states[1])))
+    gs2 = TensorNetworks.parity_projection(states[2], sign(TensorNetworks.parity(states[2])))
+    @time r1, r2, r3,r4 = majorana_measurements(gs1, gs2, N);
+    a,b = majorana_coefficients(r1,r2,r3,r4,tol=1e-14);
+   
+    @test norm(b) < 100*tol
+    @test norm(r1 .- a) < 100*tol
+    @test norm(r3 - TensorNetworks.three_body_noninteracting(r1,r2)) < 1000*tol
+    @test abs(sum((exp.(diff(log.(abs.(r1[:,1])))) ./ (μ/(2t)))[1:3])/3 - 1) < 1e-6
+end
