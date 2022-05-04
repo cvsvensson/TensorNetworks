@@ -627,13 +627,14 @@ end
     N = 10
     t = 1.0
     μ = .5
-    Δ = 0.0
+    Δ = t
+    U = 0.0
     Dmax = 20
     tol = 1e-12
     truncation= TruncationArgs(Dmax, tol, true)
     initialmps = canonicalize(randomLCROpenMPS(N, 2, Dmax; truncation=truncation, T=Float64))
     set_center!(initialmps, 1)
-    ham = TensorNetworks.KitaevMPO(N,t, t, Δ, μ)
+    ham = TensorNetworks.KitaevMPO(N,t, Δ, U, μ)
     states, energies = TensorNetworks.eigenstates2(ham, initialmps, 2, precision=tol, maxsweeps=10, maxbonds=[5, 10, 20]);
     gs1 = TensorNetworks.parity_projection(states[1], sign(TensorNetworks.parity(states[1])))
     gs2 = TensorNetworks.parity_projection(states[2], sign(TensorNetworks.parity(states[2])))
