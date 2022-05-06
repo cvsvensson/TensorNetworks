@@ -31,15 +31,14 @@ function antisymmetrise(m::Array{T,N}) where {T,N}
     perms = permutations(1:Nhalf)
     return mapreduce(p->(-1)^Combinatorics.parity(p)*permutedims(m,vcat(p,p .+ Nhalf)), + ,perms)
 end
-function l_iterator(m2,m,r,width)
-    #If m2,m,r are separated, we should only calculate close values.
-    if min(m-m2,r-m) < width
-        return m2-1:-1:1
-    else 
-        return m2-1:-1:max(1,m2-width)
+
+function close_or_edge_iterator(right_indices, width)
+    if length(right_indices)==1|| right_indices[2]-right_indices[1] > width
+        return reverse(vcat(1:min(width,right_indices[1]), min(max(width+1, right_indices[1] - width),right_indices[1]):(right_indices[1])))
+    else
+        return reverse(1:(right_indices[1]))
     end
 end
-
 """
     majorana_measurements(mps, mps2, width)
 
@@ -108,33 +107,37 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
             T4stacked0 = transfer_matrix(mps[r], MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), :left) 
             result4[r,r,r,r, 1,2,3,4] = real(leftvec0[r] * T4stacked0 * rightvec0[r])
         end
-        for m in r:-1:1#max(1, r - width +1)
-            if m==r
+        for (i,j) in T2indices
+            result2[r, r, i,j] = imag(leftvec0[r] * (T2stacked0[r][i,j]*rightvec0[r]))
+        end
+        for m in close_or_edge_iterator((r,), width)#:-1:1#max(1, r - width +1)
+            if m == r
                 M = [op * rightvec0[r] for op in T2stacked0[r]]
-                for (i,j) in T2indices
-                    result2[r, r, i,j] = imag(leftvec0[r] * (T2stacked0[r][i,j]*rightvec0[r]))
-                end
             else
+                for (i,j,k) in T3indices
+                    result4[m, m, m, r, i, j, k,:] .= [real(leftvec0[m] * T3stackedJW0[m][i,j,k] * Rv) for Rv in R]
+                end
                 M = [op * Rv for (op, Rv) in Base.product(T1JW0[m], R)]
                 result2[m, r, :, :] .= [imag(leftvec0[m] * Mv) for Mv in M]
             end
-            for m2 in m:-1:1#max(1, r - width +1)
+            #M2 = [op * rightvec0[r] for op in T3stacked0[m]]
+            for m2 in close_or_edge_iterator((m,r), width)#:-1:1#max(1, r - width +1)
                 if m2==m==r
                     M2 = [op * rightvec0[r] for op in T3stacked0[m2]]
                 elseif m2==m != r
                     M2 = [op * Rv for (op,Rv) in Base.product(T2stackedJW0[m2],R)]
-                    for (i,j,k) in T3indices
-                        result4[m2, m2, m2, r, i, j, k,:] .= [real(leftvec0[m2] * T3stackedJW0[m2][i,j,k] * Rv) for Rv in R]
-                    end
                 else
                     M2 = [op * Mv for (op, Mv) in Base.product(T10[m2], M)]
                     for (i,j) in T2indices
                         result4[m2, m2, m, r, i, j, :,:] .= [real(leftvec0[m2] * T2stacked0[m2][i,j] * Mv) for Mv in M]
                     end
                 end
-                for l in l_iterator(m2,m,r,width)#m2-1:-1:max(1,r-width+1)
-                    result4[l, m2, m, r, :, :, :,:] .= [real(leftvec0[l] * op * M2v) for (op, M2v) in Base.product(T1JW0[l], M2)]
-                    M2 = map(M2v -> TJW0[l] * M2v, M2)
+                # end
+                for l in close_or_edge_iterator((m2,m,r),width)#m2-1:-1:max(1,r-width+1)
+                    if l<m2
+                        result4[l, m2, m, r, :, :, :,:] .= [real(leftvec0[l] * op * M2v) for (op, M2v) in Base.product(T1JW0[l], M2)]
+                        M2 = map(M2v -> TJW0[l] * M2v, M2)
+                    end
                 end
                 if m2!=m
                     M = map(Mv -> TI0[m2] * Mv, M)
@@ -145,6 +148,13 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
             end
         end
     end
+    #Rs = Vector{Vector{Vector{complex(T)}}}(undef,N)
+    # Threads.@threads for r in 1:N
+    #     R = [op * rightvec[r] for op in T1[r]]
+    #     result1[r, :] .= [leftvec[r] * Rv for Rv in R]
+    # end
+    r2 = antisymmetrise(result2)
+    #result3 = three_body_noninteracting(result1, r2)
     Threads.@threads for r in 1:N
         R = [op * rightvec[r] for op in T1[r]]
         result1[r, :] .= [leftvec[r] * Rv for Rv in R]
@@ -171,7 +181,7 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
         end
     end
 
-    r2 = antisymmetrise(result2)
+    #r2 = antisymmetrise(result2)
     r3 = antisymmetrise(result3)
     r4 = antisymmetrise(result4)
 
