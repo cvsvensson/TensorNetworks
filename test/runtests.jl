@@ -143,9 +143,9 @@ end
     @test z^(1/N)*idsite == zid[floor(Int, N/2)]
 
     mps = randomOpenMPS(N,2,5);
-    T0 = Matrix(prod(transfer_matrices(mps)))
-    @test T0 == Matrix(prod(transfer_matrices(mps,id)))
-    @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)))
+    T0 = Matrix(transfer_matrix((mps,),(mps,)))
+    @test T0 == Matrix(transfer_matrix((mps,),(id,mps)))
+    @test z*T0 ≈ Matrix(transfer_matrix((mps,),(zid,mps)))
 end
 
 
@@ -162,7 +162,7 @@ end
     env = environment(mps);
     site = randomGenericSite(D,d,D)
     mid = floor(Int,N/2)
-    update_environment!(env,mid,site,site)
+    update_environment!(env,mid,(site,),(site,))
     TL = transfer_matrix(site,:left)
     TR = transfer_matrix(site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -173,7 +173,7 @@ end
     env = environment(mps2,mps);
     @test length(env.R[mid]) == D2*D == length(env.L[mid])
     site2 = randomGenericSite(D2,d,D2);
-    update_environment!(env,mid,site2,site)
+    update_environment!(env,mid,(site2,),(site,))
     TL = transfer_matrix(site2,site,:left)
     TR = transfer_matrix(site2,site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -181,9 +181,9 @@ end
 
     mpo = IsingMPO(N,1,1,1);
     Dmpo = size(mpo[mid],4)
-    env = environment(mps2,mpo,mps);
+    env = environment((mps2,),(mpo,mps));
     @test length(env.R[mid]) == D2*D*Dmpo == length(env.L[mid])
-    update_environment!(env,mid,site2,mpo[mid],site)
+    update_environment!(env,mid,(site2,),(mpo[mid],site))
     TL = transfer_matrix(site2,mpo[mid],site,:left)
     TR = transfer_matrix(site2,mpo[mid],site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])

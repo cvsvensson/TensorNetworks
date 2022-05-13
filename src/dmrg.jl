@@ -105,7 +105,6 @@ function effective_hamiltonian(mposite, hl, hr, orthvecs)
     return LinearMap{eltype(hl)}(f, prod(szmps), ishermitian = true)
 end
 
-const BigNumber = Union{ComplexDF64,ComplexDF32,ComplexDF16,Double64,Double32,Double16,BigFloat,Complex{BigFloat}}
 function eigs(heff::LinearMap, x0, nev, prec)
     if prod(size(heff)) < 100
         evals, evecs = _eigs_small(Matrix(heff))
@@ -165,12 +164,12 @@ function sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFiniteEnviron
 
         shift_center!(mps, j, dir, shifter; mpo = mpo, env = Henv)
         update! = dir == :right ? update_left_environment! : update_right_environment!
-        update!(Henv, j, mps[j], mpo[j], mps[j])
+        update!(Henv, j, (mps[j], mpo[j]), (mps[j],))
         # for k in 1:N_orth
         #     update!(orthenv[k],j, orth[k][j], mps[j])
         # end
         for (oe, o) in zip(orthenv, orth)
-            update!(oe, j, o[j], mps[j])
+            update!(oe, j, (o[j],), (mps[j],))
         end
     end
     return mps::LCROpenMPS{T}
@@ -326,10 +325,10 @@ function twosite_sweep(mps::LCROpenMPS{T}, mpo::AbstractMPO, Henv::AbstractFinit
             mps[j] = A * Λ
             mps[j+1] = B
         end
-        update!(Henv, j1, mps[j1], mpo[j1], mps[j1])
+        update!(Henv, j1, (mps[j1],), (mpo[j1], mps[j1]))
         # update!(Henv,j2,mps[j2],mpo[j2],mps[j2])
         for (oe, o) in zip(orthenv, orth)
-            update!(oe, j1, o[j1], mps[j1])
+            update!(oe, j1, (o[j1],), (mps[j1],))
             # update!(oe,j2,o[j2],mps[j2])
         end
     end

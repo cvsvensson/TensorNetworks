@@ -13,7 +13,6 @@ function boundary(::OpenBoundary, mps::AbstractMPS, side::Symbol)
     end
 end
 
-
 boundary(::OpenBoundary, cmpss::Tuple, mpss::Tuple, side::Symbol) = kron(
     (conj(boundary(OpenBoundary(), cm, side)) for cm in cmpss)..., (boundary(OpenBoundary(), m, side) for m in mpss)...)
 
@@ -37,15 +36,14 @@ end
 
 function boundary(::InfiniteBoundary, cmps::Tuple, mps::Tuple, side::Symbol)
     _, rhos = transfer_spectrum(cmps, mps, reverse_direction(side), nev = 1)
-    return rhos[1]
+    return vec(rhos[1])
 end
 function boundary(::InfiniteBoundary, mps::AbstractMPS, side::Symbol)
     _, rhos = transfer_spectrum(mps, reverse_direction(side), nev = 1)
-    return rhos[1]
+    return vec(rhos[1])
 end
 
 boundaryvec(args...) = copy(vec(boundary(args...)))
-
 
 function expectation_value(mps::AbstractMPS{GenericSite}, op, site::Integer)
     mps = set_center(mps, site)

@@ -51,18 +51,18 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     Tbonds = [TensorNetworks.transfer_matrix_bond((mps,), (mps2,), k, :left) for k in 1:N]
     Tbonds0 = [TensorNetworks.transfer_matrix_bond((mps,),(mps,), k, :left) for k in 1:N]
     JW = JWop(nmaj)
-    JWenv = environment(mps, MPO(fill(MPOsite(JW), N)), mps2)
+    JWenv = environment((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
     #JWenv0 = environment(mps, MPO(fill(MPOsite(JW), N)))
-    env0 = environment(mps)
-    env = environment(mps, mps2)
+    env0 = environment((mps,),(mps,))
+    env = environment((mps,), (mps2,))
     rightvec = [vec(env.R[k]) for k in 1:N]
     leftvec = [transpose(Tbonds[k] * vec(JWenv.L[k])) for k in 1:N]#vec(Matrix{T}(I,size(mps[k],1),size(mps[k],1))))
     leftvec0 = [transpose(Tbonds0[k] * vec(env0.L[k])) for k in 1:N]
     rightvec0 = [vec(env0.R[k]) for k in 1:N]
-    TI = transfer_matrices(mps, mps2, :left)
-    TI0 = transfer_matrices(mps, :left)
+    TI = transfer_matrices((mps,), (mps2,), :left)
+    TI0 = transfer_matrices((mps,),(mps,), :left)
     TJW = transfer_matrices(mps, MPOsite(JW), mps2, :left)
-    TJW0 = transfer_matrices(mps, MPOsite(JW), :left)
+    TJW0 = transfer_matrices(mps, MPOsite(JW), mps, :left)
     result1::Array{complex(T),2} = zeros(complex(T), N, nmaj)
     result2::Array{real(T),4} = zeros(real(T), N, N, nmaj, nmaj)
     result3::Array{complex(T),6} = zeros(complex(T), N, N, N, nmaj, nmaj, nmaj)
@@ -74,7 +74,7 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     T1 = [[transfer_matrix(mps[r], MPOsite(majops[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
     T10 = [[transfer_matrix(mps[r], MPOsite(majops[i]), :left) for i in 1:nmaj] for r in 1:N]
     T1JW = [[transfer_matrix(mps[r], MPOsite(majopsJW[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
-    T1JW0 = [[transfer_matrix(mps[r], MPOsite(majopsJW[i]), :left) for i in 1:nmaj] for r in 1:N]
+    T1JW0 = [[transfer_matrix(mps[r],MPOsite(majopsJW[i]), :left) for i in 1:nmaj] for r in 1:N]
     
     Ttype = typeof(1*T1[1][1])
     
@@ -104,7 +104,7 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     Threads.@threads for r in 1:N
         R = [op * rightvec0[r] for op in T10[r]]
         if nmaj==4
-            T4stacked0 = transfer_matrix(mps[r], MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), :left) 
+            T4stacked0 = transfer_matrix((mps[r],),(MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), mps[r]), :left) 
             result4[r,r,r,r, 1,2,3,4] = real(leftvec0[r] * T4stacked0 * rightvec0[r])
         end
         for (i,j) in T2indices
