@@ -198,7 +198,7 @@ transfer_spectrum((mps1,),(mps2,),dir;nev) = transfer_spectrum(mps1, mps2,dir;ne
 
 function _eigsolve(transfer::LinearMap{K},x0; nev = 1, tol) where K<:BigNumber
     D = size(transfer,2)
-    if D < 20
+    if D < 50
         vals, vecs = eigen(Matrix(transfer))
         #vals::Vector{K} = vals[end:-1:1]
         #vecs::Matrix{K} = vecs[:, end:-1:1]
@@ -414,10 +414,12 @@ function canonicalize_cell(mps::UMPS{K}) where {K}
         Y = Diagonal(sevl)[abs.(sevl).>sqrt(mps.truncation.tol), :] * Ul'
         #println(minimum(abs.(sevr)))
     end
+    m = Y * data(mps.Λ[1]) * transpose(X)
     F = try
-        svd!(Y * data(mps.Λ[1]) * transpose(X))
+        svd(m)
     catch y
-        svd!(Y * data(mps.Λ[1]) * transpose(X), alg = LinearAlgebra.QRIteration())
+        println(y)
+        svd(m, alg = LinearAlgebra.QRIteration())
     end
     U, S, Vt, D, err = truncate_svd(F, mps.truncation) #split_truncate!(Y*data(mps.Λ[1])*transpose(X), mps.truncation) 
     Λ = LinkSite(S)
@@ -438,6 +440,7 @@ function canonicalize_cell(mps::UMPS{K}) where {K}
     Λcopy[1] = Λ #/ β
     # @tensor Γcopy[end][:] := Γcopy[end][-1,-2,3]*YU[3,-3]
     # @tensor Γcopy[1][:] := VX[-1,1]*Γcopy[1][1,-2,-3]
+
     @assert valR[1] ≈ valL[1] "Left and right eigenvalues not equal: $(valR) !≈ $(valL)"
     return UMPS(Γcopy, Λcopy, mps, error = err)
 end
@@ -454,6 +457,11 @@ function canonicalize(mps::UMPS)
         mpsout = mps
     elseif N == 2
         #Γ[1],Λ2,Γ[2], err = apply_two_site_identity(mps.Γ, mps.Λ[mod1.(1:3,2)], mps.truncation)
+        # println(mps[1].Γ)
+        # println(mps[1].Λ2)
+        # println(mps[2].Γ)
+        # println(mps[2].Λ2)
+        # println(transfer_spectrum(mps)[2])
         ΓL, ΓR, err = apply_two_site_gate(mps[1], mps[2], IdentityGate(Val(2)), mps.truncation)
         mpsout = UMPS([ΓL, ΓR], truncation = mps.truncation, error = err)
     else
@@ -543,12 +551,9 @@ end
 """
      canonicalize_eigenoperator(rho)
 
-makes the dominant eigenvector hermitian
+make the dominant eigenvector hermitian
 """
 function canonicalize_eigenoperator(rho::AbstractMatrix)
-    trρ = tr(rho)
-    phase = trρ / abs(trρ)
-    rho = rho ./ phase
     rhoH = Hermitian((rho + rho') / 2)
     return rhoH / norm(rhoH) * sqrt(size(rhoH, 1))
 end

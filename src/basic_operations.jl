@@ -35,12 +35,13 @@ end
 
 Split and truncate a two-site tensor
 """
-function split_truncate!(theta, args::TruncationArgs)
+function split_truncate(theta, args::TruncationArgs)
     F = try
         #println(real(theta))
-        svd!(theta)
+        svd(theta)
     catch y
-        svd!(theta, alg = LinearAlgebra.QRIteration())
+        println(y)
+        svd(theta, alg = LinearAlgebra.QRIteration())
     end
     U, S, Vt, Dm, err = truncate_svd(F, args)
     return U, S, Vt, Dm, real(err)

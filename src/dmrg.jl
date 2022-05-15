@@ -236,7 +236,7 @@ function subspace_expand(alpha, site, nextsite, env, mposite, trunc, dir)
         M[:, k, :] = hcat(data(site)[:, k, :], P[:, k, :])
         B[:, k, :] = vcat(data(nextsite)[:, k, :], P0[:, k, :])
     end
-    U, S, V, err = split_truncate!(reshape(M, ss[1] * ss[2], ss[3] + sp[3]), trunc)
+    U, S, V, err = split_truncate(reshape(M, ss[1] * ss[2], ss[3] + sp[3]), trunc)
     newsite = GenericSite(reshape(Matrix(U), ss[1], ss[2], length(S)), false)
     newnextsite = VirtualSite(Diagonal(S) * V) * GenericSite(B, false)
     if dir == :left
@@ -370,7 +370,7 @@ function twosite_eigensite(siteL, siteR, mpoL, mpoR, hL, hR, orthvecs, prec, tru
         error("ERROR: complex eigenvalues")
     end
     theta = reshape(vecmin, blocksize[1] * blocksize[2], blocksize[3] * blocksize[4])
-    U, S, Vt, Dm, err = split_truncate!(theta / norm(theta), truncation)
+    U, S, Vt, Dm, err = split_truncate(theta / norm(theta), truncation)
     Ss = LinkSite(S)
     Us = GenericSite(Array(reshape(U, blocksize[1], blocksize[2], Dm)), ispurification(siteL))
     Vts = GenericSite(Array(reshape(Vt, Dm, blocksize[3], blocksize[4])), ispurification(siteR))

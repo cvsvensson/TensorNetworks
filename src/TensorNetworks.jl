@@ -7,6 +7,7 @@ using KrylovKit
 using DoubleFloats
 using ArnoldiMethod
 using GenericSchur
+using GenericLinearAlgebra #TODO: check if this is necessary
 # using Combinatorics
 # using SparseArrays
 using SparseArrayKit

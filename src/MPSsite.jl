@@ -116,7 +116,7 @@ function to_left_orthogonal(site::GenericSite; full = false, method = :qr, trunc
     D1, d, D2 = size(site)
     M = reshape(data(site), D1 * d, D2)
     if method == :svd
-        Usvd, S, Vt, _, _ = split_truncate!(copy(M), truncation)
+        Usvd, S, Vt, _, _ = split_truncate(M, truncation)
         A = Matrix(Usvd)
         R = Diagonal(S) * Vt
     else
@@ -253,7 +253,9 @@ Contract and compress the two sites using the svd. Return two U,S,V,err where U 
 function apply_two_site_gate(Γ1::GenericSite, Γ2::GenericSite, gate, args::TruncationArgs)
     theta = gate * (Γ1, Γ2)
     DL, d, d, DR = size(theta)
-    U, S, Vt, Dm, err = split_truncate!(reshape(theta, DL * d, d * DR), args)
+    #println(reshape(theta, DL * d, d * DR))
+    U, S, Vt, Dm, err = split_truncate(reshape(theta, DL * d, d * DR), args)
+    #println(norm(U*Diagonal(S)*Vt - reshape(theta, DL * d, d * DR)))
     U2 = GenericSite(Array(reshape(U, DL, d, Dm)), ispurification(Γ1))
     Vt2 = GenericSite(Array(reshape(Vt, Dm, d, DR)), ispurification(Γ2))
     S2 = LinkSite(S)
