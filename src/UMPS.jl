@@ -555,7 +555,7 @@ make the dominant eigenvector hermitian
 """
 function canonicalize_eigenoperator(rho::AbstractMatrix)
     rhoH = Hermitian((rho + rho') / 2)
-    return rhoH / norm(rhoH) * sqrt(size(rhoH, 1))
+    return rhoH / (sign(tr(rhoH))*norm(rhoH)) * sqrt(size(rhoH, 1))
 end
 
 
