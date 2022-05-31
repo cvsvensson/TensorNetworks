@@ -560,27 +560,8 @@ end
 
 
 # %% Entropy
-# function renyi(mps::UMPS, n)
-# 	N = length(mps.Γ)
-# 	T = eltype(mps.Γ[1])
-#     transfer_matrices = transfer_matrices_squared(mps,:right)
-# 	sizes = size.(mps.Γ)
-# 	id = Matrix{T}(I,sizes[1][1],sizes[1][1])
-# 	leftVec = vec(@tensor id[-1,-2]*id[-3,-4])
-# 	Λsquares = Diagonal.(mps.Λ .^2)
-# 	rightVecs = map(k->vec(@tensor Λsquares[-1,-2]*Λsquares[-3,-4])', 1:N)
-#     vals = Float64[]
-#     for k in 1:n
-# 		leftVec = transfer_matrices[mod1(k,N)]*leftVec
-# 		val = rightVecs[mod1(k+1,N)] * leftVec
-#         push!(vals, -log2(val))
-#     end
-#     return vals
-# end
 
-function renyi(mps;tol=1e-6) #FIXME implement transfer_matrix_squared
-	#N = length(mps.Γ)
-	#T = eltype(mps.Γ[1])
+function renyi(mps;tol=1e-6)
     T = transfer_matrix_squared(mps,:right)
     vals,vecs, info = eigsolve(T,size(T,2),1,tol=tol,maxiter=6,krylovdim=8)#,1)eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
 	println(info)
@@ -612,19 +593,8 @@ function _transfer_matrix_right_squared(s)
     sA=size(A)
     function contract(R)
         temp = reshape(R,sA[1],sA[1],sA[1],sA[1])
-        # @tensoropt (r1,r2,r3,r4) out[:] := conj(A[r1,u,c1,-1])*A[r2,c1,c2,-2]*conj(A[r3,c2,c3,-3])*A[r4,c3,u,-4]*temp[r1,r2,r3,r4]
-        @tensor out[:] := conj(A[r1,u,c1,-1])*(A[r2,c1,c2,-2]*(conj(A[r3,c2,c3,-3])*(A[r4,c3,u,-4]*temp[r1,r2,r3,r4])))
-        #@tullio out[a,b,c,d] := conj(A[r1,u,c1,a])*(A[r2,c1,c2,b]*(conj(A[r3,c2,c3,c])*(A[r4,c3,u,d]*temp[r1,r2,r3,r4])))
+        @tensor out[:] := A[r1,u,c1,-1]*(conj(A[r2,c2,c1,-2])*(A[r3,c2,c3,-3]*(conj(A[r4,u,c3,-4])*temp[r1,r2,r3,r4])))
         return vec(out)
-        # @tensoropt (r,-2,-3,-4) begin
-        #     temp[:] := temp[r,-2,-3,-4]*conj(A[r,-5,-6,-1])
-        #     temp[:] := temp[-1,r,-3,-4,c,-6]*A[r,c,-5,-2]
-        #     temp[:] := temp[-1,-2,r,-4,c,-6]*conj(A[r,-5,c,-3])
-        #     temp[:] := temp[-1,-2,-3,r,c,-6]*A[r,c,-5,-4]
-        #     temp[:] := temp[-1,-2,-3,-4,c,c]
-        # end
-        #st = size(temp)
-        # return vec(temp)
     end
     T = LinearMap{ComplexF64}(contract,sA[4]^4,sA[1]^4)
     return T
