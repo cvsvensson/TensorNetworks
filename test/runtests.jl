@@ -124,9 +124,9 @@ end
     site2 = randomGenericSite(DL2,d,DR2);
     T0 = Matrix(transfer_matrix(site1,site2));
     Tid = Matrix(transfer_matrix(site1,id,site2));
-    @test T0 == Tid
-    @test Matrix(transfer_matrix(site1)) == Matrix(transfer_matrix(site1,id))
-    @test z*T0 == Matrix(transfer_matrix(site1,zid,site2))
+    @test T0 ≈ Tid
+    @test Matrix(transfer_matrix(site1)) ≈ Matrix(transfer_matrix(site1,id))
+    @test z*T0 ≈ Matrix(transfer_matrix(site1,zid,site2))
 end
 
 @testset "MPO" begin
@@ -400,6 +400,8 @@ end
     ham = IsingMPO(Nchain, 1, 0, 0);
     mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
     states, energies = eigenstates(ham, mps, 5; precision = 1e-8);
+    @test sort(energies) ≈ -[Nchain-1, Nchain-1, Nchain-3, Nchain-3, Nchain-3]
+    states, energies = eigenstates(ham, fill(mps,5), 5; precision = 1e-8);
     @test sort(energies) ≈ -[Nchain-1, Nchain-1, Nchain-3, Nchain-3, Nchain-3]
 
     Nchain = 10

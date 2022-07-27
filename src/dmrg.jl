@@ -192,12 +192,36 @@ function eigenstates(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; shifter =
     return states, energies
 end
 
+function eigenstates(hamiltonian::MPO, mps::Vector{LCROpenMPS{T}}, n::Integer; shifter = ShiftCenter(), kwargs...) where {T}
+    #T = eltype(data(mps[1]))
+    states = Vector{LCROpenMPS{T}}(undef, n)
+    energies = Vector{real(promote_type(T, eltype(hamiltonian[1])))}(undef, n)
+    for k = 1:n
+        @time state, E = DMRG(hamiltonian, mps[k], states[1:k-1]; shifter = deepcopy(shifter), kwargs...)
+        states[k] = state
+        energies[k] = E
+    end
+    return states, energies
+end
+
 function eigenstates2(hamiltonian::MPO, mps::LCROpenMPS{T}, n::Integer; shifter = ShiftCenter(), kwargs...) where {T}
     #T = eltype(data(mps[1]))
     states = Vector{LCROpenMPS{T}}(undef, n)
     energies = Vector{real(promote_type(T, eltype(hamiltonian[1])))}(undef, n)
     for k = 1:n
         @time state, E = DMRG2(hamiltonian, mps, states[1:k-1]; shifter = deepcopy(shifter), kwargs...)
+        states[k] = state
+        energies[k] = E
+    end
+    return states, energies
+end
+
+function eigenstates2(hamiltonian::MPO, mps::Vector{LCROpenMPS{T}}, n::Integer; shifter = ShiftCenter(), kwargs...) where {T}
+    #T = eltype(data(mps[1]))
+    states = Vector{LCROpenMPS{T}}(undef, n)
+    energies = Vector{real(promote_type(T, eltype(hamiltonian[1])))}(undef, n)
+    for k = 1:n
+        @time state, E = DMRG2(hamiltonian, mps[k], states[1:k-1]; shifter = deepcopy(shifter), kwargs...)
         states[k] = state
         energies[k] = E
     end
