@@ -172,6 +172,12 @@ function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=Float64)
     return mposite
 end
 
+function BD1MPO(μs::Vector,h, t, α, Δ, Δ1, U, V; type=Float64)
+    #center = _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type)
+    #mpo = Vector{Array{type,4}}(undef, N)
+    mpo = [ _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type) for μ in μs]
+    return MPO(mpo)
+end
 function BD1MPO(N,μ,h, t, α, Δ, Δ1, U, V; type=Float64)
     center = _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type)
     #mpo = Vector{Array{type,4}}(undef, N)

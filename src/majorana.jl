@@ -104,7 +104,7 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     Threads.@threads for r in 1:N
         R = [op * rightvec0[r] for op in T10[r]]
         if nmaj==4
-            T4stacked0 = transfer_matrix((mps[r],),(MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), mps[r]), :left) 
+            T4stacked0 = transfer_matrix(mps[r],MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), mps[r], :left) 
             result4[r,r,r,r, 1,2,3,4] = real(leftvec0[r] * T4stacked0 * rightvec0[r])
         end
         for (i,j) in T2indices
@@ -186,6 +186,33 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     r4 = antisymmetrise(result4)
 
     return result1, r2, r3,r4#, abmap!,abcmap! #lsola, lsolb, lsolai, lsolbi
+end
+
+"""
+one_body_noninteracting(mps, mps2, width)
+
+Return the matrix elements of one-point functions of majorana operators. 
+Works for spinless or spin 1/2 fermions.
+"""
+function one_body_noninteracting_majorana_coefficients(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.AbstractSite{T}}, mps2) where {T}
+    N = length(mps)
+    nmaj = size(mps[1],2)
+    Tbonds = [TensorNetworks.transfer_matrix_bond((mps,), (mps2,), k, :left) for k in 1:N]
+    JW = JWop(nmaj)
+    JWenv = environment((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
+    env = environment((mps,), (mps2,))
+    rightvec = [vec(env.R[k]) for k in 1:N]
+    leftvec = [transpose(Tbonds[k] * vec(JWenv.L[k])) for k in 1:N]#vec(Matrix{T}(I,size(mps[k],1),size(mps[k],1))))
+    result1::Array{complex(T),2} = zeros(complex(T), N, nmaj)
+
+    majops = maj_ops(nmaj)#[TensorNetworks.XI,TensorNetworks.YI,-TensorNetworks.ZX,-TensorNetworks.ZY]
+    T1 = [[transfer_matrix(mps[r], MPOsite(majops[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
+
+    Threads.@threads for r in 1:N
+        R = [op * rightvec[r] for op in T1[r]]
+        result1[r, :] .= [leftvec[r] * Rv for Rv in R]
+    end
+    return result1
 end
 
 function three_body_noninteracting(a,r2)
