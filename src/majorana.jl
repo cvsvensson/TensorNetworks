@@ -253,16 +253,16 @@ end
 
 Return the one- and three-body coefficients given the measured values.
 """
-function majorana_coefficients(r1,r2,r3,r4; tol=1e-12)
+function majorana_coefficients(r1,r2,r3,r4; tol=1e-12, krylovdim = 10, maxiter = 10)
     N = size(r1,1)
     nmaj = size(r1,2)
     abmap! = majorana_map(r2,r4)
     v = vcat(vec(r1),vec(r3))
     rv = real(v)
     iv = real(-1im*v)
-    @time lsolab,info = linsolve(abmap!,rv,rv,maxiter =10, krylovdim=10, tol=tol);
+    @time lsolab,info = linsolve(abmap!,rv,rv,maxiter =maxiter, krylovdim=krylovdim, tol=tol);
     println(info)
-    @time lsolabi,info = linsolve(abmap!,iv,iv,maxiter =10, krylovdim=10, tol=tol);
+    @time lsolabi,info = linsolve(abmap!,iv,iv,maxiter =maxiter, krylovdim=krylovdim, tol=tol);
     println(info)
     lsola, lsolb = unpack(lsolab,N,nmaj)
     lsolai, lsolbi = unpack(lsolabi,N,nmaj)
