@@ -52,8 +52,19 @@ fuse(l1::Link{QN},l2::Link{QN}) where {QN<:AbstractQuantumNumber}= fuse(QuantumN
 fuse(ls::NTuple{<:Any,Union{Link,AbstractQuantumNumber}}) = foldl(fuse,ls)
 
 
-function contract(t1::CovariantTensor,t2::CovariantTensor, i1,i2)
-    for (n1,l1) in links(t1) 
+function tensorcontract(t1::CovariantTensor{T1,N1},I1,t2::CovariantTensor{T2,N2},I2) where {T1,T2,N1,N2}
+    qntotal = fuse(t1.qntotal,t2.qntotal)
+    T = promote_type(T1,T2)
+    pairs = Tuple{Int,Int}[]
+    for (n1,l1) in enumerate(links(t1))
+        for (n2,l2) in enumerate(links(t2))
+            if l1.qn[I1] == l2.qn[I2] && xor(l1.dir,l2.dir)
+                append!(pairs,(n1,n2))
+            end
+        end
+    end
+    blocks = Vector{Array{T,N1+}}
+    blocks = [tensorcontract(t1.blocks[n1],I1,t2.blocks[n2],I2) for (n1,n2) in pairs] 
 
 end
 
