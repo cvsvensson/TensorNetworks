@@ -16,13 +16,13 @@ Base.size(mps::MPSSum) = (length(mps),)
 Base.length(mps::MPSSum) = length(mps.states[1])
 Base.copy(mps::MPSSum) = MPSSum(copy(mps.states), copy(mps.scalings))
 
-struct SiteSum{S<:AbstractSite,T} <: AbstractCenterSite{T}
+struct SiteSum{S<:AbstractSite,T} <: AbstractPhysicalSite{T}
     sites::Vector{S}
-    function SiteSum(sites::Vector{S}) where {S<:AbstractCenterSite}
+    function SiteSum(sites::Vector{S}) where {S<:AbstractPhysicalSite}
         new{S,eltype(sites[1])}(sites)
     end
 end
-SiteSum(site::AbstractCenterSite) = SiteSum([site])
+SiteSum(site::AbstractPhysicalSite) = SiteSum([site])
 Base.show(io::IO, mps::SiteSum) =
     print(io, "SiteSum: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps.sites))
 Base.show(io::IO, m::MIME"text/plain", mps::SiteSum) = show(io, mps)

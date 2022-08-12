@@ -39,7 +39,7 @@ struct GenericSquareGate{T,N} <: AbstractSquareGate{T,N}
 end
 
 abstract type AbstractSite{T,N} <: AbstractArray{T,N} end
-abstract type AbstractCenterSite{T} <: AbstractSite{T,3} end
+abstract type AbstractPhysicalSite{T} <: AbstractSite{T,3} end
 abstract type AbstractVirtualSite{T} <: AbstractSite{T,2} end
 
 struct LinkSite{T} <: AbstractVirtualSite{T}
@@ -49,27 +49,42 @@ LinkSite(v::Vector) = LinkSite(Diagonal(v))
 struct VirtualSite{T} <: AbstractVirtualSite{T}
     Λ::Matrix{T}
 end
-struct GenericSite{T} <: AbstractCenterSite{T}
+struct GenericSite{T} <: AbstractPhysicalSite{T}
     Γ::Array{T,3}
     purification::Bool
 end
 
-struct OrthogonalLinkSite{T} <: AbstractCenterSite{T}
-    Γ::GenericSite{T}
-    Λ1::LinkSite{T}
-    Λ2::LinkSite{T}
-    function OrthogonalLinkSite(Λ1::LinkSite, Γ::GenericSite{T}, Λ2::LinkSite; check = false) where {T}
+struct OrthogonalLinkSite{T, C, V} <: AbstractPhysicalSite{T}
+    Γ::C
+    Λ1::V
+    Λ2::V
+    function OrthogonalLinkSite(Λ1::V, Γ::C, Λ2::V; check = false) where {T}
         if check
             @assert isleftcanonical(Λ1 * Γ) "Error in constructing OrthogonalLinkSite: Is not left canonical"
             @assert isrightcanonical(Γ * Λ2) "Error in constructing OrthogonalLinkSite: Is not right canonical"
             @assert norm(Λ1) ≈ 1
             @assert norm(Λ2) ≈ 1
         end
-        new{T}(Γ, Λ1, Λ2)
+        new{T,C,V}(Γ, Λ1, Λ2)
     end
 end
 
-abstract type AbstractMPS{T<:AbstractCenterSite} <: AbstractVector{T} end
+# struct OrthogonalLinkSite{T} <: AbstractPhysicalSite{T}
+#     Γ::GenericSite{T}
+#     Λ1::LinkSite{T}
+#     Λ2::LinkSite{T}
+#     function OrthogonalLinkSite(Λ1::LinkSite, Γ::GenericSite{T}, Λ2::LinkSite; check = false) where {T}
+#         if check
+#             @assert isleftcanonical(Λ1 * Γ) "Error in constructing OrthogonalLinkSite: Is not left canonical"
+#             @assert isrightcanonical(Γ * Λ2) "Error in constructing OrthogonalLinkSite: Is not right canonical"
+#             @assert norm(Λ1) ≈ 1
+#             @assert norm(Λ2) ≈ 1
+#         end
+#         new{T}(Γ, Λ1, Λ2)
+#     end
+# end
+
+abstract type AbstractMPS{T<:AbstractPhysicalSite} <: AbstractVector{T} end
 
 mutable struct OpenMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
     #In gamma-lambda notation
