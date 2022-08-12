@@ -16,6 +16,13 @@ Base.length(site::LinkSite) = length(site.Λ)
 Base.conj(s::GenericSite) = GenericSite(conj(data(s)), ispurification(s))
 Base.conj(s::OrthogonalLinkSite) = OrthogonalLinkSite(s.Λ1, conj(s.Γ), s.Λ2)
 
+Base.:*(s1::GenericSite, s2::GenericSite) = GenericSite(coarse_grain((@tensor s12[:] := data(s1)[-1,-2,1]*data(s2)[1,-3,-4]),2),ispurification(s1))
+
+function coarse_grain(A::AbstractArray{T,N},n::I) where {N,T,I<:Integer}
+    sA = size(A)
+    sA2::NTuple{N-1,I} = (sA[1:n-1]...,sA[n]*sA[n+1],sA[n+2:end]...)
+    reshape(A,sA2)
+end
 
 #Base.isapprox(s1::AbstractSite,s2::AbstractSite) = isapprox(data(s1),data(s2))
 Base.isapprox(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = isapprox(s1.Γ, s2.Γ) && isapprox(s1.Λ1, s2.Λ1) && isapprox(s1.Λ2, s2.Λ2)
@@ -109,7 +116,7 @@ function to_left_orthogonal(site::GenericSite; full = false, method = :qr, trunc
     D1, d, D2 = size(site)
     M = reshape(data(site), D1 * d, D2)
     if method == :svd
-        Usvd, S, Vt, _, _ = split_truncate!(copy(M), truncation)
+        Usvd, S, Vt, _, _ = split_truncate(M, truncation)
         A = Matrix(Usvd)
         R = Diagonal(S) * Vt
     else
@@ -246,7 +253,7 @@ Contract and compress the two sites using the svd. Return two U,S,V,err where U 
 function apply_two_site_gate(Γ1::GenericSite, Γ2::GenericSite, gate, args::TruncationArgs)
     theta = gate * (Γ1, Γ2)
     DL, d, d, DR = size(theta)
-    U, S, Vt, Dm, err = split_truncate!(reshape(theta, DL * d, d * DR), args)
+    U, S, Vt, Dm, err = split_truncate(reshape(theta, DL * d, d * DR), args)
     U2 = GenericSite(Array(reshape(U, DL, d, Dm)), ispurification(Γ1))
     Vt2 = GenericSite(Array(reshape(Vt, Dm, d, DR)), ispurification(Γ2))
     S2 = LinkSite(S)

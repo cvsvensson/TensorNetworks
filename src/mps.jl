@@ -9,13 +9,14 @@ Base.show(io::IO, m::MIME"text/plain", mps::AbstractMPS) = show(io, mps)
 
 function scalar_product(mps1::AbstractMPS, mps2::AbstractMPS)
     #K = promote_type(numtype.((mps1, mps2))...)
-    T = transfer_matrix(mps1, mps2,:left)
-    vl = transfer_matrix_bond((mps1,), (mps2,), 1, :right) * boundary((mps1,), (mps2,), :left)
-    vr = boundary((mps1,),(mps2,), :right)
+    return _horizontal_contraction((mps1,),(mps2,))
+    # T = transfer_matrix(mps1, mps2,:left)
+    # vl = transfer_matrix_bond((mps1,), (mps2,), 1, :right) * boundary((mps1,), (mps2,), :left)
+    # vr = boundary((mps1,),(mps2,), :right)
     # for k in length(mps1):-1:1
     #     vr = Ts[k] * vr
     # end
-    return transpose(T*vr) * vl
+    #return transpose(T*vr) * vl
 end
 
 LinearAlgebra.norm(mps::AbstractMPS) = sqrt(abs(scalar_product(mps, mps)))
@@ -36,7 +37,7 @@ function get_thermal_states(mps::AbstractMPS, hamGates, βs, dβ; order = 2)
     mps = canonicalize(mps)
     mpss = Array{typeof(mps),1}(undef, Nβ)
     layers = prepare_layers(mps, hamGates, dβ * 1im / 2, order)
-    β = 0
+    β = 0.0
     βout = Float64[]
     for n in 1:Nβ
         Nsteps = floor((βs[n] - β) / dβ)

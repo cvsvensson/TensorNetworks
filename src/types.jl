@@ -1,3 +1,5 @@
+const BigNumber = Union{ComplexDF64,ComplexDF32,ComplexDF16,Double64,Double32,Double16,BigFloat,Complex{BigFloat}}
+
 mutable struct TruncationArgs
     Dmax::Int
     tol::Float64

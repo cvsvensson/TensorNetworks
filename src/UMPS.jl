@@ -140,53 +140,37 @@ end
 
 Return the spectrum of the transfer matrix of the UMPS
 """
-function transfer_spectrum(mps::UMPS{K}, direction::Symbol = :left; nev = 1) where {K}
-    # if K == ComplexDF64
-    # 	@warn("converting ComplexDF64 to ComplexF64")
-    # 	mps = convert(UMPS{ComplexF64},mps)
-    # end
-    T = transfer_matrix(mps, direction)
+function transfer_spectrum(mps::UMPS{K}, direction::Symbol = :left; nev = 1, kwargs...) where {K}
+    T = transfer_matrix((mps,),(mps,), direction)
     D = length(vec(mps.Λ[1]))#(sqrt(size(T,2)))
     nev::Int = min(D^2, nev)
-    if D < 4
-        vals, vecs = eigen(Matrix(T))
-        vals::Vector{K} = vals[end:-1:1]
-        vecs::Matrix{K} = vecs[:, end:-1:1]
-    else
-        x0 = vec(Matrix{K}(I, D, D))
-        vals, vecsvec = eigsolve(T, x0, nev, :LM)#eigs(T,nev=nev)
-        vecs = reduce(hcat, vecsvec)
-    end
-    # if K == ComplexDF64
-    # 	vals = ComplexDF64.(vals)
-    # 	vecs = ComplexDF64.(vecs)
-    # end
-    # tensors = Array{Array{eltype(vecs),2},1}(undef,nev)
-    # for i in 1:nev
-    # 	tensors[i] = reshape(vecs[:,i],D,D)
-    # end
+    x0 = vec(Matrix{K}(I, D, D))
+    vals, vecs = _eigsolve(T,x0,nev=nev,tol = mps.truncation.tol)
     nev = min(length(vals), nev)
-    tensors::Vector{Matrix{K}} = [canonicalize_eigenoperator(reshape(vecs[:, k], D, D)) for k in 1:nev]
-    return (vals[1:nev])::Vector{K}, (tensors) #canonicalize_eigenoperator.(tensors)
+    tensors = [canonicalize_eigenoperator(reshape(vecs[:, k], D, D)) for k in 1:nev]
+    return (vals[1:nev]), (tensors) #canonicalize_eigenoperator.(tensors)
 end
+
 function transfer_spectrum(mps1::UMPS{K1}, mps2::UMPS{K2}, direction::Symbol = :left; nev = 1) where {K1,K2}
     K = promote_type(K1,K2)
-    T = transfer_matrix(mps1, mps2, direction)
+    T = transfer_matrix((mps1,), (mps2,), direction)
     D1 = size(mps1[end], 3)
     D2 = size(mps2[end], 3)
     nev = minimum([D1 * D2, nev])
-    if D1 * D2 < 20
-        vals, vecs = eigen(Matrix(T))
-        vals = vals[end:-1:1]
-        vecs = vecs[:, end:-1:1]
-    else
-        x0 = vec(Matrix{eltype(mps1[end])}(I, D1, D2))
-        vals, vecsvec = eigsolve(T, x0, nev, :LM)#eigs(T,nev=nev)
-        vecs = reduce(hcat, vecsvec)
-    end
+
+    x0 = vec(Matrix{eltype(mps1[end])}(I, D1, D2))
+    tol = max(mps1.truncation.tol, mps2.truncation.tol)
+    vals, vecs = _eigsolve(T,x0,nev=nev,tol = tol)
+
     nev = min(length(vals), nev)
-    tensors::Vector{Matrix{K}} = [reshape(vecs[:, k], D1, D2) for k in 1:nev]
-    return vals[1:nev]::Vector{K}, tensors #canonicalize_eigenoperator.(tensors)
+    tensors = [reshape(vecs[:, k], D1, D2) for k in 1:nev]
+    return vals[1:nev], tensors #canonicalize_eigenoperator.(tensors)
+end
+
+function LinearAlgebra.norm(mps::UMPS)
+    R = boundary(mps, :right)
+    L = boundary(mps, :left)
+    transpose(L) * transfer_matrix_bond((mps,),(mps,),1,:left)*R
 end
 """
 	transfer_spectrum(mps::UMPS, mpo::AbstractMPO, direction=:left; nev=1)
@@ -194,27 +178,48 @@ end
 Return the spectrum of the transfer matrix of the UMPS, with mpo sandwiched
 """
 function transfer_spectrum(mps::UMPS, mpo::AbstractMPO, mps2::UMPS, direction::Symbol = :left; nev = 1)
-    T = transfer_matrix(mps, mpo, mps2, direction)
+    T = transfer_matrix((mps,), (mpo, mps2), direction)
     DdD = size(T, 1)
     d = size(mpo[1], 1)
-    N = length(mpo)
+    #N = length(mpo)
     D = Int(sqrt(DdD / d))
     nev = minimum([DdD, nev])
-    if N < 10
-        vals, vecs = eigen(Matrix(T))
-        vals = vals[end:-1:end-nev+1]
-        vecs = @view vecs[:, end:-1:end-nev+1]
-    else
-        x0id = Matrix{K}(I, D, D)
-        x0v = rand(K, size(mpo[1], 1))
-        @tensor x0tens[:] := x0id[-1, -3] * x0v[-2]
-        x0 = vec(x0tens)
-        vals, vecsvec = eigsolve(T, x0, nev)#eigs(T,nev=nev)
-        vecs = reduce(hcat, vecsvec)
-    end
+    x0id = Matrix{K}(I, D, D)
+    x0v = rand(K, size(mpo[1], 1))
+    @tensor x0tens[:] := x0id[-1, -3] * x0v[-2]
+    x0 = vec(x0tens)
+    tol = max(mps.truncation.tol, mps2.truncation.tol)
+    vals, vecs = _eigsolve(T,x0,nev=nev,tol = tol)
     tensors = [reshape(vecs[:, k], D, d, D) for k in 1:nev]
     return vals, tensors #canonicalize_eigenoperator.(tensors)
 end
+
+transfer_spectrum((mps1,),(mps2,),dir;nev) = transfer_spectrum(mps1, mps2,dir;nev)
+
+function _eigsolve(transfer::LinearMap{K},x0; nev = 1, tol) where K<:BigNumber
+    D = size(transfer,2)
+    if D < 50
+        vals, vecs = eigen(Matrix(transfer))
+        #vals::Vector{K} = vals[end:-1:1]
+        #vecs::Matrix{K} = vecs[:, end:-1:1]
+    else
+        vals, vecs = partialeigen(partialschur(transfer, nev = nev, which = LM(), tol = tol)[1])
+    end
+    return reverse(vals)::Vector{K} , reverse(vecs,dims=2)::Matrix{K}
+end
+function _eigsolve(transfer::LinearMap{K},x0; nev = 1, tol) where K
+    D = size(transfer,2)
+    if D < 50
+        vals, vecs = eigen(Matrix(transfer))
+        vals::Vector{K} = vals[end:-1:1]
+        vecs::Matrix{K} = vecs[:, end:-1:1]
+    else
+        vals, vecsvec = eigsolve(transfer, x0, nev, :LM,tol=tol)#eigs(T,nev=nev)
+        vecs = reduce(hcat, vecsvec)
+    end
+    return vals, vecs
+end
+
 
 function apply_layers(mps::UMPS, layers)
     sites, err = apply_layers(mps[1:end], layers, mps.truncation, isperiodic = true)
@@ -313,20 +318,7 @@ function canonicalize(mps::UMPS, n)
     return mps
 end
 
-"""
-	boundary(mps::UMPS)
 
-Return the left and right dominant eigentensors of the transfer matrix
-"""
-function boundary(mps::UMPS)
-    valR, rhoRs = transfer_spectrum(mps, :left, nev = 2)
-    valL, rhoLs = transfer_spectrum(mps, :right, nev = 2)
-    DR = Int(sqrt(length(rhoRs[:, 1])))
-    DL = Int(sqrt(length(rhoLs[:, 1])))
-    rhoR = reshape(rhoRs[:, 1], DR, DR)
-    rhoL = reshape(rhoLs[:, 1], DL, DL)
-    return rhoL, rhoR
-end
 # transfer_matrix_bond(mps::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = (s =Diagonal(data(mps.Λ[site])); kron(s,s))
 # transfer_matrix_bond(mps1::AbstractMPS{_braket(OrthogonalLinkSite)}, mps2::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = kron(Diagonal(data(mps1.Λ[site])),Diagonal(data(mps2.Λ[site])))
 
@@ -364,8 +356,8 @@ function effective_hamiltonian(mps::UMPS{T}, mpo::AbstractMPO; direction = :left
     Dmpo = size(mpo[end], 1)
     D = length(mps.Λ[1])
     sR = (D, Dmpo, D)
-    TL = transfer_matrix(mps, mpo, direction)
-    TIL = transfer_matrix(mps, direction)
+    TL = transfer_matrix((mps,), (mpo,mps), direction)
+    TIL = transfer_matrix((mps,),(mps,), direction)
     @warn "Make sure that mpo is lower triangular with identity on the first and last place of the diagonal"
     rhoR = zeros(T, sR) #TODO Sparse array?
     itr = 1:Dmpo
@@ -422,10 +414,12 @@ function canonicalize_cell(mps::UMPS{K}) where {K}
         Y = Diagonal(sevl)[abs.(sevl).>sqrt(mps.truncation.tol), :] * Ul'
         #println(minimum(abs.(sevr)))
     end
+    m = Y * data(mps.Λ[1]) * transpose(X)
     F = try
-        svd!(Y * data(mps.Λ[1]) * transpose(X))
+        svd(m)
     catch y
-        svd!(Y * data(mps.Λ[1]) * transpose(X), alg = LinearAlgebra.QRIteration())
+        println(y)
+        svd(m, alg = LinearAlgebra.QRIteration())
     end
     U, S, Vt, D, err = truncate_svd(F, mps.truncation) #split_truncate!(Y*data(mps.Λ[1])*transpose(X), mps.truncation) 
     Λ = LinkSite(S)
@@ -446,8 +440,8 @@ function canonicalize_cell(mps::UMPS{K}) where {K}
     Λcopy[1] = Λ #/ β
     # @tensor Γcopy[end][:] := Γcopy[end][-1,-2,3]*YU[3,-3]
     # @tensor Γcopy[1][:] := VX[-1,1]*Γcopy[1][1,-2,-3]
-    @assert valR[1] ≈ valL[1]
 
+    @assert valR[1] ≈ valL[1] "Left and right eigenvalues not equal: $(valR) !≈ $(valL)"
     return UMPS(Γcopy, Λcopy, mps, error = err)
 end
 
@@ -463,6 +457,11 @@ function canonicalize(mps::UMPS)
         mpsout = mps
     elseif N == 2
         #Γ[1],Λ2,Γ[2], err = apply_two_site_identity(mps.Γ, mps.Λ[mod1.(1:3,2)], mps.truncation)
+        # println(mps[1].Γ)
+        # println(mps[1].Λ2)
+        # println(mps[2].Γ)
+        # println(mps[2].Λ2)
+        # println(transfer_spectrum(mps)[2])
         ΓL, ΓR, err = apply_two_site_gate(mps[1], mps[2], IdentityGate(Val(2)), mps.truncation)
         mpsout = UMPS([ΓL, ΓR], truncation = mps.truncation, error = err)
     else
@@ -499,7 +498,7 @@ Return an UMPS with double the size of the unit cell
 """
 function double(mps::UMPS)
     N = length(mps.Γ)
-    return UMPS(mps.Γ[mod1.(1:2N, N)], mps.Λ[mod1.(1:2N, N)], mps)
+    return UMPS(vcat(mps.Γ,copy.(mps.Γ)), vcat(mps.Λ,copy.(mps.Λ)), mps)
 end
 
 
@@ -552,39 +551,17 @@ end
 """
      canonicalize_eigenoperator(rho)
 
-makes the dominant eigenvector hermitian
+make the dominant eigenvector hermitian
 """
 function canonicalize_eigenoperator(rho::AbstractMatrix)
-    trρ = tr(rho)
-    phase = trρ / abs(trρ)
-    rho = rho ./ phase
     rhoH = Hermitian((rho + rho') / 2)
-    return rhoH / norm(rhoH) * sqrt(size(rhoH, 1))
+    return rhoH / (sign(tr(rhoH))*norm(rhoH)) * sqrt(size(rhoH, 1))
 end
 
 
 # %% Entropy
-# function renyi(mps::UMPS, n)
-# 	N = length(mps.Γ)
-# 	T = eltype(mps.Γ[1])
-#     transfer_matrices = transfer_matrices_squared(mps,:right)
-# 	sizes = size.(mps.Γ)
-# 	id = Matrix{T}(I,sizes[1][1],sizes[1][1])
-# 	leftVec = vec(@tensor id[-1,-2]*id[-3,-4])
-# 	Λsquares = Diagonal.(mps.Λ .^2)
-# 	rightVecs = map(k->vec(@tensor Λsquares[-1,-2]*Λsquares[-3,-4])', 1:N)
-#     vals = Float64[]
-#     for k in 1:n
-# 		leftVec = transfer_matrices[mod1(k,N)]*leftVec
-# 		val = rightVecs[mod1(k+1,N)] * leftVec
-#         push!(vals, -log2(val))
-#     end
-#     return vals
-# end
 
-function renyi(mps;tol=1e-6) #FIXME implement transfer_matrix_squared
-	#N = length(mps.Γ)
-	#T = eltype(mps.Γ[1])
+function renyi(mps;tol=1e-6)
     T = transfer_matrix_squared(mps,:right)
     vals,vecs, info = eigsolve(T,size(T,2),1,tol=tol,maxiter=6,krylovdim=8)#,1)eigsolve(heff, vec(x0), nev, :SR, tol = prec, ishermitian = true, maxiter = 3, krylovdim = 20)
 	println(info)
@@ -616,19 +593,8 @@ function _transfer_matrix_right_squared(s)
     sA=size(A)
     function contract(R)
         temp = reshape(R,sA[1],sA[1],sA[1],sA[1])
-        # @tensoropt (r1,r2,r3,r4) out[:] := conj(A[r1,u,c1,-1])*A[r2,c1,c2,-2]*conj(A[r3,c2,c3,-3])*A[r4,c3,u,-4]*temp[r1,r2,r3,r4]
-        @tensor out[:] := conj(A[r1,u,c1,-1])*(A[r2,c1,c2,-2]*(conj(A[r3,c2,c3,-3])*(A[r4,c3,u,-4]*temp[r1,r2,r3,r4])))
-        #@tullio out[a,b,c,d] := conj(A[r1,u,c1,a])*(A[r2,c1,c2,b]*(conj(A[r3,c2,c3,c])*(A[r4,c3,u,d]*temp[r1,r2,r3,r4])))
+        @tensor out[:] := A[r1,u,c1,-1]*(conj(A[r2,c2,c1,-2])*(A[r3,c2,c3,-3]*(conj(A[r4,u,c3,-4])*temp[r1,r2,r3,r4])))
         return vec(out)
-        # @tensoropt (r,-2,-3,-4) begin
-        #     temp[:] := temp[r,-2,-3,-4]*conj(A[r,-5,-6,-1])
-        #     temp[:] := temp[-1,r,-3,-4,c,-6]*A[r,c,-5,-2]
-        #     temp[:] := temp[-1,-2,r,-4,c,-6]*conj(A[r,-5,c,-3])
-        #     temp[:] := temp[-1,-2,-3,r,c,-6]*A[r,c,-5,-4]
-        #     temp[:] := temp[-1,-2,-3,-4,c,c]
-        # end
-        #st = size(temp)
-        # return vec(temp)
     end
     T = LinearMap{ComplexF64}(contract,sA[4]^4,sA[1]^4)
     return T

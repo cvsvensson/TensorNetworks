@@ -124,9 +124,9 @@ end
     site2 = randomGenericSite(DL2,d,DR2);
     T0 = Matrix(transfer_matrix(site1,site2));
     Tid = Matrix(transfer_matrix(site1,id,site2));
-    @test T0 == Tid
-    @test Matrix(transfer_matrix(site1)) == Matrix(transfer_matrix(site1,id))
-    @test z*T0 == Matrix(transfer_matrix(site1,zid,site2))
+    @test T0 ≈ Tid
+    @test Matrix(transfer_matrix(site1)) ≈ Matrix(transfer_matrix(site1,id))
+    @test z*T0 ≈ Matrix(transfer_matrix(site1,zid,site2))
 end
 
 @testset "MPO" begin
@@ -143,9 +143,9 @@ end
     @test z^(1/N)*idsite == zid[floor(Int, N/2)]
 
     mps = randomOpenMPS(N,2,5);
-    T0 = Matrix(prod(transfer_matrices(mps)))
-    @test T0 == Matrix(prod(transfer_matrices(mps,id)))
-    @test z*T0 ≈ Matrix(prod(transfer_matrices(mps,zid)))
+    T0 = Matrix(transfer_matrix((mps,),(mps,)))
+    @test T0 == Matrix(transfer_matrix((mps,),(id,mps)))
+    @test z*T0 ≈ Matrix(transfer_matrix((mps,),(zid,mps)))
 end
 
 
@@ -162,7 +162,7 @@ end
     env = environment(mps);
     site = randomGenericSite(D,d,D)
     mid = floor(Int,N/2)
-    update_environment!(env,mid,site,site)
+    update_environment!(env,mid,(site,),(site,))
     TL = transfer_matrix(site,:left)
     TR = transfer_matrix(site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -173,7 +173,7 @@ end
     env = environment(mps2,mps);
     @test length(env.R[mid]) == D2*D == length(env.L[mid])
     site2 = randomGenericSite(D2,d,D2);
-    update_environment!(env,mid,site2,site)
+    update_environment!(env,mid,(site2,),(site,))
     TL = transfer_matrix(site2,site,:left)
     TR = transfer_matrix(site2,site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -181,9 +181,9 @@ end
 
     mpo = IsingMPO(N,1,1,1);
     Dmpo = size(mpo[mid],4)
-    env = environment(mps2,mpo,mps);
+    env = environment((mps2,),(mpo,mps));
     @test length(env.R[mid]) == D2*D*Dmpo == length(env.L[mid])
-    update_environment!(env,mid,site2,mpo[mid],site)
+    update_environment!(env,mid,(site2,),(mpo[mid],site))
     TL = transfer_matrix(site2,mpo[mid],site,:left)
     TR = transfer_matrix(site2,mpo[mid],site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -401,6 +401,8 @@ end
     mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
     states, energies = eigenstates(ham, mps, 5; precision = 1e-8);
     @test sort(energies) ≈ -[Nchain-1, Nchain-1, Nchain-3, Nchain-3, Nchain-3]
+    states, energies = eigenstates(ham, fill(mps,5), 5; precision = 1e-8);
+    @test sort(energies) ≈ -[Nchain-1, Nchain-1, Nchain-3, Nchain-3, Nchain-3]
 
     Nchain = 10
     Dmax = 20
@@ -549,4 +551,100 @@ end
         wf = TensorNetworks.evaluate_wavefunction(mps, [n1,n2])
         @test wf ≈ transpose(sites[1][1,n1,:]) * sites[2][:,n2,1]
     end 
+end
+
+@testset "BD1MPO" begin
+    μ,t,h,α,Δ,Δ1,U,V = [1.01,1,.1,1.5,.2,-.55,pi,7]
+    ham = TensorNetworks.BD1MPO(1,μ,h, t, α, Δ, Δ1, U, V);
+    @test norm(Matrix(ham) - Matrix(ham)') < 1e-12
+    s1 = qubit(0,0)
+    s0 = qubit(pi/2,0)
+    s11 = LCROpenMPS([(-1)*s1*s1])
+    s00 = LCROpenMPS([s0*s0])
+    s10 = LCROpenMPS([s1*s0])
+    s01 = LCROpenMPS([s0*s1])
+    @test expectation_value(s11, ham) ≈ -2μ+U
+    @test abs(expectation_value(s00, ham)) < 1e-8
+    @test expectation_value(s10, ham) ≈ -μ-h 
+    @test expectation_value(s01, ham) ≈ -μ+h 
+
+    @test matrix_element(s00,ham,s11) ≈ Δ
+    @test abs(matrix_element(s01,ham,s10)) < 1e-8
+    @test abs(matrix_element(s01,ham,s10)) < 1e-8
+
+    _qubit(n) = n==1 ? s1 : s0
+    state(a,b,c,d) = LCROpenMPS([_qubit(a)*_qubit(b), (-1)^(a*b+c*(a+b)+d*(a+b+c))*_qubit(c)*_qubit(d)])
+    me(a,b) = matrix_element(state(a...),ham2,state(b...))
+
+    ham2 = TensorNetworks.BD1MPO(2,μ,h, t, α, Δ, Δ1, U, V);
+    @test norm(Matrix(ham2) - Matrix(ham2)') < 1e-12
+    @test me((1,1,0,0),(1,1,0,0)) ≈ -2μ + U
+    ### Spin orbit
+    # spin up jumps left
+    @test me((1,1,0,0),(1,0,1,0)) ≈ α/2
+    @test me((0,1,0,0),(0,0,1,0)) ≈ α/2
+    @test me((0,1,0,1),(0,0,1,1)) ≈ α/2
+    # spin up jumps right
+    @test me((0,0,0,1),(1,0,0,0)) ≈ -α/2
+    @test me((0,1,0,1),(1,1,0,0)) ≈ α/2 #extra minus sign from jumping over a fermion
+    @test me((0,0,1,1),(1,0,1,0)) ≈ α/2 #extra minus sign from jumping over a fermion
+
+    ### Hopping
+    @test me((1,0,0,0),(0,0,1,0)) ≈ -t/2
+    @test me((1,1,0,0),(0,1,1,0)) ≈ t/2 #extra minus sign from jumping over a fermion
+    @test me((0,1,1,1),(1,1,0,1)) ≈ t/2 #extra minus sign from jumping over a fermion
+    @test me((0,1,1,0),(0,0,1,1)) ≈ t/2
+    @test me((1,0,0,1),(1,1,0,0)) ≈ -t/2 
+
+    #superconductivity
+    @test me((0,0,0,0),(0,0,1,1)) ≈ Δ
+    @test me((1,0,0,0),(1,0,1,1)) ≈ Δ
+    @test me((0,0,0,0),(1,0,0,1)) ≈ Δ1
+    @test me((0,0,0,0),(0,1,1,0)) ≈ -Δ1
+    @test abs(me((0,0,0,0),(0,1,0,1))) < 1e-12
+
+    #interactions
+    @test me((1,1,1,1),(1,1,1,1)) ≈ (2U + 2V - 4μ)
+    @test me((1,0,1,1),(1,0,1,1)) ≈ (U + V - 3μ - h)
+    @test me((1,1,0,1),(1,1,0,1)) ≈ (U + V - 3μ + h)
+end
+
+@testset "KitaevMPO" begin
+    μ,t,Δ,U = [1.01,1,.1,pi]
+    ham = TensorNetworks.KitaevMPO(2,t, Δ, U, μ)
+    @test norm(Matrix(ham) - Matrix(ham)') < 1e-12
+    s1 = qubit(0,0)
+    s0 = qubit(pi/2,0)
+    _qubit(n) = n==1 ? s1 : s0
+    state(a,b) = LCROpenMPS([_qubit(a),(-1)^(a*b)*_qubit(b)])
+    me(a,b) = matrix_element(state(a...),ham,state(b...))
+    @test me((1,1),(1,1)) ≈ -μ + U
+    @test me((0,0),(0,0)) ≈ μ + U
+    ### Hopping
+    @test me((1,0),(0,1)) ≈ -t
+    @test me((0,0),(1,1)) ≈ Δ
+end
+
+@testset "Majorana" begin
+    N = 10
+    t = 1.0
+    μ = .5
+    Δ = t
+    U = 0.0
+    Dmax = 50
+    tol = 1e-14
+    truncation= TruncationArgs(Dmax, tol, true)
+    initialmps = canonicalize(randomLCROpenMPS(N, 2, Dmax; truncation=truncation, T=Float64))
+    set_center!(initialmps, 1)
+    ham = TensorNetworks.KitaevMPO(N,t, Δ, U, μ)
+    states, energies = TensorNetworks.eigenstates2(ham, initialmps, 2, precision=tol, maxsweeps=10, maxbonds=[5, 10, 20]);
+    gs1 = TensorNetworks.parity_projection(states[1], sign(TensorNetworks.parity(states[1])))
+    gs2 = TensorNetworks.parity_projection(states[2], sign(TensorNetworks.parity(states[2])))
+    @time r1, r2, r3,r4 = majorana_measurements(gs1, gs2, N);
+    a,b = majorana_coefficients(r1,r2,r3,r4,tol=1e-14);
+   
+    @test norm(b) < sqrt(tol)
+    @test norm(r1 .- a) < sqrt(tol)
+    @test norm(r3 - TensorNetworks.three_body_noninteracting(r1,r2)) < sqrt(tol)
+    @test abs(sum((exp.(diff(log.(abs.(r1[:,1])))) ./ (μ/(2t)))[1:3])/3 - 1) < 1e-6
 end

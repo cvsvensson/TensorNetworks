@@ -172,6 +172,12 @@ function _HeisenbergMPO_center(S, Jx, Jy, Jz, h; type=Float64)
     return mposite
 end
 
+function BD1MPO(μs::Vector,h, t, α, Δ, Δ1, U, V; type=Float64)
+    #center = _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type)
+    #mpo = Vector{Array{type,4}}(undef, N)
+    mpo = [ _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type) for μ in μs]
+    return MPO(mpo)
+end
 function BD1MPO(N,μ,h, t, α, Δ, Δ1, U, V; type=Float64)
     center = _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=type)
     #mpo = Vector{Array{type,4}}(undef, N)
@@ -183,36 +189,36 @@ function _BD1MPO_center(μ,h, t, α, Δ, Δ1, U, V; type=Float64)
     d = 4
     mposite = zeros(type, D, d, d, D)
     mposite[1, :, :, 1] = mposite[D, :, :, D] = Matrix{type}(I, d, d)
-    mposite[1, :, :, D] = (-μ - h) / 2 * ZI + (-μ + h) / 2 * IZ + Δ * (XX - YY) + U / 4 * (ZI + IZ + ZZ) + V / 2*(ZI + IZ) #(SmSm * ZI - SpSp * ZI)
+    mposite[1, :, :, D] = (-μ - h) / 2 * (ZI+II) + (-μ + h) / 2 * (IZ+II) + Δ/2 * (-XX + YY) + U / 4 * (II + ZI + IZ + ZZ) #(SmSm * ZI - SpSp * ZI)
 
     #Kinetic terms
     dk = 2
-    mposite[1, :, :, dk] = t / 2 * XZ
+    mposite[1, :, :, dk] = t / 4 * XZ
     mposite[dk, :, :, D] = XI
-    mposite[1, :, :, dk+1] = t / 2 * YZ *(1im) #Multiply with i to make everything real
+    mposite[1, :, :, dk+1] = t / 4 * YZ *(1im) #Multiply with i to make everything real
     mposite[dk+1, :, :, D] = YI *(-1im)
-    mposite[1, :, :, dk+2] = t / 2 * IX
+    mposite[1, :, :, dk+2] = t / 4 * IX
     mposite[dk+2, :, :, D] = ZX
-    mposite[1, :, :, dk+3] = t / 2 * IY *(1im)
+    mposite[1, :, :, dk+3] = t / 4 * IY *(1im)
     mposite[dk+3, :, :, D] = ZY *(-1im)
 
     #Spin orbit and Intersite superconductivity
     dsoc = dk + 4
-    mposite[1, :, :, dsoc] = (Δ1 + α) / 2 * XZ
+    mposite[1, :, :, dsoc] = -(Δ1/2 + α/4) * XZ
     mposite[dsoc, :, :, D] = ZX
-    mposite[1, :, :, dsoc+1] = (-Δ1 + α) / 2 * YZ *(1im)
+    mposite[1, :, :, dsoc+1] = -(-Δ1/2 + α/4) * YZ *(1im)
     mposite[dsoc+1, :, :, D] = ZY *(-1im)
-    mposite[1, :, :, dsoc+2] = (-Δ1 + α) / 2 * IX
+    mposite[1, :, :, dsoc+2] = -(-Δ1/2 - α/4) * IX
     mposite[dsoc+2, :, :, D] = XI
-    mposite[1, :, :, dsoc+3] = (Δ1 + α) / 2 * IY *(1im)
+    mposite[1, :, :, dsoc+3] = -(Δ1/2 - α/4) * IY *(1im)
     mposite[dsoc+3, :, :, D] = YI *(-1im)
 
     #Intersite interaction
     dinter = dsoc + 4
-    mposite[1, :, :, dinter] = V / 4 * ZI
-    mposite[dinter, :, :, D] = ZI
-    mposite[1, :, :, dinter+1] = V / 4 * IZ
-    mposite[dinter+1, :, :, D] = IZ
+    mposite[1, :, :, dinter] = V / 4 * (II+ZI)
+    mposite[dinter, :, :, D] = (II+ZI)
+    mposite[1, :, :, dinter+1] = V / 4 * (II+IZ)
+    mposite[dinter+1, :, :, D] = (II+IZ)
 
     return mposite
 end

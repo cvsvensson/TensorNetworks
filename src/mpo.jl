@@ -128,6 +128,7 @@ MPO(mpo::MPOsite) = MPO([mpo])
 MPO(op::Array{<:Number,2}) = MPO(MPOsite(op))
 MPO(ops::Vector{Matrix{T}}) where {T} = MPO(map(MPOsite, ops))
 MPO(ops::Vector{Array{T,4}}) where {T} = MPO(map(MPOsite, ops))
+MPO(ops::Vector{<:ScaledIdentityMPOsite}) = prod(data.(ops))*IdentityMPO(length(ops))
 data(mpo::MPO) = mpo.data
 # HermitianMPO(mpo::MPOsite) = HermitianMPO(MPO([mpo]))
 # HermitianMPO(op::Array{T,2}) where {T<:Number} = HermitianMPO(MPOsite(op))
