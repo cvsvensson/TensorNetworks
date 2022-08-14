@@ -58,7 +58,8 @@ struct OrthogonalLinkSite{T, C, V} <: AbstractPhysicalSite{T}
     Γ::C
     Λ1::V
     Λ2::V
-    function OrthogonalLinkSite(Λ1::V, Γ::C, Λ2::V; check = false) where {T}
+    function OrthogonalLinkSite(Λ1::V, Γ::C, Λ2::V; check = false) where {C<:AbstractPhysicalSite,V<:AbstractVirtualSite}
+        T = promote_type(eltype(V),eltype(C))
         if check
             @assert isleftcanonical(Λ1 * Γ) "Error in constructing OrthogonalLinkSite: Is not left canonical"
             @assert isrightcanonical(Γ * Λ2) "Error in constructing OrthogonalLinkSite: Is not right canonical"

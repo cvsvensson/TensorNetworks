@@ -63,4 +63,5 @@ include("expectation_values.jl")
 include("states.jl")
 include("evaluate_wavefunction.jl")
 include("majorana.jl")
+include("parity.jl")
 end # module
