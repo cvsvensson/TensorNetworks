@@ -251,9 +251,6 @@ function majorana_measurements_1to3(mps::TensorNetworks.AbstractMPS{<:TensorNetw
             if m == r
                 M = [op * rightvec0[r] for op in T2stacked0[r]]
             else
-                for (i,j,k) in T3indices
-                    result4[m, m, m, r, i, j, k,:] .= [real(leftvec0[m] * T3stackedJW0[m][i,j,k] * Rv) for Rv in R]
-                end
                 M = [op * Rv for (op, Rv) in Base.product(T1JW0[m], R)]
                 result2[m, r, :, :] .= [imag(leftvec0[m] * Mv) for Mv in M]
             end
@@ -305,7 +302,7 @@ end
 
 
 """
-one_body_noninteracting(mps, mps2, width)
+one_body_noninteracting_majorana_coefficients(mps, mps2, width)
 
 Return the matrix elements of one-point functions of majorana operators. 
 Works for spinless or spin 1/2 fermions.
