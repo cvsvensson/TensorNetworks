@@ -188,6 +188,122 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     return result1, r2, r3,r4#, abmap!,abcmap! #lsola, lsolb, lsolai, lsolbi
 end
 
+function majorana_measurements_1to3(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.AbstractSite{T}}, mps2, width::Int) where {T}
+    N = length(mps)
+    nmaj = size(mps[1],2)
+    Tbonds = [TensorNetworks.transfer_matrix_bond((mps,), (mps2,), k, :left) for k in 1:N]
+    Tbonds0 = [TensorNetworks.transfer_matrix_bond((mps,),(mps,), k, :left) for k in 1:N]
+    JW = JWop(nmaj)
+    JWenv = environment((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
+    env0 = environment((mps,),(mps,))
+    env = environment((mps,), (mps2,))
+    rightvec = [vec(env.R[k]) for k in 1:N]
+    leftvec = [transpose(Tbonds[k] * vec(JWenv.L[k])) for k in 1:N]#vec(Matrix{T}(I,size(mps[k],1),size(mps[k],1))))
+    leftvec0 = [transpose(Tbonds0[k] * vec(env0.L[k])) for k in 1:N]
+    rightvec0 = [vec(env0.R[k]) for k in 1:N]
+    TI = transfer_matrices((mps,), (mps2,), :left)
+    TI0 = transfer_matrices((mps,),(mps,), :left)
+    TJW = transfer_matrices(mps, MPOsite(JW), mps2, :left)
+    TJW0 = transfer_matrices(mps, MPOsite(JW), mps, :left)
+    result1::Array{complex(T),2} = zeros(complex(T), N, nmaj)
+    result2::Array{real(T),4} = zeros(real(T), N, N, nmaj, nmaj)
+    result3::Array{complex(T),6} = zeros(complex(T), N, N, N, nmaj, nmaj, nmaj)
+
+    majops = maj_ops(nmaj)#[TensorNetworks.XI,TensorNetworks.YI,-TensorNetworks.ZX,-TensorNetworks.ZY]
+    majopsJW = maj_opsJW(nmaj)#[-1im*TensorNetworks.YZ, 1im*TensorNetworks.XZ, 1im * TensorNetworks.IY, -1im*TensorNetworks.IX]
+
+    T1 = [[transfer_matrix(mps[r], MPOsite(majops[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
+    T10 = [[transfer_matrix(mps[r], MPOsite(majops[i]), :left) for i in 1:nmaj] for r in 1:N]
+    T1JW = [[transfer_matrix(mps[r], MPOsite(majopsJW[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
+    T1JW0 = [[transfer_matrix(mps[r],MPOsite(majopsJW[i]), :left) for i in 1:nmaj] for r in 1:N]
+    
+    Ttype = typeof(1*T1[1][1])
+    
+    T2indices::Vector{NTuple{2, Int64}} = vcat([[(k1,k2) for k2 in (1:nmaj)[k1+1:end]] for k1 in 1:nmaj]...)
+    T2indicesitr = Base.product(1:nmaj,1:nmaj)
+    T2stack(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]), mps2[r], :left)
+    T2stack0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]), :left)
+    T2stackJW(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majopsJW[j]), mps2[r], :left)
+    T2stackJW0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majopsJW[j]), :left)
+    T2stacked::Vector{Array{Ttype,2}} = [[T2stack(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+    T2stacked0::Vector{Array{Ttype,2}} = [[T2stack0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+    T2stackedJW::Vector{Array{Ttype,2}} = [[T2stackJW(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+    T2stackedJW0::Vector{Array{Ttype,2}} = [[T2stackJW0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
+
+    T3indices::Vector{NTuple{3, Int64}} = [vcat([vcat([[(k1,k2,k3) for k3 in (1:nmaj)[k2+1:end]] for k2 in (1:nmaj)[k1+1:end]]...) for k1 in 1:nmaj]...)...]
+    T3stack(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majops[k]), mps2[r], :left)
+    T3stack0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majops[k]), :left)
+    T3stackJW(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majopsJW[k]), mps2[r], :left)
+    T3stackJW0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majopsJW[k]), :left)
+    T3indicesitr = Base.product(1:nmaj,1:nmaj,1:nmaj)
+    T3stacked::Vector{Array{Ttype,3}} = [[T3stack(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
+    T3stacked0::Vector{Array{Ttype,3}} = [[T3stack0(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
+    #T3stackedJW = [[T3stackJW(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
+    T3stackedJW0::Vector{Array{Ttype,3}} = [[T3stackJW0(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
+
+    #T4stacked0 = [transfer_matrix(mps[r], MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), :left) for r in 1:N]
+    Threads.@threads for r in 1:N
+        R = [op * rightvec0[r] for op in T10[r]]
+        for (i,j) in T2indices
+            result2[r, r, i,j] = imag(leftvec0[r] * (T2stacked0[r][i,j]*rightvec0[r]))
+        end
+        for m in close_or_edge_iterator((r,), width)#:-1:1#max(1, r - width +1)
+            if m == r
+                M = [op * rightvec0[r] for op in T2stacked0[r]]
+            else
+                for (i,j,k) in T3indices
+                    result4[m, m, m, r, i, j, k,:] .= [real(leftvec0[m] * T3stackedJW0[m][i,j,k] * Rv) for Rv in R]
+                end
+                M = [op * Rv for (op, Rv) in Base.product(T1JW0[m], R)]
+                result2[m, r, :, :] .= [imag(leftvec0[m] * Mv) for Mv in M]
+            end
+            for m2 in close_or_edge_iterator((m,r), width)#:-1:1#max(1, r - width +1)
+                if m2==m==r
+                    M2 = [op * rightvec0[r] for op in T3stacked0[m2]]
+                elseif m2==m != r
+                    M2 = [op * Rv for (op,Rv) in Base.product(T2stackedJW0[m2],R)]
+                else
+                    M2 = [op * Mv for (op, Mv) in Base.product(T10[m2], M)]
+                end
+                if m2!=m
+                    M = map(Mv -> TI0[m2] * Mv, M)
+                end
+            end
+            if m!=r 
+                R = map(Rv -> TJW0[m] * Rv, R)
+            end
+        end
+    end
+    r2 = antisymmetrise(result2)
+    Threads.@threads for r in 1:N
+        R = [op * rightvec[r] for op in T1[r]]
+        result1[r, :] .= [leftvec[r] * Rv for Rv in R]
+        for m in r:-1:1
+            if m == r
+                M = [op * rightvec[m] for op in T2stacked[m]]
+                for (i,j,k) in T3indices
+                    result3[m, m, m, i, j,k] = 1im*leftvec[m] * T3stacked[m][i,j,k] * rightvec[r]
+                end
+            else
+                M = [op * Rv for (op, Rv) in Base.product(T1JW[m], R)]
+                for (i,j) in T2indices
+                    result3[m, m, r, i, j,:] .= [1im*leftvec[m] * T2stackedJW[m][i,j] * Rv for Rv in R]
+                end
+            end
+            for l in m-1:-1:1
+                result3[l, m, r, :, :, :] .= [1im*leftvec[l] * op * Mv for (op, Mv) in Base.product(T1[l], M)]
+                M = map(Mv -> TI[l] * Mv, M)
+            end
+            if m != r
+                R = map(Rv -> TJW[m] * Rv, R)
+            end
+        end
+    end
+    r3 = antisymmetrise(result3)
+    return result1, r2, r3
+end
+
+
 """
 one_body_noninteracting(mps, mps2, width)
 
