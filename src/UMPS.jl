@@ -66,14 +66,14 @@ function identityUMPS(N, d; T = ComplexF64, truncation::TruncationArgs = DEFAULT
     mps = UMPS(Γ, Λ, truncation = truncation)
     return mps
 end
-function identityMPS(mps::UMPS{T}) where {T}
+function identityMPS(mps::UMPS)
     N = length(mps.Γ)
     d = size(mps.Γ[1], 2)
     if ispurification(mps)
         d = Int(sqrt(d))
     end
     trunc = mps.truncation
-    return identityUMPS(N, d, T = T, truncation = trunc)
+    return identityUMPS(N, d, T = numtype(mps), truncation = trunc)
 end
 
 function productUMPS(theta, phi)

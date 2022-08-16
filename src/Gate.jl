@@ -21,6 +21,7 @@ function Base.:*(g1::SquareGate{<:Any,N}, g2::SquareGate{<:Any,N}) where {N}
 end
 Base.:*(g1::AbstractSquareGate{<:Any,N}, g2::ScaledIdentityGate{<:Any,N}) where {N} = g1 * data(g2)
 Base.:*(g2::ScaledIdentityGate{<:Any,N}, g1::AbstractSquareGate{<:Any,N}) where {N} = g1 * data(g2)
+Base.:*(g1::ScaledIdentityGate{<:Any,N}, g2::ScaledIdentityGate{<:Any,N}) where {N} = ScaledIdentityGate(data(g1)*data(g2),Val(N))
 
 """ 
 	kron(g1::AbstractSquareGate, g2::AbstractSquareGate)

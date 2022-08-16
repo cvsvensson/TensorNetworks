@@ -216,7 +216,7 @@ function eigenstates2(hamiltonian::MPO, mps::OpenPMPS, n::Integer; shifter = Shi
     return states, energies
 end
 
-function eigenstates2(hamiltonian::MPO, mps::Vector{<:OpenPMPS}, n::Integer; shifter = ShiftCenter(), kwargs...) where {T}
+function eigenstates2(hamiltonian::MPO, mps::Vector{<:OpenPMPS}, n::Integer; shifter = ShiftCenter(), kwargs...)
     #T = eltype(data(mps[1]))
     states = Vector{typeof(mps[1])}(undef, n)
     energies = Vector{real(promote_type(numtype(mps...), eltype(hamiltonian[1])))}(undef, n)

@@ -94,7 +94,7 @@ function VirtualSite(site::PVSite,dir)
         return site.Λ2
     end
 end
-function PhysicalSite(site::PVSite, dir)
+function PhysicalSite(site::PVSite, dir::Symbol)
     if dir == :left
         return site.Λ1 * site.Γ
     elseif dir == :right

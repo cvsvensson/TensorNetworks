@@ -72,7 +72,7 @@ iscanonical(site::PVSite) = isrightcanonical(site) && isleftcanonical(site) && n
 entanglement_entropy(Λ::LinkSite) = -sum(data(Λ) * log(data(Λ)))
 
 PhysicalSite(site::PhysicalSite) = site
-PhysicalSite(site::PhysicalSite, dir) = site
+PhysicalSite(site::PhysicalSite, dir::Symbol) = site
 
 Base.convert(::Type{LinkSite{T}}, Λ::LinkSite{K}) where {K,T} = LinkSite(Diagonal{T}(data(Λ)))
 # Base.convert(::Type{GenericSite{T}}, site::GenericSite{K}) where {K,T} = GenericSite(convert.(T,data(site)),ispurification(site))
