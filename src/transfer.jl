@@ -1,8 +1,8 @@
 # transfer_matrix_bond(mps::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = (s =Diagonal(data(mps.Λ[site])); kron(s,s))
 # transfer_matrix_bond(mps1::AbstractMPS{_braket(OrthogonalLinkSite)}, mps2::AbstractMPS{_braket(OrthogonalLinkSite)}, site::Integer, dir::Symbol) = kron(Diagonal(data(mps1.Λ[site])),Diagonal(data(mps2.Λ[site])))
 
-transfer_matrix_bond(mps::AbstractVector{<:OrthogonalLinkSite}, site::Integer, dir::Symbol) = data(link(mps[site], :left))
-transfer_matrix_bond(mps::AbstractVector{<:GenericSite}, site::Integer, dir::Symbol) = LinearMap(I,size(mps[site],1))#Diagonal(I,size(mps[site],1))
+transfer_matrix_bond(mps::AbstractVector{<:PVSite}, site::Integer, dir::Symbol) = data(link(mps[site], :left))
+transfer_matrix_bond(mps::AbstractVector{<:PhysicalSite}, site::Integer, dir::Symbol) = LinearMap(I,size(mps[site],1))#Diagonal(I,size(mps[site],1))
 transfer_matrix_bond(mpo::AbstractMPO, site::Integer, dir::Symbol) = LinearMap(I,size(mpo[site],1))#Diagonal(I,size(mps[site],1))
 
 #transfer_matrix_bond(mps1::AbstractMPS, mps2::AbstractMPS, site::Integer, dir::Symbol) = kron(transfer_matrix_bond(mps1, site, dir), transfer_matrix_bond(mps2, site, dir))
@@ -16,11 +16,11 @@ Base.kron(a::UniformScaling, b::AbstractMatrix) = Diagonal(a, size(b, 1)) * b
 Base.kron(a::AbstractMatrix, b::UniformScaling) = Diagonal(b, size(a, 1)) * a
 # %% Transfer Matrices
 
-_transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s2, :right))
-_transfer_left_mpo(s1::OrthogonalLinkSite, op::MPOsite) = _transfer_left_mpo(GenericSite(s1, :right), op, GenericSite(s1, :right))
-_transfer_left_mpo(s1::OrthogonalLinkSite, s2::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s1, :right), GenericSite(s2, :right))
-_transfer_left_mpo(s::OrthogonalLinkSite) = _transfer_left_mpo(GenericSite(s, :right))
-function _transfer_left_mpo(Γ1::GenericSite, Γ2::GenericSite)
+_transfer_left_mpo(s1::PVSite, op::MPOsite, s2::PVSite) = _transfer_left_mpo(PhysicalSite(s1, :right), op, PhysicalSite(s2, :right))
+_transfer_left_mpo(s1::PVSite, op::MPOsite) = _transfer_left_mpo(PhysicalSite(s1, :right), op, PhysicalSite(s1, :right))
+_transfer_left_mpo(s1::PVSite, s2::PVSite) = _transfer_left_mpo(PhysicalSite(s1, :right), PhysicalSite(s2, :right))
+_transfer_left_mpo(s::PVSite) = _transfer_left_mpo(PhysicalSite(s, :right))
+function _transfer_left_mpo(Γ1::PhysicalSite, Γ2::PhysicalSite)
     dims1 = size(Γ1)
     dims2 = size(Γ2)
     function func(Rout,Rvec)
@@ -37,7 +37,7 @@ function _transfer_left_mpo(Γ1::GenericSite, Γ2::GenericSite)
     end
     return LinearMap{eltype(Γ1)}(func, func_adjoint, dims1[1] * dims2[1], dims1[3] * dims2[3])
 end
-function _transfer_left_mpo(Γ1::GenericSite)
+function _transfer_left_mpo(Γ1::PhysicalSite)
     dims = size(Γ1)
     Γ = data(Γ1)
     function func(Rout,Rvec)
@@ -55,10 +55,10 @@ function _transfer_left_mpo(Γ1::GenericSite)
     return LinearMap{eltype(Γ1)}(func, func_adjoint, dims[1]^2, dims[3]^2)
 end
 
-_transfer_left_mpo(Γ1::GenericSite, mpo::MPOsite) = _transfer_left_mpo(Γ1, mpo, Γ1)
+_transfer_left_mpo(Γ1::PhysicalSite, mpo::MPOsite) = _transfer_left_mpo(Γ1, mpo, Γ1)
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite, Γ2) = data(mpo) * _transfer_left_mpo(Γ1, Γ2)
 _transfer_left_mpo(Γ1, mpo::ScaledIdentityMPOsite) = data(mpo) * _transfer_left_mpo(Γ1)
-function _transfer_left_mpo(Γ1::GenericSite, mpo::MPOsite, Γ2::GenericSite)
+function _transfer_left_mpo(Γ1::PhysicalSite, mpo::MPOsite, Γ2::PhysicalSite)
     dims1 = size(Γ1)
     dims2 = size(Γ2)
     smpo = size(mpo)
@@ -184,32 +184,18 @@ reverse_direction(Γ::Array{<:Number,3}) = permutedims(Γ, [3, 2, 1])
 reverse_direction(Γs::AbstractVector{<:Union{AbstractMPOsite,AbstractSite}}) = reverse(reverse_direction.(Γs))
 
 function _transfer_left_gate(Γ1, gate::AbstractSquareGate, Γ2)
-    # oplength = operatorlength(gate)
-    # Γnew1 = copy(reverse([Γ1...]))
-    # Γnew2 = copy(reverse([Γ2...]))
-    # for k = 1:oplength
-    # 	Γnew1[oplength+1-k] = reverse_direction(Γnew1[oplength+1-k])
-    # 	Γnew2[oplength+1-k] = reverse_direction(Γnew2[oplength+1-k])
-    # 	gate = permutedims(gate,[oplength:-1:1..., 2*oplength:-1:oplength+1...])
-    # end
     Γnew1 = reverse_direction(Γ1)
     Γnew2 = reverse_direction(Γ2)
     return _transfer_right_gate(Γnew1, reverse_direction(gate), Γnew2)
 end
 
 function _transfer_left_gate(Γ, gate::AbstractSquareGate)
-    # oplength = operatorlength(gate)
-    # Γnew = copy(reverse([Γ...]))
     Γnew = reverse_direction(Γ)
-    # for k = 1:oplength
-    # 	# Γnew[oplength+1-k] = reverse_direction(Γnew[oplength+1-k])
-    # 	gate = permutedims(gate,[oplength:-1:1..., 2*oplength:-1:oplength+1...])
-    # end
     return _transfer_right_gate(Γnew, reverse_direction(gate))
 end
-_transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate)
-_transfer_right_gate(Γ1::AbstractVector{<:OrthogonalLinkSite}, gate::GenericSquareGate, Γ2::AbstractVector{<:OrthogonalLinkSite}) = _transfer_right_gate([GenericSite(Γ, :left) for Γ in Γ1], gate, [GenericSite(Γ, :left) for Γ in Γ2])
-function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::GenericSquareGate, Γ2::AbstractVector{GenericSite{T}}) where {T}
+_transfer_right_gate(Γ1::AbstractVector{<:PVSite}, gate::SquareGate) = _transfer_right_gate([PhysicalSite(Γ, :left) for Γ in Γ1], gate)
+_transfer_right_gate(Γ1::AbstractVector{<:PVSite}, gate::SquareGate, Γ2::AbstractVector{<:PVSite}) = _transfer_right_gate([PhysicalSite(Γ, :left) for Γ in Γ1], gate, [PhysicalSite(Γ, :left) for Γ in Γ2])
+function _transfer_right_gate(Γ1::AbstractVector{<:PhysicalSite{T}}, gate::SquareGate, Γ2::AbstractVector{<:PhysicalSite{T}}) where {T}
     op = data(gate)
     oplength = operatorlength(gate)
     @assert length(Γ1) == length(Γ2) == oplength "Error in transfer_right_gate: number of sites does not match gate length"
@@ -236,7 +222,7 @@ function _transfer_right_gate(Γ1::AbstractVector{GenericSite{T}}, gate::Generic
     #TODO Define adjoint
     return LinearMap{T}(T_on_vec, s_final1 * s_final2, s_start1 * s_start2)
 end
-function _transfer_right_gate(Γ::AbstractVector{GenericSite{T}}, gate::GenericSquareGate) where {T}
+function _transfer_right_gate(Γ::AbstractVector{<:PhysicalSite{T}}, gate::SquareGate) where {T}
     op = data(gate)
     oplength = operatorlength(gate)
     @assert length(Γ) == oplength "Error in transfer_right_gate: number of sites does not match gate length"

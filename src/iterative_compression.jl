@@ -58,7 +58,7 @@ function shift_center!(mps, j, dir, SE::SubspaceExpand; mpo, env, kwargs...)
 end
 
 function iterative_compression(target::AbstractMPS, guess::AbstractMPS, prec = 1e-8; maxiter = 50, shifter = ShiftCenter)
-    env = environment(guess, target)
+    env = environments(guess, target)
     # mps = guess
     #    mps = iscanonical(guess) ? guess :  canonicalize(guess)
     mps = canonicalize(guess)
@@ -109,7 +109,7 @@ function sweep(target, mps, env, dir, prec; kwargs...)
         newsite = local_mul(env.L[j], env.R[j], target[j])
         mps[j] = newsite / norm(newsite)
         shift_center!(mps, j, dir, shifter; error = error)
-        update! = dir == :right ? update_left_environment! : update_right_environment!
+        update! = dir == :right ? update_left_environments! : update_right_environments!
         update!(env, j, (mps[j],), (target[j],))
     end
     return mps, env

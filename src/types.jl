@@ -24,11 +24,11 @@ IdentityGate(::Val{N}) where N = ScaledIdentityGate(true, Val(N))
 Base.show(io::IO, g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))
 Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))
 
-struct GenericSquareGate{T,N} <: AbstractSquareGate{T,N}
+struct SquareGate{T,N} <: AbstractSquareGate{T,N}
     data::Array{T,N}
     ishermitian::Bool
     isunitary::Bool
-    function GenericSquareGate(data::AbstractArray{T,N}) where {T,N}
+    function SquareGate(data::AbstractArray{T,N}) where {T,N}
         @assert iseven(N) "Gate should be square"
         sg = size(data)
         l = Int(N / 2)
@@ -42,72 +42,98 @@ abstract type AbstractSite{T,N} <: AbstractArray{T,N} end
 abstract type AbstractPhysicalSite{T} <: AbstractSite{T,3} end
 abstract type AbstractVirtualSite{T} <: AbstractSite{T,2} end
 
-struct LinkSite{T} <: AbstractVirtualSite{T}
-    Λ::Diagonal{T,Vector{T}}
+struct VirtualSite{T,S<:AbstractArray{T,2}} <: AbstractVirtualSite{T}
+    Λ::S
 end
-LinkSite(v::Vector) = LinkSite(Diagonal(v))
-struct VirtualSite{T} <: AbstractVirtualSite{T}
-    Λ::Matrix{T}
-end
-struct GenericSite{T} <: AbstractPhysicalSite{T}
-    Γ::Array{T,3}
+VirtualSite(site::S) where S = VirtualSite{eltype(S),S}(site)
+const LinkSite{T} = VirtualSite{T,Diagonal{T,Vector{T}}}
+LinkSite(v::Vector) = VirtualSite(Diagonal(v))
+LinkSite(v::Diagonal) = VirtualSite(v)
+
+
+struct PhysicalSite{T,S<:AbstractArray{T,3}} <: AbstractPhysicalSite{T}
+    Γ::S
     purification::Bool
 end
+PhysicalSite(site::S,pur::Bool = false) where S = PhysicalSite{eltype(S),S}(site,pur)
+const DensePSite{T} = PhysicalSite{T,Array{T,3}}
 
-struct OrthogonalLinkSite{T, C, V} <: AbstractPhysicalSite{T}
-    Γ::C
+Base.promote_rule(::Type{VirtualSite{T1,S1}}, ::Type{VirtualSite{T2,S2}}) where {T1,T2,S1,S2} =
+    VirtualSite{promote_type(T1,T2),promote_type(S1,S2)}
+Base.promote_rule(::Type{PhysicalSite{T1,S1}}, ::Type{PhysicalSite{T2,S2}}) where {T1,T2,S1,S2} =
+    PhysicalSite{promote_type(T1,T2),promote_type(S1,S2)}
+
+abstract type AbstractPVSite{T,P,V} <: AbstractPhysicalSite{T} end
+
+struct PVSite{T, P, V} <: AbstractPVSite{T,P,V}
+    Γ::P
     Λ1::V
     Λ2::V
-    function OrthogonalLinkSite(Λ1::V, Γ::C, Λ2::V; check = false) where {C<:AbstractPhysicalSite,V<:AbstractVirtualSite}
-        T = promote_type(eltype(V),eltype(C))
+    function PVSite(Λ1::V1, Γ::P, Λ2::V2; check = false) where {P<:AbstractPhysicalSite,V1<:AbstractVirtualSite,V2<:AbstractVirtualSite}
+        T = promote_type(eltype(V1),eltype(V2),eltype(P))
+        V = promote_type(V1,V2)
         if check
             @assert isleftcanonical(Λ1 * Γ) "Error in constructing OrthogonalLinkSite: Is not left canonical"
             @assert isrightcanonical(Γ * Λ2) "Error in constructing OrthogonalLinkSite: Is not right canonical"
             @assert norm(Λ1) ≈ 1
             @assert norm(Λ2) ≈ 1
         end
-        new{T,C,V}(Γ, Λ1, Λ2)
+        new{T,P,V}(Γ, Λ1, Λ2)
     end
 end
 
-# struct OrthogonalLinkSite{T} <: AbstractPhysicalSite{T}
-#     Γ::GenericSite{T}
-#     Λ1::LinkSite{T}
-#     Λ2::LinkSite{T}
-#     function OrthogonalLinkSite(Λ1::LinkSite, Γ::GenericSite{T}, Λ2::LinkSite; check = false) where {T}
-#         if check
-#             @assert isleftcanonical(Λ1 * Γ) "Error in constructing OrthogonalLinkSite: Is not left canonical"
-#             @assert isrightcanonical(Γ * Λ2) "Error in constructing OrthogonalLinkSite: Is not right canonical"
-#             @assert norm(Λ1) ≈ 1
-#             @assert norm(Λ2) ≈ 1
-#         end
-#         new{T}(Γ, Λ1, Λ2)
-#     end
-# end
+Base.convert(::Type{PhysicalSite{T,S}}, s::PhysicalSite) where {T,S} = PhysicalSite(S(s.Γ),s.purification)
 
-abstract type AbstractMPS{T<:AbstractPhysicalSite} <: AbstractVector{T} end
+const DensePVSite{T} = PVSite{T,DensePSite{T},LinkSite{T}}
+PhysicalSite(site::PVSite) = site.Γ
+function VirtualSite(site::PVSite,dir)
+    if dir == :left
+        return site.Λ1
+    else
+        @assert dir == :right
+        return site.Λ2
+    end
+end
+function PhysicalSite(site::PVSite, dir)
+    if dir == :left
+        return site.Λ1 * site.Γ
+    elseif dir == :right
+        return site.Γ * site.Λ2
+    end
+end
+function ΓΛ(sites::Vector{<:PVSite})
+    Γ = [PhysicalSite(site) for site in sites]
+    Λ = [VirtualSite(site,:left) for site in sites]
+    push!(Λ,VirtualSite(sites[end],:right))
+    return Γ, Λ
+end
 
-mutable struct OpenMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
+abstract type AbstractMPS{P<:AbstractPhysicalSite} <: AbstractVector{P} end
+abstract type AbstractPVMPS{PV<:AbstractPVSite} <: AbstractMPS{PV} end
+abstract type AbstractPMPS{P<:AbstractPhysicalSite} <: AbstractMPS{P} end
+
+mutable struct OpenPVMPS{T,P,V} <: AbstractPVMPS{PVSite{T}}
     #In gamma-lambda notation
-    Γ::Vector{GenericSite{T}}
-    Λ::Vector{LinkSite{T}}
+    Γ::Vector{P}
+    Λ::Vector{V}
 
     # Max bond dimension and tolerance
     truncation::TruncationArgs
 
     #Accumulated error
     error::Float64
-    function OpenMPS(
-        Γ::Vector{GenericSite{T}},
-        Λ::Vector{LinkSite{T}};
-        truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION, error = 0.0) where {T}
-        new{T}(Γ, Λ, truncation, error)
+    function OpenPVMPS(
+        Γ::Vector{P},
+        Λ::Vector{V};
+        truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION, error = 0.0) where {P,V}
+        @assert length(Γ) + 1 == length(Λ)
+        new{promote_type(eltype(P),eltype(V)),P,V}(Γ, Λ, truncation, error)
     end
 end
 
 
-mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
-    Γ::Vector{GenericSite{T}}
+mutable struct OpenPMPS{T,P} <: AbstractPMPS{P}
+    Γ::Vector{P}
 
     # Max bond dimension and tolerance
     truncation::TruncationArgs
@@ -116,11 +142,11 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
     error::Float64
 
     center::Int
-    function LCROpenMPS{T}(
-        Γ::Vector{GenericSite{K}};
+    function OpenPMPS{T,P}(
+        Γ::Vector{<:AbstractPhysicalSite};
         truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
         error = 0.0
-    ) where {K,T}
+    ) where {P,T}
         count = 1
         N = length(Γ)
         while count < N + 1 && isleftcanonical(data(Γ[count]))
@@ -137,42 +163,37 @@ mutable struct LCROpenMPS{T} <: AbstractMPS{GenericSite{T}}
             count += 1
         end
         @assert count == N + 1 "LCROpenMPS is not LR canonical. $count != $(N+1)"
-        new{T}(Γ, truncation, error, center)
+        new{T,P}(Γ, truncation, error, center)
     end
 end
-function LCROpenMPS(
-    Γ::Vector{GenericSite{K}};
+function OpenPMPS(
+    Γ::Vector{P};
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
     error = 0.0
-) where {K}
-    LCROpenMPS{K}(Γ; truncation = truncation, error = error)
+) where {P}
+    OpenPMPS{eltype(P),P}(Γ, truncation = truncation,error = error)
 end
-mutable struct UMPS{T} <: AbstractMPS{OrthogonalLinkSite{T}}
+# function LCROpenMPS(
+#     Γ::Vector{PhysicalSite{K}};
+#     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
+#     error = 0.0
+# ) where {K}
+#     LCROpenMPS{K}(Γ; truncation = truncation, error = error)
+# end
+mutable struct UMPS{T,P,V} <: AbstractPVMPS{PVSite{T,P,V}}
     #In gamma-lambda notation
-    Γ::Vector{GenericSite{T}}
-    Λ::Vector{LinkSite{T}}
+    Γ::Vector{P}
+    Λ::Vector{V}
 
     # Max bond dimension and tolerance
     truncation::TruncationArgs
 
     # Accumulated error
     error::Float64
-end
-
-mutable struct CentralUMPS{T} <: AbstractMPS{GenericSite{T}}
-    #In gamma-lambda notation
-    ΓL::Vector{GenericSite{T}}
-    ΓR::Vector{GenericSite{T}}
-    Λ::Vector{T}
-
-    #Indicates whether the MPS should be treated as a purification or not
-    purification::Bool
-
-    # Max bond dimension and tolerance
-    truncation::TruncationArgs
-
-    # Accumulated error
-    error::Float64
+    function UMPS(Γ::Vector{P}, Λ::Vector{V}; truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION, error = 0.0) where {P,V}
+        T = promote_type(eltype(P),eltype(V))
+        new{T,P,V}(Γ, Λ, truncation, error)
+    end
 end
 
 # numtype(::LCROpenMPS{T}) where {T} = T
@@ -181,40 +202,15 @@ end
 # numtype(::OpenMPS{T}) where {T} = T
 numtype(ms::Vararg{AbstractVector{<:AbstractSite},<:Any}) = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
-sites(mps::LCROpenMPS) = mps.Γ
+sites(mps::OpenPMPS) = mps.Γ
 sites(mps::UMPS) = mps.Γ
-sites(mps::CentralUMPS) = mps.Γ
-sites(mps::OpenMPS) = mps.Γ
+#sites(mps::CentralUMPS) = mps.Γ
+#sites(mps::OpenPVMPS) = mps.Γ
 
 abstract type BoundaryCondition end
 struct OpenBoundary <: BoundaryCondition end
 struct InfiniteBoundary <: BoundaryCondition end
 boundaryconditions(::T) where {T<:AbstractMPS} = boundaryconditions(T)
-boundaryconditions(::Type{<:OpenMPS}) = OpenBoundary()
-boundaryconditions(::Type{<:LCROpenMPS}) = OpenBoundary()
+boundaryconditions(::Type{<:OpenPVMPS}) = OpenBoundary()
+boundaryconditions(::Type{<:OpenPMPS}) = OpenBoundary()
 boundaryconditions(::Type{<:UMPS}) = InfiniteBoundary()
-# mutable struct LROpenMPS{T<:Number} <: AbstractOpenMPS
-#     Γ::Vector{AbstractOrthogonalSite}
-#     Λ::LinkSite{T}
-
-#     # Max bond dimension and tolerance
-#     truncation::TruncationArgs
-
-#     #Accumulated error
-#     error::Float64
-
-#     #Orthogonality boundaries
-#     center::Int
-
-#     function LROpenMPS(
-#         Γ::Vector{AbstractOrthogonalSite},
-#         Λ::LinkSite{T};
-#         truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
-#         center=1, error=0.0,
-#     ) where {T}
-#         N = length(Γ)
-#         @assert 0<center<=N+1 "Error in constructing LROpenMPS: center is not in the chain"
-#         @assert norm(data(Λ)) ≈ 1 "Error in constructing LROpenMPS: Singular values not normalized"
-#         new{T}(Γ, Λ, truncation, error, center)
-#     end
-# end

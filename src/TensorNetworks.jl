@@ -18,9 +18,9 @@ using Tullio
 
 
 export TruncationArgs, identityMPS, MPOsite, MPO,
-OpenMPS, randomOpenMPS, identityOpenMPS,
-LCROpenMPS, randomLCROpenMPS, identityLCROpenMPS,
-UMPS, randomUMPS, identityUMPS, transfer_spectrum, boundary, productUMPS,
+OpenPVMPS, randomOpenPVMPS, identityOpenMPS,
+OpenPMPS, randomDenseOpenPMPS, identityLCROpenMPS,
+UMPS, randomDenseUMPS, identityUMPS, transfer_spectrum, boundary, productUMPS,
 canonicalize, canonicalize!, iscanonical,
 expectation_value, expectation_values, correlator, connected_correlator, matrix_element,
 transfer_matrix, transfer_matrices,
@@ -29,15 +29,16 @@ DMRG, eigenstates,
 isingHamBlocks, isingHamGates, IdentityMPO, IsingMPO, HeisenbergMPO,
 get_thermal_states, TEBD!, apply_layers_nonunitary, apply_layer_nonunitary!, apply_two_site_gate,
 sx, sy, sz, si, s0, ZZ, ZI, IZ, XI, IX,YI,IY, XY, YX, II, Sx, Sy, Sz, XZ,ZX,ZY,YZ,
-OrthogonalLinkSite, GenericSite, VirtualSite, LinkSite,
-GenericSquareGate, AbstractSquareGate, AbstractGate, Gate,
+PVSite, PhysicalSite, VirtualSite, LinkSite,
+SquareGate, AbstractSquareGate, AbstractGate, Gate,
 isleftcanonical, isrightcanonical, data, isunitary,
 scalar_product, set_center, set_center!, entanglement_entropy,
 entanglement_entropy, IdentityGate, data, compress, qubit,
-randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, randomGenericSite,
-IdentityMPOsite, environment, update_environment!,
+randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, randomDensePhysicalSite,
+IdentityMPOsite, environments, update_environments!,
 ShiftCenter, SubspaceExpand, getindex, setindex!, kron, repeatedgate, *, +, vec,
-majorana_coefficients, majorana_measurements
+majorana_coefficients, majorana_measurements,
+IdentityQN, ZQuantumNumber, ParityQN, CovariantTensor, SymmetricTensor, fuse,invert
 
 include("types.jl")
 include("pauli.jl")

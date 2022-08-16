@@ -3,16 +3,16 @@ const DEFAULT_UMPS_TOL = 1e-12
 const DEFAULT_UMPS_NORMALIZATION = true
 const DEFAULT_UMPS_TRUNCATION = TruncationArgs(DEFAULT_UMPS_DMAX, DEFAULT_UMPS_TOL, DEFAULT_UMPS_NORMALIZATION)
 isinfinite(::UMPS) = true
-Base.eltype(::Type{UMPS}) = OrthogonalLinkSite
+Base.eltype(::Type{UMPS}) = PVSite
 
 function Base.getindex(mps::UMPS, i::Integer)
     i1 = mod1(i, length(mps))
     i2 = mod1(i + 1, length(mps))
-    return OrthogonalLinkSite(mps.Γ[i1], mps.Λ[i1], mps.Λ[i2])
+    return PVSite(mps.Λ[i1],mps.Γ[i1],mps.Λ[i2])
 end
 Base.getindex(mps::UMPS, I) = [mps[i] for i in I]
 
-function Base.setindex!(mps::UMPS, v::OrthogonalLinkSite, i::Integer)
+function Base.setindex!(mps::UMPS, v::PVSite, i::Integer)
     i1 = mod1(i, length(mps))
     i2 = mod1(i + 1, length(mps))
     mps.Γ[i1] = v.Γ
@@ -21,54 +21,31 @@ function Base.setindex!(mps::UMPS, v::OrthogonalLinkSite, i::Integer)
     return v
 end
 
-
-# %% Constructors
-function UMPS(Γ::Vector{Array{T,3}}, Λ::Vector{Vector{K}}; truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION, error = 0.0, purification = false) where {T,K}
-    UMPS{T}(GenericSite.(Γ, purification), LinkSite.(Λ), truncation, error)
-end
-function UMPS(Γ::Vector{<:GenericSite}, Λ::Vector{<:LinkSite}; truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION, error = 0.0)
-    UMPS{eltype(data(Γ[1]))}(Γ, Λ, truncation, error)
+function UMPS(Γ::Vector{P}, Λ::Vector{V}, mps::UMPS; error = 0) where {P<:AbstractPhysicalSite,V<:AbstractVirtualSite}
+    # T = promote_type(eltype(P),eltype(V))
+    return UMPS(Γ, Λ, truncation = mps.truncation, error = mps.error + error)
 end
 
-function UMPS(Γ::Vector{<:GenericSite}, Λ::Vector{<:LinkSite}, mps::UMPS; error = 0)
-    return UMPS{eltype(data(Γ[1]))}(Γ, Λ, mps.truncation, mps.error + error)
-end
+# function UMPS(Γ::Vector{Array{T,3}}, mps::UMPS; error = 0) where {T}
+#     Λ = LinkSite.([ones(T, size(γ, 1)) / sqrt(size(γ, 1)) for γ in Γ])
+#     return UMPS(PhysicalSite.(Γ, ispurification(mps)), Λ, truncation = mps.truncation, error = mps.error + error)
+# end
 
-function UMPS(Γ::Vector{Array{T,3}}, mps::UMPS; error = 0) where {T}
-    Λ = LinkSite.([ones(T, size(γ, 1)) / sqrt(size(γ, 1)) for γ in Γ])
-    return UMPS(GenericSite.(Γ, ispurification(mps)), Λ, truncation = mps.truncation, error = mps.error + error)
-end
-
-function UMPS(sites::Vector{OrthogonalLinkSite{T}}; truncation, error = 0.0) where {T}
+function UMPS(sites::Vector{<:AbstractPVSite}; truncation, error = 0.0)
     Γ, Λ = ΓΛ(sites)
     UMPS(Γ, Λ[1:end-1], truncation = truncation, error = error)
 end
 
-# """
-# 	convert(Type{UMPS{T}}, mps::UMPS)
-
-# Convert `mps` to an UMPS{T} and return the result
-# """
-# function Base.convert(::Type{UMPS{T}}, mps::UMPS) where {T}
-# 	return UMPS(map(g-> convert.(T,g),mps.Γ), map(λ-> Base.convert.(T,λ), mps.Λ), mps)
-# end
-# function Base.convert(::Type{UMPS{T}}, mps::UMPS{T}) where {T}
-# 	return mps
-# end
 
 """
 	randomUMPS(T::DataType, N, d, D; purification=false, truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION)
 
 Return a random UMPS{T}
 """
-function randomUMPS(T::DataType, N, d, D; purification = false, truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION)
-    Γ = Array{Array{T,3},1}(undef, N)
-    Λ = Array{Array{T,1},1}(undef, N)
-    for i in 1:N
-        Γ[i] = rand(T, D, d, D)
-        Λ[i] = ones(T, D)
-    end
-    mps = UMPS(Γ, Λ, purification = purification, truncation = truncation)
+function randomDenseUMPS(T::DataType, N, d, D; purification = false, truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION)
+    Γ = [DensePSite{T}(rand(T, D, d, D),purification) for k in 1:N]
+    Λ = [LinkSite(ones(T, D)) for k in 1:N]
+    mps = UMPS(Γ, Λ, truncation = truncation, error = 0.0)
     return mps
 end
 
@@ -78,13 +55,15 @@ end
 Return the UMPS corresponding to the identity density matrix
 """
 function identityUMPS(N, d; T = ComplexF64, truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION)
-    Γ = Vector{Array{T,3}}(undef, N)
-    Λ = Vector{Vector{T}}(undef, N)
-    for i in 1:N
-        Γ[i] = reshape(Matrix{T}(I, d, d) / sqrt(d), 1, d^2, 1)
-        Λ[i] = ones(T, 1)
-    end
-    mps = UMPS(Γ, Λ, purification = true, truncation = truncation)
+    # Γ = Vector{Array{T,3}}(undef, N)
+    # Λ = Vector{Vector{T}}(undef, N)
+    # for i in 1:N
+    #     Γ[i] = reshape(Matrix{T}(I, d, d) / sqrt(d), 1, d^2, 1)
+    #     Λ[i] = ones(T, 1)
+    # end
+    Γ = [DensePSite{T}(reshape(Matrix{T}(I, d, d) / sqrt(d), 1, d^2, 1),true) for k in 1:N]
+    Λ = [LinkSite(ones(T, 1)) for k in 1:N]
+    mps = UMPS(Γ, Λ, truncation = truncation)
     return mps
 end
 function identityMPS(mps::UMPS{T}) where {T}
@@ -98,12 +77,12 @@ function identityMPS(mps::UMPS{T}) where {T}
 end
 
 function productUMPS(theta, phi)
-    Γ = [reshape([cos(theta), exp(phi * im) * sin(theta)], (1, 2, 1))]
-    Λ = [[ComplexF64(1.0)]]
-    return UMPS(Γ, Λ, purification = false)
+    Γ = [PhysicalSite(reshape([cos(theta), exp(phi * im) * sin(theta)], (1, 2, 1)),false)]
+    Λ = [LinkSite([ComplexF64(1.0)])]
+    return UMPS(Γ, Λ)
 end
 
-Base.copy(mps::UMPS{T}) where {T} = UMPS{T}([copy(getfield(mps, k)) for k = 1:length(fieldnames(UMPS))]...)
+Base.copy(mps::UMPS) = UMPS(copy(mps.Γ),copy(mps.Λ),mps)
 
 # """
 # 	reverse_direction(mps::UMPS)

@@ -1,5 +1,5 @@
 Base.IndexStyle(::Type{<:AbstractMPS}) = IndexLinear()
-Base.size(mps::AbstractMPS) = size(sites(mps))
+Base.size(mps::AbstractMPS) = size(mps.Γ)
 
 ispurification(mps::AbstractMPS) = ispurification(mps[1])
 
@@ -92,7 +92,7 @@ function apply_local_op(mps, op)
     end
     for n in 1:N
         @tensor temp[:] := data(mps.Γ[n])[-1, 2, -3] * data(op)[-2, 2] #TODO Replace by Tullio or matrix mult?
-        mpsout.Γ[n] = GenericSite(temp, ispurification(mps.Γ[n]))
+        mpsout.Γ[n] = PhysicalSite(temp, ispurification(mps.Γ[n]))
     end
     return mpsout
 end

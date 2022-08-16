@@ -45,12 +45,12 @@ end
 
 boundaryvec(args...) = copy(vec(boundary(args...)))
 
-function expectation_value(mps::AbstractMPS{GenericSite}, op, site::Integer)
+function expectation_value(mps::AbstractPMPS{PhysicalSite}, op, site::Integer)
     mps = set_center(mps, site)
     return expectation_value(mps, op, site, iscanonical = true)
 end
 
-function apply_identity_layer(::OpenBoundary, mpsin::AbstractMPS{GenericSite}; kwargs...)
+function apply_identity_layer(::OpenBoundary, mpsin::AbstractMPS{PhysicalSite}; kwargs...)
     truncation = get(kwargs, :truncation, mpsin.truncation)
     mps = set_center(mpsin, 1)
     for k in 1:length(mps)-1
@@ -63,7 +63,7 @@ function apply_identity_layer(::OpenBoundary, mpsin::AbstractMPS{GenericSite}; k
     return mps
 end
 
-function entanglement_entropy(mpsin::AbstractMPS{GenericSite}, link::Integer)
+function entanglement_entropy(mpsin::AbstractMPS{PhysicalSite}, link::Integer)
     N = length(mpsin)
     @assert 0 < link < N
     mps = set_center(mpsin, link)

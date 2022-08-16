@@ -49,16 +49,16 @@ end
 
 
 function isleftcanonical(data)
-    s = size(data)
-    m = reshape(data, s[1] * s[2], s[3])
-    id = m' * m
-    #@tensor id[:] := conj(data[1,2,-1])*data[1,2,-2]
-    return id ≈ one(id)
+    # s = size(data)
+    # m = reshape(data, s[1] * s[2], s[3])
+    # id = m' * m
+    @tensor id[:] := conj(data[1,2,-1])*data[1,2,-2]
+    return Array(id) ≈ one(id)
 end
 function isrightcanonical(data)
-    s = size(data)
-    m = reshape(data, s[1], s[2] * s[3])
-    id = m * m'
-    #@tensor id[:] := conj(data[-1,2,1])*data[-2,2,1]
-    return id ≈ one(id)
+    # s = size(data)
+    # m = reshape(data, s[1], s[2] * s[3])
+    # id = m * m'
+    @tensor id[:] := conj(data[-1,2,1])*data[-2,2,1]
+    return Array(id) ≈ one(id)
 end

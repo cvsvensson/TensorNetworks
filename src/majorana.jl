@@ -51,10 +51,10 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     Tbonds = [TensorNetworks.transfer_matrix_bond((mps,), (mps2,), k, :left) for k in 1:N]
     Tbonds0 = [TensorNetworks.transfer_matrix_bond((mps,),(mps,), k, :left) for k in 1:N]
     JW = JWop(nmaj)
-    JWenv = environment((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
+    JWenv = environments((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
     #JWenv0 = environment(mps, MPO(fill(MPOsite(JW), N)))
-    env0 = environment((mps,),(mps,))
-    env = environment((mps,), (mps2,))
+    env0 = environments((mps,),(mps,))
+    env = environments((mps,), (mps2,))
     rightvec = [vec(env.R[k]) for k in 1:N]
     leftvec = [transpose(Tbonds[k] * vec(JWenv.L[k])) for k in 1:N]#vec(Matrix{T}(I,size(mps[k],1),size(mps[k],1))))
     leftvec0 = [transpose(Tbonds0[k] * vec(env0.L[k])) for k in 1:N]
@@ -199,8 +199,8 @@ function one_body_noninteracting_majorana_coefficients(mps::TensorNetworks.Abstr
     nmaj = size(mps[1],2)
     Tbonds = [TensorNetworks.transfer_matrix_bond((mps,), (mps2,), k, :left) for k in 1:N]
     JW = JWop(nmaj)
-    JWenv = environment((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
-    env = environment((mps,), (mps2,))
+    JWenv = environments((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
+    env = environments((mps,), (mps2,))
     rightvec = [vec(env.R[k]) for k in 1:N]
     leftvec = [transpose(Tbonds[k] * vec(JWenv.L[k])) for k in 1:N]#vec(Matrix{T}(I,size(mps[k],1),size(mps[k],1))))
     result1::Array{complex(T),2} = zeros(complex(T), N, nmaj)

@@ -29,7 +29,7 @@ function TEBD!(mps::AbstractMPS, ham; total_time, steps, increment, observables,
 end
 
 
-function apply_layer(sites::AbstractVector{<:OrthogonalLinkSite}, gates, parity, truncation; isperiodic = false)
+function apply_layer(sites::AbstractVector{<:PVSite}, gates, parity, truncation; isperiodic = false)
     N = length(sites)
     if isodd(N)
         @error "Cell size should be even to be consistent with trotter decomposition"
@@ -53,9 +53,9 @@ function apply_layer(sites::AbstractVector{<:OrthogonalLinkSite}, gates, parity,
     return newsites, total_error[]
 end
 
-apply_identity_layer(sites::AbstractVector{<:OrthogonalLinkSite}, parity, truncation; kwargs...) = apply_layer(sites, [IdentityGate(Val(2)) for k in 1:length(sites)], parity, truncation; kwargs...)
+apply_identity_layer(sites::AbstractVector{<:PVSite}, parity, truncation; kwargs...) = apply_layer(sites, [IdentityGate(Val(2)) for k in 1:length(sites)], parity, truncation; kwargs...)
 
-function apply_layer!(sites::AbstractVector{<:OrthogonalLinkSite}, gates, parity, truncation; isperiodic = false)
+function apply_layer!(sites::AbstractVector{<:PVSite}, gates, parity, truncation; isperiodic = false)
     N = length(sites)
     if isodd(N)
         @error "Cell size should be even to be consistent with trotter decomposition"
@@ -73,7 +73,7 @@ function apply_layer!(sites::AbstractVector{<:OrthogonalLinkSite}, gates, parity
     return sites, total_error[]
 end
 
-function apply_layer_nonunitary!(sites::AbstractVector{<:OrthogonalLinkSite}, gates, parity, dir, truncation; isperiodic = false)
+function apply_layer_nonunitary!(sites::AbstractVector{<:PVSite}, gates, parity, dir, truncation; isperiodic = false)
     N = length(sites)
     if isodd(N)
         @error "Cell size should be even to be consistent with trotter decomposition"
@@ -107,7 +107,7 @@ end
 
 Modify the mps by acting with the nonunitary layers of gates
 """
-function apply_layers_nonunitary(sitesin::AbstractVector{<:OrthogonalLinkSite}, layers, truncation; isperiodic = false)
+function apply_layers_nonunitary(sitesin::AbstractVector{<:PVSite}, layers, truncation; isperiodic = false)
     total_error = 0.0
     sites = copy(sitesin)
     for n = 1:length(layers)
@@ -118,7 +118,7 @@ function apply_layers_nonunitary(sitesin::AbstractVector{<:OrthogonalLinkSite}, 
     return sites, total_error
 end
 
-function apply_layers(sitesin::AbstractVector{<:OrthogonalLinkSite}, layers, truncation; isperiodic = false)
+function apply_layers(sitesin::AbstractVector{<:PVSite}, layers, truncation; isperiodic = false)
     total_error = 0.0
     sites = copy(sitesin)
     for n = 1:length(layers)
@@ -127,7 +127,7 @@ function apply_layers(sitesin::AbstractVector{<:OrthogonalLinkSite}, layers, tru
     end
     return sites, total_error
 end
-function apply_layers!(sites::AbstractVector{<:OrthogonalLinkSite}, layers, truncation; isperiodic = false)
+function apply_layers!(sites::AbstractVector{<:PVSite}, layers, truncation; isperiodic = false)
     total_error = 0.0
     for n = 1:length(layers)
         _, error = apply_layer!(sites, layers[n], n, truncation, isperiodic = isperiodic)

@@ -65,22 +65,22 @@ function Base.setindex!(mps::MPSSum, v::SiteSum, i::Integer)
     return v
 end
 
-function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum})
+function _transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::SquareGate, Γ2::Vector{<:SiteSum})
     #FIXME Might screw up type stability, so might need a TransferMatrix struct?
     N1 = length(Γ1[1])
     N2 = length(Γ2[1])
     Ts = [_transfer_right_gate(getindex.(Γ1, n1), gate, getindex.(Γ2, n2)) for n1 in 1:N1, n2 in 1:N2]
     return blockdiagonal(Ts) #LinearMaps.blockdiag(Ts...) #_apply_transfer_matrices(Ts)
 end
-_transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::GenericSquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
-_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate, Γ2::Vector{<:AbstractSite}) = _transfer_right_gate(Γ1, gate, SiteSum.(Γ2))
-_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::GenericSquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
+_transfer_right_gate(Γ1::Vector{<:AbstractSite}, gate::SquareGate, Γ2::Vector{<:SiteSum}) = _transfer_right_gate(SiteSum.(Γ1), gate, Γ2)
+_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::SquareGate, Γ2::Vector{<:AbstractSite}) = _transfer_right_gate(Γ1, gate, SiteSum.(Γ2))
+_transfer_right_gate(Γ1::Vector{<:SiteSum}, gate::SquareGate) = _transfer_right_gate(Γ1, gate, Γ1)
 
 
-_transfer_left_mpo(Γ1::GenericSite, op, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), op, Γ2)
-_transfer_left_mpo(Γ1::SiteSum, op, Γ2::GenericSite) = _transfer_left_mpo(Γ1, op, SiteSum(Γ2))
-_transfer_left_mpo(Γ1::GenericSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
-_transfer_left_mpo(Γ1::SiteSum, Γ2::GenericSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
+_transfer_left_mpo(Γ1::PhysicalSite, op, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), op, Γ2)
+_transfer_left_mpo(Γ1::SiteSum, op, Γ2::PhysicalSite) = _transfer_left_mpo(Γ1, op, SiteSum(Γ2))
+_transfer_left_mpo(Γ1::PhysicalSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
+_transfer_left_mpo(Γ1::SiteSum, Γ2::PhysicalSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
 _transfer_left_mpo(Γ1::SiteSum, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
 function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
     N1 = length(Γ1)
@@ -168,17 +168,17 @@ function boundary(::OpenBoundary, mps::MPSSum, side::Symbol)
         return mps.scalings
     end
 end
-transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:GenericSite,<:Any}}, site::Integer, dir::Symbol) = I
+transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:PhysicalSite,<:Any}}, site::Integer, dir::Symbol) = I
 
 
-function dense(mpss::MPSSum{LCROpenMPS{T},<:Any}) where {T}
+function dense(mpss::MPSSum{MPS,<:Any,T}) where {MPS<:OpenPMPS,T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return LCROpenMPS{T}(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(getproperty.(mpss.states, :error)))
+    return MPS(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(getproperty.(mpss.states, :error)))
 end
 
-function dense(sitesum::SiteSum{<:GenericSite,T}) where {T}
+function dense(sitesum::SiteSum{<:PhysicalSite,T}) where {T}
     sizes = size.(sitesum.sites)
     d = sizes[1][2] #Maybe check that all sites have the same physical dim?
     DL = sum([s[1] for s in sizes])
@@ -193,27 +193,27 @@ function dense(sitesum::SiteSum{<:GenericSite,T}) where {T}
         lastL = nextL
         lastR = nextR
     end
-    return GenericSite(newsite, ispurification(sitesum))
+    return PhysicalSite(newsite, ispurification(sitesum))
 end
 
-function dense(sitesum::SiteSum{<:OrthogonalLinkSite,T}) where {T}
+function dense(sitesum::SiteSum{<:PVSite,T}) where {T}
     Γ = dense(SiteSum(getproperty.(sitesum.sites, :Γ)))
     Λ1s = getproperty.(sitesum.sites, :Λ1)
     Λ2s = getproperty.(sitesum.sites, :Λ2)
     Λ1 = LinkSite(reduce(vcat, vec.(Λ1s)))
     Λ2 = LinkSite(reduce(vcat, vec.(Λ2s)))
-    return OrthogonalLinkSite(Λ1, Γ, Λ2)
+    return PVSite(Λ1, Γ, Λ2)
 end
 
-function dense(mpss::MPSSum{OpenMPS{T},<:Any}) where {T}
-    lcrsum = MPSSum(LCROpenMPS.(mpss.states), mpss.scalings)
+function dense(mpss::MPSSum{<:OpenPVMPS,<:Any})
+    lcrsum = MPSSum(OpenPMPS.(mpss.states), mpss.scalings)
     denselcr = dense(lcrsum)
-    OpenMPS(denselcr)
+    OpenPVMPS(denselcr)
 end
 
 Base.vec(site::LinkSite) = vec(diag(data(site)))
 
-function transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:OrthogonalLinkSite,<:Any}}, site::Integer, dir::Symbol)
+function transfer_matrix_bond(mps::AbstractVector{<:SiteSum{<:PVSite,<:Any}}, site::Integer, dir::Symbol)
     Λ1s = getproperty.(mps[site].sites, :Λ1)
     return LinkSite(reduce(vcat, vec.(Λ1s)))
 end

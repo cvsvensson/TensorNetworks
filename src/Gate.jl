@@ -3,20 +3,20 @@ Base.getindex(g::AbstractGate{T,N}, I::Vararg{Int,N}) where {T,N} = getindex(g.d
 # Base.setindex!(g::AbstractGate{T,N}, v, I::Vararg{Int,N}) where {T,N} = setindex!(g.data, v, I...)
 #Base.length(::AbstractSquareGate{T,N}) where {T,N} = div(N,2)
 operatorlength(::AbstractSquareGate{T,N}) where {T,N} = div(N, 2)
-LinearAlgebra.ishermitian(gate::GenericSquareGate) = gate.ishermitian
+LinearAlgebra.ishermitian(gate::SquareGate) = gate.ishermitian
 LinearAlgebra.ishermitian(gate::ScaledIdentityGate) = gate.ishermitian
-isunitary(gate::GenericSquareGate) = gate.isunitary
+isunitary(gate::SquareGate) = gate.isunitary
 isunitary(mat::AbstractArray{<:Number,2}) = mat' * mat ≈ one(mat) && mat * mat' ≈ one(mat)
-Base.complex(::Type{<:GenericSquareGate{T,N}}) where {T,N} = GenericSquareGate{complex(T),N}
+Base.complex(::Type{<:SquareGate{T,N}}) where {T,N} = SquareGate{complex(T),N}
 
 Base.:*(x::K, g::ScaledIdentityGate{T,N}) where {T,N,K<:Number} = ScaledIdentityGate(x * data(g), Val(div(N, 2)))
 Base.:*(g::ScaledIdentityGate, x::K) where {K<:Number} = x * g
-Base.:*(x::K, g::GenericSquareGate) where {K<:Number} = GenericSquareGate(x * data(g))
-Base.:*(g::GenericSquareGate, x::K) where {K<:Number} = GenericSquareGate(x * data(g))
-Base.:/(g::GenericSquareGate, x::K) where {K<:Number} = inv(x) * g
+Base.:*(x::K, g::SquareGate) where {K<:Number} = SquareGate(x * data(g))
+Base.:*(g::SquareGate, x::K) where {K<:Number} = SquareGate(x * data(g))
+Base.:/(g::SquareGate, x::K) where {K<:Number} = inv(x) * g
 Base.:/(g::ScaledIdentityGate, x::K) where {K<:Number} = inv(x) * g
 
-function Base.:*(g1::GenericSquareGate{<:Any,N}, g2::GenericSquareGate{<:Any,N}) where {N}
+function Base.:*(g1::SquareGate{<:Any,N}, g2::SquareGate{<:Any,N}) where {N}
     Gate(gate(Matrix(g1) * Matrix(g2), Val(Int(N / 2))))
 end
 Base.:*(g1::AbstractSquareGate{<:Any,N}, g2::ScaledIdentityGate{<:Any,N}) where {N} = g1 * data(g2)
@@ -48,51 +48,51 @@ function repeatedgate(g::AbstractSquareGate, n)
     return gout
 end
 
-function reverse_direction(g::GenericSquareGate{<:Any,N}) where {N}
+function reverse_direction(g::SquareGate{<:Any,N}) where {N}
     L = operatorlength(g)
     perm = [L:-1:1; 2*L:-1:L+1]
     permutedims(g, perm)
 end
 
-Base.:+(g1::GenericSquareGate{K,N}, g2::GenericSquareGate{T,N}) where {T,K,N} = GenericSquareGate(data(g1) + data(g2))
+Base.:+(g1::SquareGate{K,N}, g2::SquareGate{T,N}) where {T,K,N} = SquareGate(data(g1) + data(g2))
 Base.:+(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1) + data(g2), Val(operatorlength(g1)))
-Base.:+(g1::ScaledIdentityGate{T,N}, g2::GenericSquareGate{K,N}) where {T,K,N} = data(g1) * one(data(g2)) + data(g2)
-Base.:+(g1::GenericSquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2) * one(data(g1)) + data(g1)
+Base.:+(g1::ScaledIdentityGate{T,N}, g2::SquareGate{K,N}) where {T,K,N} = data(g1) * one(data(g2)) + data(g2)
+Base.:+(g1::SquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2) * one(data(g1)) + data(g1)
 
-Base.:-(g1::GenericSquareGate{K,N}, g2::GenericSquareGate{T,N}) where {T,K,N} = GenericSquareGate(data(g1) - data(g2))
+Base.:-(g1::SquareGate{K,N}, g2::SquareGate{T,N}) where {T,K,N} = SquareGate(data(g1) - data(g2))
 Base.:-(g1::ScaledIdentityGate{T,N}, g2::ScaledIdentityGate{K,N}) where {T,K,N} = ScaledIdentityGate(data(g1) - data(g2), Val(operatorlength(g1)))
-Base.:-(g1::ScaledIdentityGate{T,N}, g2::GenericSquareGate{K,N}) where {T,K,N} = data(g1) * one(data(g2)) - data(g2)
-Base.:-(g1::GenericSquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2) * one(data(g1)) - data(g1)
+Base.:-(g1::ScaledIdentityGate{T,N}, g2::SquareGate{K,N}) where {T,K,N} = data(g1) * one(data(g2)) - data(g2)
+Base.:-(g1::SquareGate{K,N}, g2::ScaledIdentityGate{T,N}) where {T,K,N} = data(g2) * one(data(g1)) - data(g1)
 
-Base.:-(g::GenericSquareGate) = Gate(-data(g))
+Base.:-(g::SquareGate) = Gate(-data(g))
 
-Base.exp(g::GenericSquareGate{T,N}) where {T,N} = GenericSquareGate(gate(exp(Matrix(g)), Val(div(N, 2))))
+Base.exp(g::SquareGate{T,N}) where {T,N} = SquareGate(gate(exp(Matrix(g)), Val(div(N, 2))))
 Base.exp(g::ScaledIdentityGate{T,N}) where {T,N} = ScaledIdentityGate(exp(data(g)), Val(div(N, 2)))
 
-Base.adjoint(g::GenericSquareGate{T,N}) where {T,N} = GenericSquareGate(gate(Matrix(g)', Val(div(N, 2))))
+Base.adjoint(g::SquareGate{T,N}) where {T,N} = SquareGate(gate(Matrix(g)', Val(div(N, 2))))
 
 Base.adjoint(g::ScaledIdentityGate{T,N}) where {T,N} = ScaledIdentityGate(data(g)', Val(div(N, 2)))
 Base.transpose(g::ScaledIdentityGate) = g
 
-data(gate::GenericSquareGate) = gate.data
+data(gate::SquareGate) = gate.data
 data(gate::ScaledIdentityGate) = gate.data
 
-# Base.convert(::Type{GenericSquareGate{T,N}}, g::GenericSquareGate{K,N}) where {T,K,N} = GenericSquareGate(convert.(T,g.data))
-# Base.convert(::Type{<:GenericSquareGate}, m::Matrix{<:Any}) = GenericSquareGate(m)
+# Base.convert(::Type{SquareGate{T,N}}, g::SquareGate{K,N}) where {T,K,N} = SquareGate(convert.(T,g.data))
+# Base.convert(::Type{<:SquareGate}, m::Matrix{<:Any}) = SquareGate(m)
 
-Base.permutedims(g::GenericSquareGate, perm) = GenericSquareGate(permutedims(g.data, perm))
+Base.permutedims(g::SquareGate, perm) = SquareGate(permutedims(g.data, perm))
 
 LinearAlgebra.Hermitian(squareGate::AbstractSquareGate) = (squareGate + squareGate') / 2
 
 function Gate(data::Array{T,N}) where {T<:Number,N}
     if iseven(N)
-        return GenericSquareGate(data)
+        return SquareGate(data)
     else
         error("No gate with $N legs implemented")
-        return GenericSquareGate(data)
+        return SquareGate(data)
     end
 end
-function Base.Matrix(g::GenericSquareGate)
+function Base.Matrix(g::SquareGate)
     sg = size(g)
     l = operatorlength(g)
     D = prod(sg[1:l])
@@ -111,7 +111,7 @@ end
 
 Return gate_phys⨂Id_aux
 """
-function auxillerate(op::GenericSquareGate{T,N}) where {T,N}
+function auxillerate(op::SquareGate{T,N}) where {T,N}
     opSize = size(op)
     d::Int = opSize[1]
     opLength = Int(N / 2)
@@ -119,16 +119,16 @@ function auxillerate(op::GenericSquareGate{T,N}) where {T,N}
     odds = -1:-2:(-4*opLength)
     evens = -2:-2:(-4*opLength)
     tens::Array{T,2 * N} = ncon((op.data, idop), (odds, evens))
-    return GenericSquareGate(reshape(tens, (opSize .^ 2)...))
+    return SquareGate(reshape(tens, (opSize .^ 2)...))
 end
 
-function auxillerate(op::GenericSquareGate{T,N}, opaux::GenericSquareGate{K,N}) where {T,K,N}
+function auxillerate(op::SquareGate{T,N}, opaux::SquareGate{K,N}) where {T,K,N}
     opSize = size(op)
     opLength = Int(N / 2)
     odds = -1:-2:(-4*opLength)
     evens = -2:-2:(-4*opLength)
     tens::Array{T,2 * N} = ncon((data(op), data(opaux)), (odds, evens))
-    return GenericSquareGate(reshape(tens, (opSize .^ 2)...))
+    return SquareGate(reshape(tens, (opSize .^ 2)...))
 end
 
 auxillerate(gate::ScaledIdentityGate) = gate

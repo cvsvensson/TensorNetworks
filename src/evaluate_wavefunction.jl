@@ -9,11 +9,11 @@ function evaluate_wavefunction(mps, indices)
     @assert length(indices) == N
     sizes = size.(mps, 2)
     @assert all(indices .<= sizes)
-    sites = Vector{GenericSite{ComplexF64}}(undef, N)
+    sites = Vector{DensePSite{ComplexF64}}(undef, N)
     for k in 1:N
         temp_tensor = zeros(1, sizes[k], 1)
         temp_tensor[indices[k]] = 1
-        sites[k] = GenericSite{ComplexF64}(temp_tensor, false)
+        sites[k] = PhysicalSite(temp_tensor, false)
     end
-    scalar_product(LCROpenMPS(sites), mps)
+    scalar_product(OpenPMPS(sites), mps)
 end

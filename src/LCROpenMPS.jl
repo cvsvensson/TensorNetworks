@@ -1,5 +1,5 @@
-Base.getindex(mps::LCROpenMPS, i::Integer) = mps.Γ[i]
-function Base.setindex!(mps::LCROpenMPS, v, i::Integer)
+Base.getindex(mps::OpenPMPS, i::Integer) = mps.Γ[i]
+function Base.setindex!(mps::OpenPMPS, v, i::Integer)
     c = center(mps)
     if i < c
         @assert isleftcanonical(v) "Error in setindex!: site not left canonical"
@@ -11,8 +11,8 @@ function Base.setindex!(mps::LCROpenMPS, v, i::Integer)
     mps.Γ[i] = v
     return v
 end
-Base.copy(mps::LCROpenMPS{T}) where T = LCROpenMPS{T}(copy(mps.Γ), truncation = copy(mps.truncation), error = copy(mps.error))
-center(mps::LCROpenMPS) = mps.center
+Base.copy(mps::OpenPMPS) = OpenPMPS(copy(mps.Γ), truncation = copy(mps.truncation), error = copy(mps.error))
+center(mps::OpenPMPS) = mps.center
 
 #TODO Iterative compression as in https://arxiv.org/abs/1008.3477 
 
@@ -26,47 +26,47 @@ center(mps::LCROpenMPS) = mps.center
 #     LCROpenMPS(Γ, truncation=truncation, error = error)
 # end
 
-function LCROpenMPS(
+function OpenPMPS(
     M::Vector{Array{<:Any,3}};
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
     purification = false, center = 1, error = 0.0
 )
-    Γ = [GenericSite(m, purification) for m in M]
+    Γ = [PhysicalSite(m, purification) for m in M]
     Γ2 = to_left_right_orthogonal(Γ, center = center)
-    LCROpenMPS(Γ2, truncation = truncation, error = error)
+    OpenPMPS(Γ2, truncation = truncation, error = error)
 end
 
-function LCROpenMPS(
-    M::AbstractVector{<:OrthogonalLinkSite};
+function OpenPMPS(
+    M::Vector{PVSite{T,P,V}};
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
     center = 1, error = 0.0
-)
+) where {T,P,V}
     N = length(M)
-    Γ = Vector{GenericSite{eltype(M[1])}}(undef, N)
+    Γ = Vector{P}(undef, N)
     for k in 1:N
         if k < N
             @assert data(M[k].Λ2) ≈ data(M[k+1].Λ1) "Error in constructing LCROpenMPS: Sites do not share links"
         end
         if k < center
-            Γ[k] = GenericSite(M[k], :left)
+            Γ[k] = PhysicalSite(M[k], :left)
         end
         if k > center
-            Γ[k] = GenericSite(M[k], :right)
+            Γ[k] = PhysicalSite(M[k], :right)
         end
     end
     Γ[center] = M[center].Λ1 * M[center].Γ * M[center].Λ2
-    LCROpenMPS(Γ, truncation = truncation, error = error)
+    OpenPMPS(Γ, truncation = truncation, error = error)
 end
 
-# function LCROpenMPS(
-#     mps::OpenMPS;
-#     center::Int = 1,
-#     error = 0.0,
-# )
-#     LCROpenMPS(mps[1:end], truncation=mps.truncation, error = mps.error + error, center=center)
-# end
+function OpenPMPS(
+    mps::OpenPVMPS;
+    center::Int = 1,
+    error = 0.0,
+)
+    OpenPMPS(mps[1:end], truncation=mps.truncation, error = mps.error + error, center=center)
+end
 
-function shift_center_right!(mps::LCROpenMPS, method = :qr)
+function shift_center_right!(mps::OpenPMPS, method = :qr)
     c = center(mps)
     N = length(mps)
     if c == N + 1
@@ -90,7 +90,7 @@ function shift_center_right!(mps::LCROpenMPS, method = :qr)
     return mps
 end
 
-function shift_center_left!(mps::LCROpenMPS, method = :qr)
+function shift_center_left!(mps::OpenPMPS, method = :qr)
     c = center(mps)
     N = length(mps)
     if c == 0
@@ -114,7 +114,7 @@ function shift_center_left!(mps::LCROpenMPS, method = :qr)
     return mps
 end
 
-function shift_center!(mps::LCROpenMPS, n::Integer)
+function shift_center!(mps::OpenPMPS, n::Integer)
     if n > 0
         f = shift_center_right!
     elseif n < 0
@@ -127,7 +127,7 @@ function shift_center!(mps::LCROpenMPS, n::Integer)
     end
     return mps
 end
-function set_center!(mps::LCROpenMPS, n::Integer)
+function set_center!(mps::OpenPMPS, n::Integer)
     c = center(mps)
     N = length(mps)
     if n < 0 || n > N + 1
@@ -136,12 +136,12 @@ function set_center!(mps::LCROpenMPS, n::Integer)
     dn = n - c
     return shift_center!(mps, dn)
 end
-function set_center(mps::LCROpenMPS, n::Integer)
+function set_center(mps::OpenPMPS, n::Integer)
     mps2 = copy(mps)
     set_center!(mps2, n)
     return mps2
 end
-iscenter(mps::LCROpenMPS, c::Integer) = c == center(mps)
+iscenter(mps::OpenPMPS, c::Integer) = c == center(mps)
 
 # function qr_right(L::GenericSite{T}, R::GenericSite{T})
 #     Q, r = to_left_orthogonal(L)
@@ -156,20 +156,20 @@ iscenter(mps::LCROpenMPS, c::Integer) = c == center(mps)
 # end
 
 """
-    randomLCROpenMPS(N, d, D; T=ComplexF64, purification=false, trunc)
+randomDenseOpenPMPS(N, d, D; T=ComplexF64, purification=false, trunc)
 
 Return a random mps
 """
-function randomLCROpenMPS(N, d, D; T = ComplexF64, purification = false,
+function randomDenseOpenPMPS(N, d, D; T = ComplexF64, purification = false,
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION
 )
-    Γ = Vector{GenericSite{T}}(undef, N)
+    Γ = Vector{DensePSite{T}}(undef, N)
     for i = 1:N
         χL = Int(round(d^(min(i - 1, log(d, D), N + 1 - i))))
         χR = Int(round(d^(min(i, log(d, D), N - i))))
         Γ[i] = randomRightOrthogonalSite(χL, d, χR, T, purification = purification)
     end
-    return LCROpenMPS{T}(Γ, truncation = truncation)
+    return OpenPMPS(Γ, truncation = truncation)
 end
 
 """
@@ -180,27 +180,27 @@ Return the identity density matrix as a purification
 function identityLCROpenMPS(N, d; T = ComplexF64,
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION
 )
-    Γ = Vector{GenericSite{T}}(undef, N)
+    Γ = Vector{DensePSite{T}}(undef, N)
     for i = 1:N
-        Γ[i] = GenericSite(reshape(Matrix(one(T)I, d, d) / sqrt(d), 1, d^2, 1), true)
+        Γ[i] = PhysicalSite(reshape(Matrix(one(T)I, d, d) / sqrt(d), 1, d^2, 1), true)
     end
-    return LCROpenMPS(Γ, truncation = truncation)
+    return OpenPMPS(Γ, truncation = truncation)
 end
 
-"""
-    identityMPS(mps::LCROpenMPS)
+# """
+#     identityMPS(mps::LCROpenMPS)
 
-Return the identity density matrix as a purification, with similar parameters as the input mps
-"""
-function identityMPS(mps::LCROpenMPS) #FIXME
-    N = length(mps)
-    d = size(mps[1], 2)
-    if ispurification(mps)
-        d = Int(sqrt(d))
-    end
-    trunc = mps.truncation
-    return identityLCROpenMPS(N, d, truncation = trunc)
-end
+# Return the identity density matrix as a purification, with similar parameters as the input mps
+# """
+# function identityMPS(mps::OpenPMPS) #FIXME
+#     N = length(mps)
+#     d = size(mps[1], 2)
+#     if ispurification(mps)
+#         d = Int(sqrt(d))
+#     end
+#     trunc = mps.truncation
+#     return identityLCROpenMPS(N, d, truncation = trunc)
+# end
 
 
 """
@@ -208,15 +208,15 @@ end
 
 Make mps left canonical up to the `center` site and right canonical after, assuming the input mps is canonical.
 """
-function canonicalize(mps::LCROpenMPS; center = 1, method = :qr)
+function canonicalize(mps::OpenPMPS; center = 1, method = :qr)
     Γ = to_left_right_orthogonal(mps[1:length(mps)], center = center, method = method)
-    LCROpenMPS(Γ, truncation = mps.truncation, error = mps.error)
+    OpenPMPS(Γ, truncation = mps.truncation, error = mps.error)
 end
 
-function canonicalize!(mps::LCROpenMPS; center = 1)
+function canonicalize!(mps::OpenPMPS; center = 1)
     Γ = to_left_right_orthogonal(mps[1:length(mps)], center = center)
     mps.Γ = Γ
     mps.center = center
 end
 
-entanglement_entropy(mps::LCROpenMPS) = entanglement_entropy(OpenMPS(mps))
+entanglement_entropy(mps::OpenPMPS) = entanglement_entropy(OpenPVMPS(mps))

@@ -13,11 +13,13 @@ using Test, TensorNetworks, TensorOperations, LinearAlgebra, KrylovKit
 end
 
 @testset "Types" begin
-    mps = randomUMPS(ComplexF64,2,2,1)
+    mps = randomDenseUMPS(ComplexF64,2,2,1)
     @test mps isa UMPS
     @test mps isa UMPS{ComplexF64}
-    
-    @test eltype(mps) == OrthogonalLinkSite{ComplexF64}
+    @test mps isa UMPS{ComplexF64,eltype(mps.Γ),eltype(mps.Λ)}
+
+    @test mps[1] isa PVSite{ComplexF64}
+    @test eltype(mps) <: PVSite{ComplexF64}
     @test eltype(mps[1]) == ComplexF64
     @test TensorNetworks.numtype(mps) == ComplexF64
 end
@@ -31,8 +33,8 @@ end
         end
     end
 
-    @test typeof(g) == GenericSquareGate{Float64,2}
-    @test complex(typeof(g)) == GenericSquareGate{ComplexF64,2}
+    @test typeof(g) == SquareGate{Float64,2}
+    @test complex(typeof(g)) == SquareGate{ComplexF64,2}
 
     H = (op+op')/2
     U = exp(H*1.0im)
@@ -73,7 +75,7 @@ end
 
     # D = 10;
     # d = 2;
-    # site = randomGenericSite(D,d,D);
+    # site = randomDensePhysicalSite(D,d,D);
 
     d = 4;
     mat = rand(ComplexF64,d,d);
@@ -120,8 +122,8 @@ end
     @test zid' == conj(z) * id
 
     DL1,DL2,DR1,DR2,d = rand(1:10,5)
-    site1 = randomGenericSite(DL1,d,DR1);
-    site2 = randomGenericSite(DL2,d,DR2);
+    site1 = randomDensePhysicalSite(DL1,d,DR1);
+    site2 = randomDensePhysicalSite(DL2,d,DR2);
     T0 = Matrix(transfer_matrix(site1,site2));
     Tid = Matrix(transfer_matrix(site1,id,site2));
     @test T0 ≈ Tid
@@ -142,38 +144,38 @@ end
     @test idsite == id[floor(Int, N/2)]
     @test z^(1/N)*idsite == zid[floor(Int, N/2)]
 
-    mps = randomOpenMPS(N,2,5);
+    mps = randomOpenPVMPS(N,2,5);
     T0 = Matrix(transfer_matrix((mps,),(mps,)))
     @test T0 == Matrix(transfer_matrix((mps,),(id,mps)))
     @test z*T0 ≈ Matrix(transfer_matrix((mps,),(zid,mps)))
 end
 
 
-@testset "Environment" begin
+@testset "environments" begin
     N = 10
     d = 2
-    mps = randomOpenMPS(N,d,1);
-    env = environment(mps);
+    mps = randomOpenPVMPS(N,d,1);
+    env = environments(mps);
     @test length(env.L) == N == length(env.R)
     @test env.L ≈ fill([1.0], N) ≈ env.R
     
     D = 5
-    mps = randomOpenMPS(N,d,D);
-    env = environment(mps);
-    site = randomGenericSite(D,d,D)
+    mps = randomOpenPVMPS(N,d,D);
+    env = environments(mps);
+    site = randomDensePhysicalSite(D,d,D)
     mid = floor(Int,N/2)
-    update_environment!(env,mid,(site,),(site,))
+    update_environments!(env,mid,(site,),(site,))
     TL = transfer_matrix(site,:left)
     TR = transfer_matrix(site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
     @test vec(env.L[mid+1]) ≈ TR*vec(env.L[mid])
 
     D2 = 10
-    mps2 = randomOpenMPS(N,d,D2);
-    env = environment(mps2,mps);
+    mps2 = randomOpenPVMPS(N,d,D2);
+    env = environments(mps2,mps);
     @test length(env.R[mid]) == D2*D == length(env.L[mid])
-    site2 = randomGenericSite(D2,d,D2);
-    update_environment!(env,mid,(site2,),(site,))
+    site2 = randomDensePhysicalSite(D2,d,D2);
+    update_environments!(env,mid,(site2,),(site,))
     TL = transfer_matrix(site2,site,:left)
     TR = transfer_matrix(site2,site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -181,9 +183,9 @@ end
 
     mpo = IsingMPO(N,1,1,1);
     Dmpo = size(mpo[mid],4)
-    env = environment((mps2,),(mpo,mps));
+    env = environments((mps2,),(mpo,mps));
     @test length(env.R[mid]) == D2*D*Dmpo == length(env.L[mid])
-    update_environment!(env,mid,(site2,),(mpo[mid],site))
+    update_environments!(env,mid,(site2,),(mpo[mid],site))
     TL = transfer_matrix(site2,mpo[mid],site,:left)
     TR = transfer_matrix(site2,mpo[mid],site,:right)
     @test vec(env.R[mid-1]) ≈ TL*vec(env.R[mid])
@@ -193,7 +195,7 @@ end
 @testset "Canonicalize" begin
     N = 10
     c = 5
-    Γ = randomOpenMPS(N,2,5).Γ
+    Γ = randomOpenPVMPS(N,2,5).Γ
 
     L,r = TensorNetworks.to_left_orthogonal(Γ[1], method=:qr)
     @test isleftcanonical(L)
@@ -219,7 +221,7 @@ end
 
 @testset "LCROpenMPS" begin
     N = 5
-    mps = randomLCROpenMPS(N,2,5)
+    mps = randomDenseOpenPMPS(N,2,5)
     for n in 0:N+1
         mps = canonicalize(mps,center = n)
         for k in 1:n-1
@@ -245,7 +247,7 @@ end
         end
     end
 
-    mps = randomLCROpenMPS(N,2,5, purification=true)
+    mps = randomDenseOpenPMPS(N,2,5, purification=true)
     for n in 0:N+1
         mps = canonicalize(mps, center = n)
         for k in 1:n-1
@@ -316,13 +318,13 @@ end
         @test Matrix(T4) ≈ Matrix(T1*T1*T1*T1)
         @test transpose(Matrix(T4)) ≈ Matrix(prod(transfer_matrices([site,site,site,site], g4,:right)))
     end
-    site = randomGenericSite(D,d,D);
+    site = randomDensePhysicalSite(D,d,D);
     testsite(site)
     testsite(site + site)
 end
 
 @testset "Compression" begin
-    mps = canonicalize(randomOpenMPS(7,2,5));
+    mps = canonicalize(randomOpenPVMPS(7,2,5));
     ΓL = mps[3];
     ΓR = mps[4];
     ΓL2, ΓR2, err = compress(ΓL, ΓR, mps.truncation);
@@ -398,7 +400,7 @@ end
     Nchain = 5
     Dmax = 10
     ham = IsingMPO(Nchain, 1, 0, 0);
-    mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
+    mps = canonicalize(randomDenseOpenPMPS(Nchain, 2, Dmax));
     states, energies = eigenstates(ham, mps, 5; precision = 1e-8);
     @test sort(energies) ≈ -[Nchain-1, Nchain-1, Nchain-3, Nchain-3, Nchain-3]
     states, energies = eigenstates(ham, fill(mps,5), 5; precision = 1e-8);
@@ -409,7 +411,7 @@ end
     h,g = (0.226579,0.988821)
     ham = IsingMPO(Nchain, 1, h,g);
     hammat = Matrix(ham);
-    mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
+    mps = canonicalize(randomDenseOpenPMPS(Nchain, 2, Dmax));
     energiesED, _ = eigsolve(hammat,4,:SR);
     states, energies = eigenstates(ham, mps, 4; precision = 1e-8, shifter=SubspaceExpand(1.0), maxsweeps = 20);
     @test sort(energies) ≈ energiesED[1:4]
@@ -418,7 +420,7 @@ end
     Nchain = 20
     Dmax = 30
     ham = IsingMPO(Nchain, 1, 1, 0);
-    mps = canonicalize(randomLCROpenMPS(Nchain, 2, Dmax));
+    mps = canonicalize(randomDenseOpenPMPS(Nchain, 2, Dmax));
     states, energies = eigenstates(ham, mps, 5; precision = 1e-8,shifter = SubspaceExpand(1.0), maxsweeps = 20);
     @test abs(energies[1]/(Nchain) + 4/π) < 1/Nchain
 
@@ -441,7 +443,7 @@ end
     #Empo = expectation_value(mps,hammpo)
     @test E ≈ e0 ≈ Eanalytic
 
-    mps = canonicalize(randomUMPS(ComplexF64,1,2,1))
+    mps = canonicalize(randomDenseUMPS(ComplexF64,1,2,1))
     E = expectation_value(mps,hamgates[1],1)
     e0, heff,info = TensorNetworks.effective_hamiltonian(mps,hammpo,direction=:left);
     #Empo = expectation_value(mps,hammpo)
@@ -453,8 +455,8 @@ end
     phi = 2*pi*rand()
     N = 10
     trunc = TruncationArgs(10,1e-12,true)
-    target = LCROpenMPS([qubit(2*pi*rand(),2*pi*rand()) for k in 1:N],truncation=trunc);
-    guess = canonicalize(randomLCROpenMPS(N,2,10));
+    target = OpenPMPS([qubit(2*pi*rand(),2*pi*rand()) for k in 1:N],truncation=trunc);
+    guess = canonicalize(randomDenseOpenPMPS(N,2,10));
     
     mps = TensorNetworks.iterative_compression(target, guess);
     @test scalar_product(mps,target) ≈ 1
@@ -466,14 +468,14 @@ using DoubleFloats
     # DMRG
     N = 5
     Dmax = 10
-    mps = randomLCROpenMPS(N,2,Dmax,T=ComplexDF64);
-    @test eltype(mps) == GenericSite{ComplexDF64}
+    mps = randomDenseOpenPMPS(N,2,Dmax,T=ComplexDF64);
+    @test eltype(mps) <: PhysicalSite{ComplexDF64}
     @test norm(mps) ≈ 1
     @test eltype(norm(mps)) == real(ComplexDF64)
-    @test eltype(canonicalize(mps)) == GenericSite{ComplexDF64}
+    @test eltype(canonicalize(mps)) <: PhysicalSite{ComplexDF64}
 
     T = ComplexDF64
-    mps = randomLCROpenMPS(N,2,Dmax,T=T);
+    mps = randomDenseOpenPMPS(N,2,Dmax,T=T);
     ham = IsingMPO(N, 1, T(0), 0);
     states, energies = eigenstates(ham, mps, 5; precision = 1e-20);
     @test sort(energies) ≈ -[N-1, N-1, N-3, N-3, N-3]
@@ -482,10 +484,10 @@ using DoubleFloats
     # Iterative compression
     N = 10
     trunc = TruncationArgs(10,1e-20,true)
-    target = LCROpenMPS([qubit(2*pi*rand(real(T)),2*pi*rand(real(T))) for k in 1:N], truncation=trunc);
-    guess = canonicalize(randomLCROpenMPS(N,2,10,T=T));
+    target = OpenPMPS([qubit(2*pi*rand(real(T)),2*pi*rand(real(T))) for k in 1:N], truncation=trunc);
+    guess = canonicalize(randomDenseOpenPMPS(N,2,10,T=T));
     mps = TensorNetworks.iterative_compression(target, guess);
-    @test eltype(mps) == GenericSite{T}
+    @test eltype(mps) <: PhysicalSite{T}
     @test scalar_product(mps,target) ≈ 1
     @test scalar_product(mps,guess) ≈ scalar_product(target,guess)
 
@@ -509,7 +511,7 @@ using DoubleFloats
 end
 
 @testset "MPSSum" begin
-    mps = canonicalize(randomOpenMPS(5,2,5));
+    mps = canonicalize(randomOpenPVMPS(5,2,5));
     smps = mps+mps
     @test length(mps) == length(smps)
     parityop = MPO(fill(MPOsite(sz),5))
@@ -540,13 +542,13 @@ end
 @testset "Misc" begin
     N = 5
     qubits = [qubit(rand(),rand()) for k in 1:N]
-    mps = LCROpenMPS(qubits)
+    mps = OpenPMPS(qubits)
     indices = rand([1,2], N)
     wf = TensorNetworks.evaluate_wavefunction(mps, indices)
     @test wf ≈ prod([q[1,indices[k],1] for (k,q) in enumerate(qubits)])
     d=5
     sites = [randomLeftOrthogonalSite(1,d,d) , randomLeftOrthogonalSite(d,d,1)]
-    mps = LCROpenMPS(sites)
+    mps = OpenPMPS(sites)
     for (n1,n2) in Iterators.product(1:d,1:d)
         wf = TensorNetworks.evaluate_wavefunction(mps, [n1,n2])
         @test wf ≈ transpose(sites[1][1,n1,:]) * sites[2][:,n2,1]
@@ -559,10 +561,10 @@ end
     @test norm(Matrix(ham) - Matrix(ham)') < 1e-12
     s1 = qubit(0,0)
     s0 = qubit(pi/2,0)
-    s11 = LCROpenMPS([(-1)*s1*s1])
-    s00 = LCROpenMPS([s0*s0])
-    s10 = LCROpenMPS([s1*s0])
-    s01 = LCROpenMPS([s0*s1])
+    s11 = OpenPMPS([(-1)*s1*s1])
+    s00 = OpenPMPS([s0*s0])
+    s10 = OpenPMPS([s1*s0])
+    s01 = OpenPMPS([s0*s1])
     @test expectation_value(s11, ham) ≈ -2μ+U
     @test abs(expectation_value(s00, ham)) < 1e-8
     @test expectation_value(s10, ham) ≈ -μ-h 
@@ -573,7 +575,7 @@ end
     @test abs(matrix_element(s01,ham,s10)) < 1e-8
 
     _qubit(n) = n==1 ? s1 : s0
-    state(a,b,c,d) = LCROpenMPS([_qubit(a)*_qubit(b), (-1)^(a*b+c*(a+b)+d*(a+b+c))*_qubit(c)*_qubit(d)])
+    state(a,b,c,d) = OpenPMPS([_qubit(a)*_qubit(b), (-1)^(a*b+c*(a+b)+d*(a+b+c))*_qubit(c)*_qubit(d)])
     me(a,b) = matrix_element(state(a...),ham2,state(b...))
 
     ham2 = TensorNetworks.BD1MPO(2,μ,h, t, α, Δ, Δ1, U, V);
@@ -616,7 +618,7 @@ end
     s1 = qubit(0,0)
     s0 = qubit(pi/2,0)
     _qubit(n) = n==1 ? s1 : s0
-    state(a,b) = LCROpenMPS([_qubit(a),(-1)^(a*b)*_qubit(b)])
+    state(a,b) = OpenPMPS([_qubit(a),(-1)^(a*b)*_qubit(b)])
     me(a,b) = matrix_element(state(a...),ham,state(b...))
     @test me((1,1),(1,1)) ≈ -μ + U
     @test me((0,0),(0,0)) ≈ μ + U
@@ -634,7 +636,7 @@ end
     Dmax = 50
     tol = 1e-14
     truncation= TruncationArgs(Dmax, tol, true)
-    initialmps = canonicalize(randomLCROpenMPS(N, 2, Dmax; truncation=truncation, T=Float64))
+    initialmps = canonicalize(randomDenseOpenPMPS(N, 2, Dmax; truncation=truncation, T=Float64))
     set_center!(initialmps, 1)
     ham = TensorNetworks.KitaevMPO(N,t, Δ, U, μ)
     states, energies = TensorNetworks.eigenstates2(ham, initialmps, 2, precision=tol, maxsweeps=10, maxbonds=[5, 10, 20]);
@@ -647,4 +649,40 @@ end
     @test norm(r1 .- a) < sqrt(tol)
     @test norm(r3 - TensorNetworks.three_body_noninteracting(r1,r2)) < sqrt(tol)
     @test abs(sum((exp.(diff(log.(abs.(r1[:,1])))) ./ (μ/(2t)))[1:3])/3 - 1) < 1e-6
+end
+
+@testset "QuantumNumbers" begin
+    z0 = ZQuantumNumber{2}(0)
+    z1 = ZQuantumNumber{2}(1)
+    @test iszero(z1 +z1)
+    @test iszero(z0)
+    @test all([iszero(ZQuantumNumber{N}(N-1) + ZQuantumNumber{N}(1)) for N in 1:4])
+    @test all([iszero(ZQuantumNumber{N}(N-1) + ZQuantumNumber{N}(1)) for N in 1:4])
+    @test iszero(fuse(invert(z1),z1))
+    z2 = ZQuantumNumber{5}(3)
+    @test iszero(fuse(invert(z2),z2))
+end
+
+@testset "CovariantTensor" begin
+    Av = rand(CovariantTensor{ComplexF64,1,Tuple{ParityQN},IdentityQN})
+    normA1 = norm(Array(Av))
+    @tensor normA2[:] := Av[1]*conj(Av[1])
+    @test normA1^2 ≈ scalar(normA2) 
+    Bv = TensorNetworks.rand_compatible_tensor(Av)
+    @tensor AvBv[:] := Av[1]*Bv[1]
+    @test typeof(scalar(AvBv)) == ComplexF64
+
+    Am = rand(CovariantTensor{ComplexF64,2,Tuple{ParityQN,ParityQN},IdentityQN})
+    Bm = TensorNetworks.rand_compatible_tensor(Am)
+    normA1 = norm(Array(Am))
+    @tensor normA2[:] := Am[1,2]*conj(Am[1,2])
+    @test normA1^2 ≈ scalar(normA2)
+
+    @tensor Asquare[:] := Am[-1,1]*conj(Am[-2,1])
+    trA1 = tr(Array(Asquare))
+    @tensor trA2[:] := Asquare[1,1]
+    @test trA1 ≈ scalar(trA2)
+
+
+    
 end

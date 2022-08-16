@@ -25,7 +25,7 @@ Return the Ising hamiltonian as a list of 2-site gates
 """
 function isingHamGates(L, J, h, g)
     T = promote_type(eltype.((J, h / 2, g / 2))...)
-    gates = Vector{GenericSquareGate{T,4}}(undef, L - 1)
+    gates = Vector{SquareGate{T,4}}(undef, L - 1)
     for i = 1:L-1
         if i == 1
             gate = reshape(-(J * ZZ + h / 2 * (2XI + IX) + g / 2 * (2 * ZI + IZ)), 2, 2, 2, 2)
@@ -34,7 +34,7 @@ function isingHamGates(L, J, h, g)
         else
             gate = reshape(-(J * ZZ + h / 2 * (XI + IX) + g / 2 * (ZI + IZ)), 2, 2, 2, 2)
         end
-        gates[i] = GenericSquareGate(gate)
+        gates[i] = SquareGate(gate)
     end
     return gates
 end

@@ -78,7 +78,7 @@ function expectation_value2(mps::MPSSum, op, site::Integer; string = IdentityMPO
     return res
 end
 
-function expectation_value(sites::Vector{OrthogonalLinkSite{T}}, gate::AbstractSquareGate) where {T}
+function expectation_value(sites::Vector{<:PVSite{T}}, gate::AbstractSquareGate) where {T}
     @assert length(sites) == operatorlength(gate)
     Λ = data(sites[1].Λ1) .^ 2
     transfer = transfer_matrix(sites, gate, :left)
@@ -86,7 +86,7 @@ function expectation_value(sites::Vector{OrthogonalLinkSite{T}}, gate::AbstractS
     idR = vec(Matrix{T}(I, DR, DR))
     return vec(Λ)' * (transfer * idR)
 end
-function expectation_value(sites::Vector{GenericSite{T}}, gate::AbstractSquareGate) where {T}
+function expectation_value(sites::Vector{<:PhysicalSite{T}}, gate::AbstractSquareGate) where {T}
     @assert length(sites) == operatorlength(gate) "Error in 'expectation value': length(sites) != operatorlength(gate)"
     transfer = transfer_matrix(sites, gate, :left)
     DL = size(sites[1], 1)
