@@ -53,7 +53,7 @@ abstract type AbstractSite{T,N} <: AbstractArray{T,N} end
 abstract type AbstractPhysicalSite{T} <: AbstractSite{T,3} end
 abstract type AbstractVirtualSite{T} <: AbstractSite{T,2} end
 
-struct VirtualSite{T,S<:AbstractArray{T,2}} <: AbstractVirtualSite{T}
+struct VirtualSite{T,S<:Union{AbstractArray{T,2},UniformScaling{T}}} <: AbstractVirtualSite{T}
     Λ::S
 end
 VirtualSite(site::S) where S = VirtualSite{eltype(S),S}(site)
@@ -225,3 +225,30 @@ boundaryconditions(::T) where {T<:AbstractMPS} = boundaryconditions(T)
 boundaryconditions(::Type{<:OpenPVMPS}) = OpenBoundary()
 boundaryconditions(::Type{<:OpenPMPS}) = OpenBoundary()
 boundaryconditions(::Type{<:UMPS}) = InfiniteBoundary()
+
+
+
+const IndexTuple{N} = NTuple{N,Int}
+abstract type AbstractQuantumNumber end
+struct IdentityQN <: AbstractQuantumNumber end
+struct ZQuantumNumber{N} <: AbstractQuantumNumber
+    n::Mod{N,Int64}
+end
+const ParityQN = ZQuantumNumber{2}
+struct U1QuantumNumber{T} <: AbstractQuantumNumber
+    n::T
+end
+
+struct CovariantTensor{T,N,QNs<:Tuple,QN<:AbstractQuantumNumber} <: AbstractArray{T,N}
+    blocks::Vector{Array{T,N}}
+    qns::Vector{QNs}
+    dirs::NTuple{N,Bool}
+    qntotal::QN
+    function CovariantTensor(blocks::Vector{Array{T,N}}, qns::Vector{QNs}, dirs::NTuple{N,Bool}, qntotal::QN) where {QN,QNs,N,T}
+        @assert length(blocks) == length(qns)
+        @assert length(qns[1]) == N
+        @assert all(map(qn->iszero(fuse(fuse(qn),qntotal)), qns))
+        A = new{T,N,QNs,QN}(blocks, qns, dirs, qntotal)
+        return A
+    end
+end

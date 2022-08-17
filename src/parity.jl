@@ -1,37 +1,12 @@
-using Mods
-
 function _positive_parities(n)
     map(x -> (x >>> -1) + (iseven(count_ones(x)) ? 0 : 1), 0:2^(n-1)-1)
 end
 
-const IndexTuple{N} = NTuple{N,Int}
-abstract type AbstractQuantumNumber end
 
-struct IdentityQN <: AbstractQuantumNumber end
-
-struct ZQuantumNumber{N} <: AbstractQuantumNumber
-    n::Mod{N,Int64}
-end
 Base.:*(a::Number, b::Z) where {Z<:ZQuantumNumber} = ZQuantumNumber(a * b.n)
 Base.:*(a::Z, b::Number) where {Z<:ZQuantumNumber} = ZQuantumNumber(a.n * b)
-const ParityQN = ZQuantumNumber{2}
-struct U1QuantumNumber{T} <: AbstractQuantumNumber
-    n::T
-end
 
-struct CovariantTensor{T,N,QNs<:Tuple,QN<:AbstractQuantumNumber} <: AbstractArray{T,N}
-    blocks::Vector{Array{T,N}}
-    qns::Vector{QNs}
-    dirs::NTuple{N,Bool}
-    qntotal::QN
-    function CovariantTensor(blocks::Vector{Array{T,N}}, qns::Vector{QNs}, dirs::NTuple{N,Bool}, qntotal::QN) where {QN,QNs,N,T}
-        @assert length(blocks) == length(qns)
-        @assert length(qns[1]) == N
-        @assert all(map(qn->iszero(fuse(fuse(qn),qntotal)), qns))
-        A = new{T,N,QNs,QN}(blocks, qns, dirs, qntotal)
-        return A
-    end
-end
+
 Base.size(A::CovariantTensor) = foldl(.+, size.(A.blocks))
 Base.show(io::IO, A::CovariantTensor{T,N,QNs,QN}) where {T,N,QNs,QN} = println(io, "CovariantTensor{", T, ",", N, "}\n", A.qns, "\n", A.dirs, "\n", A.qntotal)
 Base.show(io::IO, ::MIME"text/plain", A::CovariantTensor{T,N,QNs,QN}) where {T,N,QNs,QN} = print(io, "CovariantTensor{", T, ",", N, "}\n", A.qns, "\n", A.dirs, "\n", A.qntotal)

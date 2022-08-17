@@ -12,6 +12,7 @@ using GenericLinearAlgebra #TODO: check if this is necessary
 # using SparseArrays
 using SparseArrayKit
 using Tullio
+using Mods
 # using ProgressMeter
 
 # import Distributed.pmap
