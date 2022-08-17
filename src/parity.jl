@@ -2,14 +2,12 @@ function _positive_parities(n)
     map(x -> (x >>> -1) + (iseven(count_ones(x)) ? 0 : 1), 0:2^(n-1)-1)
 end
 
-
 Base.:*(a::Number, b::Z) where {Z<:ZQuantumNumber} = ZQuantumNumber(a * b.n)
 Base.:*(a::Z, b::Number) where {Z<:ZQuantumNumber} = ZQuantumNumber(a.n * b)
 
-
 Base.size(A::CovariantTensor) = foldl(.+, size.(A.blocks))
-Base.show(io::IO, A::CovariantTensor{T,N,QNs,QN}) where {T,N,QNs,QN} = println(io, "CovariantTensor{", T, ",", N, "}\n", A.qns, "\n", A.dirs, "\n", A.qntotal)
-Base.show(io::IO, ::MIME"text/plain", A::CovariantTensor{T,N,QNs,QN}) where {T,N,QNs,QN} = print(io, "CovariantTensor{", T, ",", N, "}\n", A.qns, "\n", A.dirs, "\n", A.qntotal)
+Base.show(io::IO, A::CovariantTensor{T,N,QN}) where {T,N,QN} = println(io, "CovariantTensor{", T, ",", N, "}\n", A.qns, "\n", A.dirs, "\n", A.qntotal)
+Base.show(io::IO, ::MIME"text/plain", A::CovariantTensor{T,N,QN}) where {T,N,QN} = print(io, "CovariantTensor{", T, ",", N, "}\n", A.qns, "\n", A.dirs, "\n", A.qntotal)
 
 getelements(t::Tuple, p) = map(i -> t[i], p)
 
@@ -50,7 +48,7 @@ end
 #     qntotal = deepcopy(A.qntotal)
 #     CovariantTensor(blocks, qns, dirs, qntotal)
 # end
-const CovStructure{N,QNs,QN} = Tuple{Vector{NTuple{N,Int}},Vector{QNs},NTuple{N,Bool},QN}
+const CovStructure{N,QN} = Tuple{Vector{NTuple{N,Int}},Vector{QN},NTuple{N,Bool},QN}
 function structure(A::CovariantTensor)
     sizes = size.(A.blocks)
     return (sizes,A.qns,A.dirs,A.qntotal)
@@ -66,9 +64,9 @@ function Base.similar(A::CovariantTensor, type::Type, (sizes, qns, dirs, qntotal
 end
 
 
-function SymmetricTensor(blocks::Vector, qns, dirs)
+function SymmetricTensor(blocks::Vector, qns::Vector{QN}, dirs) where QN
     @assert all(map(qn -> iszero(fuse(qn, dirs)), qns)) "$qns \n $dirs \n $(map(qn->fuse(qn,dirs),qns) )"
-    CovariantTensor(blocks, qns, dirs, IdentityQN())
+    CovariantTensor(blocks, qns, dirs, zero(QN))
 end
 
 
@@ -78,7 +76,8 @@ Base.hash(a::ZQuantumNumber, h::UInt64 = UInt64(0)) = Base.hash(a.n, h)
 #Base.:!(qn::ParityQN) = ParityQN(!qn.parity)
 #fuse(qn1::ParityQN,qn2::ParityQN) = qn1.parity + qn2.parity
 invert(l::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(-l.n)
-invert(::IdentityQN) = IdentityQN()
+invert(::TrivialQN) = TrivialQN()
+Base.zero(::Type{QN}) where QN<:Union{ZQuantumNumber,U1QuantumNumber} = QN(0)
 #invert(l::ParityQN) = !l
 #invert(ls::QNTuple) = QNTuple(invert.(ls.qns))
 # Base.:+(lA::ZQuantumNumber{N}, lB::ZQuantumNumber{N}) where {N} = ZQuantumNumber{N}(lA.n + lB.n)
@@ -86,18 +85,18 @@ Base.:-(l::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(-l.n)
 Base.:-(l::QN,l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(l.n - l2.n)
 Base.:+(l::QN,l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(l.n + l2.n)
 Base.iszero(qn::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = iszero(qn.n)
-Base.iszero(::IdentityQN) = true
+Base.iszero(::TrivialQN) = true
 fuse(l1::QN, l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = l1 + l2
-fuse(l1::AbstractQuantumNumber, l2::IdentityQN) = l1
-fuse(l1::IdentityQN, l2::AbstractQuantumNumber) = l2
-fuse(l1::IdentityQN, l2::IdentityQN) = IdentityQN()
+fuse(l1::AbstractQuantumNumber, l2::TrivialQN) = l1
+fuse(l1::TrivialQN, l2::AbstractQuantumNumber) = l2
+fuse(l1::TrivialQN, l2::TrivialQN) = TrivialQN()
 #fuse(l1::QNs, l2::QNs) where {QNs<:Tuple} = map(fuse, l1, l2)
 #fuse(l1::Link{QN},l2::Link{QN}) where {QN<:AbstractQuantumNumber}= fuse(QuantumNumber(l1),QuantumNumber(l2))
 #fuse(ls::NTuple{<:Any,Union{Link,AbstractQuantumNumber}}) = foldl(fuse,ls)
 fuse(l::AbstractQuantumNumber, d::Bool) = d ? invert(l) : l
 fuse(l1s::NTuple{N}, d1s::NTuple{N,Bool}) where {N} = fuse(map(fuse, l1s, d1s))
 fuse(l1s::Tuple) = foldl(fuse, l1s)
-fuse(l1s::Tuple{}) = IdentityQN()
+fuse(l1s::Tuple{}) = TrivialQN()
 fuse(l1s::Vector{QN}) where {QN<:AbstractQuantumNumber} = foldl(fuse, l1s)
 fuse(l1s::Vector{QN}, d1s::NTuple{N,Bool}) where {N,QN<:AbstractQuantumNumber} = fuse(tuple(l1s...), d1s)
 #fuse(l1s::QNTuple{N1}, d1s::NTuple{N1,Bool}, l2s::QNTuple{N2}, d2s::NTuple{N2,Bool}) where {N1,N2} = fuse((l1s..., l2s...), (d1s..., d2s...))
@@ -247,34 +246,33 @@ function replace_vector!(list1::Vector,list2::Vector)
     deleteat!(list1,eachindex(list1))
     append!(list1,list2)
 end
-TensorOperations.scalar(C::CovariantTensor) = ndims(C)==0 && C.qntotal == IdentityQN() ? sum(C.blocks)[] : throw(DimensionMismatch())
+TensorOperations.scalar(C::CovariantTensor) = ndims(C)==0 && C.qntotal == TrivialQN() ? sum(C.blocks)[] : throw(DimensionMismatch())
 TensorOperations.memsize(a::CovariantTensor) = Base.summarysize(a)
 
 Base.Array(A::CovariantTensor) = block_diagonal(A.blocks)
 
-function Base.rand(qntuple::Type{<:NTuple{N,<:AbstractQuantumNumber}}, qntotal::AbstractQuantumNumber = IdentityQN()) where N
-    qntypes = fieldtypes(qntuple)
-    qns = [rand(qn) for qn in qntypes]
+function Base.rand(::Type{NTuple{N,QN}}, qntotal::QN = zero(QN)) where {QN,N}
+    qns = [rand(QN) for k in 1:N]
     qns[end] = -fuse(qns[begin:end-1])
     qns[end] = fuse(qns[end],qntotal)
-    Tuple(qns)
+    Tuple(qns)::NTuple{N,QN}
 end
 
-function Base.rand(::Type{CovariantTensor{T,N,QNs,QN}}, n::Integer = 0) where {T,N,QNs,QN}
+function Base.rand(::Type{CovariantTensor{T,N,QN}}, n::Integer = 0) where {T,N,QN}
     n = rand(1:10)
     sizes = rand(1:10,n,N)
     blocks = [rand(T,sizes[k,:]...) for k in 1:n]
     dirs = Tuple(rand(Bool,N))
-    QNstypes = fieldtypes(QNs)
-    qns = [(qns = [rand(qn) for qn in QNstypes]; qns[end] -= fuse(qns); Tuple(qns)) for k in 1:n]
+   # QNstypes = fieldtypes(QNs)
     qntotal = rand(QN)
-    A = CovariantTensor(blocks,qns,dirs,qntotal)::CovariantTensor{T,N,QNs,QN}
+    qns = [rand(NTuple{N,QN},qntotal) for k in 1:n]
+    A = CovariantTensor(blocks,qns,dirs,qntotal)::CovariantTensor{T,N,QN}
     cat_collisions!(A)
 end
-Base.rand(::Type{IdentityQN}) = IdentityQN()
+Base.rand(::Type{TrivialQN}) = TrivialQN()
 Base.rand(::Type{ZQuantumNumber{N}}) where {N} = ZQuantumNumber{N}(rand(Mod{N}))
 
-function rand_compatible_tensor(A::CovariantTensor{T,N,QNs,QN}) where {T,N,QNs,QN}
+function rand_compatible_tensor(A::CovariantTensor{T,N,QN}) where {T,N,QN}
     n = length(A.blocks)
     sizes = size.(A.blocks)
     blocks = [rand(T,sizes[k,:]...) for k in 1:n]

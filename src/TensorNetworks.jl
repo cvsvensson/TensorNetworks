@@ -39,7 +39,7 @@ randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, r
 IdentityMPOsite, environments, update_environments!,
 ShiftCenter, SubspaceExpand, getindex, setindex!, kron, repeatedgate, *, +, vec,
 majorana_coefficients, majorana_measurements,
-IdentityQN, ZQuantumNumber, ParityQN, CovariantTensor, SymmetricTensor, fuse,invert
+TrivialQN, ZQuantumNumber, ParityQN, CovariantTensor, SymmetricTensor, fuse,invert
 
 include("types.jl")
 include("pauli.jl")

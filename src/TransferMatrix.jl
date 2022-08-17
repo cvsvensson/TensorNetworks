@@ -22,15 +22,23 @@ LinearAlgebra.mul!(w::V,T::TransferMatrix{V},v::V) where V = T.op(w,v)::V
 # LinearAlgebra.axpby!
 ## Structs to organize which transfer function to call 
 abstract type AbstractZipLayer{N} end
-struct SiteStack{N,Sites} <: AbstractZipLayer{N}
+struct SiteStack{T,N,QN,Sites} <: AbstractZipLayer{N}
     sites::Sites
     conjs::NTuple{N,Bool}
-    function SiteStack(sites::Tuple,conjs)
+    function SiteStack(sites::NTuple{N,AT},conjs) where {N,AT}
         #TODO handle sums of sites
+        #qns = _QN.(sites)
+        #qn1 = _QN(sites[1])
+        T = eltype(AT)
+        QN = qntype(AT)
+
+        #AbstractTensor{T,K,QN}
+        #@assert length(unique(_QN.(sites))) == 1
         @assert length(sites) == length(conjs)
-        new{length(sites),typeof(sites)}(sites,conjs)
+        new{T,N,QN,typeof(sites)}(sites,conjs)
     end
 end
+qntype(::Type{<:AbstractTensor{<:Any,<:Any,QN}}) where {QN} = QN
 struct ChainStack{N,MPs,Sites} <: AbstractVector{SiteStack{N,Sites}}
     chains::MPs
     conjs::NTuple{N,Bool}
@@ -59,38 +67,15 @@ function EnvironmentType(sites::SiteStack{N,Sites},dir) where {N,Sites}
     println(types)
     #EnvironmentType(types)
 end
-function qn(::PhysicalSite{T,CovariantTensor{T,3,Tuple{QNL,QNC,QNR},QN}},dir) where {T,QNL,QNC,QNR,QN}
-    if dir == :right 
-        return QNR
-    else 
-        @assert dir ==:left
-        return QNL
-    end
-end
-function EnvironmentType(::PhysicalSite{T,CovariantTensor{T,3,Tuple{QNL,QNC,QNR},QN}},dir) where {T,QNL,QNC,QNR,QN}
-    if dir == :right 
-        return CovariantTensor{T,1,Tuple{QNR},QN}
-    else 
-        @assert dir ==:left
-        return CovariantTensor{T,1,Tuple{QNL},QN}
-    end
-end
-function EnvironmentType(::MPOSite{T,CovariantTensor{T,4,Tuple{QNL,QNU,QND,QNR},QN}},dir) where {T,QNL,QNU,QND,QNR,QN}
-    if dir == :right 
-        return CovariantTensor{T,1,Tuple{QNR},QN}
-    else 
-        @assert dir ==:left
-        return CovariantTensor{T,1,Tuple{QNL},QN}
-    end
-end
-EnvironmentType(::PhysicalSite{T,Array{T,3}},dir) where {T} = Array{T,1}
-EnvironmentType(::MPOSite{T,Array{T,4}},dir) where {T} = Array{T,1}
-EnvironmentType(t1::CovariantTensor{T,N,QNs,QN},t2::CovariantTensor{T,1,Tuple{},QN}) where {N,T,QNs,QN} = CovariantTensor{T,N,_QN.(types),QN}
-EnvironmentType(types::Vararg{Type{CovariantTensor{T,1,QNs,QN}},N}) where {N,T,QNs,QN} = CovariantTensor{T,N,_QN.(types),QN}
-function _combine 
-_QNs(::Type{CovariantTensor{<:Any,<:Any,QNs}}) where QNs = QNs
-_QN(::Type{CovariantTensor{T,1,QNs,QN}}) where {T,QNs,QN} = fieldtypes(QNs)[1]
+qntype(::PhysicalSite{T,CovariantTensor{T,3,QN}}) where {T,QN} = QN
+EnvironmentType(::PhysicalSite{T,CovariantTensor{T,3,QN}},dir) where {T,QN} = CovariantTensor{T,1,QN}
+EnvironmentType(::MPOSite{T,CovariantTensor{T,4,QN}},dir) where {T,QN} = CovariantTensor{T,1,Tuple{QNR},QN}
 
+EnvironmentType(::PhysicalSite{T,Array{T,3}}) where {T} = Array{T,1}
+EnvironmentType(::MPOSite{T,Array{T,4}}) where {T} = Array{T,1}
+# EnvironmentType(t1::CovariantTensor{T,N,QN},t2::CovariantTensor{T,1,QN}) where {N,T,QN} = CovariantTensor{T,N,QN}
+# EnvironmentType(types::Vararg{Type{CovariantTensor{T,1,QN}},N}) where {N,T,QN} = CovariantTensor{T,N,QN}
+# function _combine 
 VirtualSite(::PhysicalSite,dir) = I
 function linktransfermatrix(sites::S,dir::Symbol) where S<:SiteStack
     Vs = [VirtualSite(site,reverse_direction(dir)) for site in sites.sites]
