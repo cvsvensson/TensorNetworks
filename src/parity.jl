@@ -44,7 +44,7 @@ function TensorOperations.similarstructure_from_indices(T::Type, p1::IndexTuple,
     sizes = [map(n -> size(block, n), ind) for block in A.blocks]
     dirs = op.(getelements(A.dirs,ind))
     qns = [getelements(qns,ind) for qns in A.qns]
-    (sizes, qns, dirs, A.qntotal)
+    (sizes, qns, dirs, op(A.qntotal))
 end
 
 function TensorOperations.similarstructure_from_indices(T::Type, poA::IndexTuple, poB::IndexTuple,
@@ -59,7 +59,7 @@ function TensorOperations.similarstructure_from_indices(T::Type, poA::IndexTuple
     sizes = vec([getelements((map(n->size(A.blocks[nA],n),poA)...,map(n->size(B.blocks[nB],n),poB)...),indC) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
     dirs = getelements((dirsA...,dirsB...),indC)
     qns = vec([getelements((getelements(A.qns[nA],poA)...,getelements(B.qns[nB],poB)...),indC) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
-    qntotal = fuse(A.qntotal,B.qntotal)
+    qntotal = fuse(opA(A.qntotal),opB(B.qntotal))
     correct_inds = [iszero(fuse(fuse(qn),qntotal)) for qn in qns]
     (sizes[correct_inds], qns[correct_inds], dirs, qntotal)
     #println((sizes, qns, dirs, fuse(A.qntotal,B.qntotal)))
@@ -90,19 +90,6 @@ function Base.similar(A::CovariantTensor, type::Type, (sizes, qns, dirs, qntotal
     CovariantTensor(blocks, qns, dirs, qntotal)
 end
 
-function Base.:*(a::Number, A::CovariantTensor)
-    B = similar(A)
-    Threads.@threads for n in eachindex(B.blocks)
-        B.blocks[n] = a * A.blocks[n]
-    end
-    return B
-end
-function LinearAlgebra.lmul!(a::Number, B::CovariantTensor)
-    Threads.@threads for n in eachindex(B.blocks)
-        LinearAlgebra.lmul!(a, B.blocks[n])
-    end
-    return B
-end
 
 function SymmetricTensor(blocks::Vector, qns, dirs)
     @assert all(map(qn -> iszero(fuse(qn, dirs)), qns)) "$qns \n $dirs \n $(map(qn->fuse(qn,dirs),qns) )"
@@ -116,6 +103,7 @@ Base.hash(a::ZQuantumNumber, h::UInt64 = UInt64(0)) = Base.hash(a.n, h)
 #Base.:!(qn::ParityQN) = ParityQN(!qn.parity)
 #fuse(qn1::ParityQN,qn2::ParityQN) = qn1.parity + qn2.parity
 invert(l::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(-l.n)
+invert(::IdentityQN) = IdentityQN()
 #invert(l::ParityQN) = !l
 #invert(ls::QNTuple) = QNTuple(invert.(ls.qns))
 # Base.:+(lA::ZQuantumNumber{N}, lB::ZQuantumNumber{N}) where {N} = ZQuantumNumber{N}(lA.n + lB.n)
@@ -123,7 +111,7 @@ Base.:-(l::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(-l.n)
 Base.:-(l::QN,l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(l.n - l2.n)
 Base.:+(l::QN,l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(l.n + l2.n)
 Base.iszero(qn::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = iszero(qn.n)
-Base.iszero(qn::IdentityQN) = true
+Base.iszero(::IdentityQN) = true
 fuse(l1::QN, l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = l1 + l2
 fuse(l1::AbstractQuantumNumber, l2::IdentityQN) = l1
 fuse(l1::IdentityQN, l2::AbstractQuantumNumber) = l2
@@ -318,3 +306,92 @@ function rand_compatible_tensor(A::CovariantTensor{T,N,QNs,QN}) where {T,N,QNs,Q
     return CovariantTensor(blocks,A.qns,invert.(A.dirs),A.qntotal)#::CovariantTensor{T,N,QNs,QN}
 end
 
+function LinearAlgebra.ishermitian(A::CovariantTensor{T,N}) where {T,N}
+    iseven(N) || return false
+    Nhalf = Int( N/ 2)
+    invert.(A.dirs[1:Nhalf]) == A.dirs[Nhalf+1:end] || return false
+    all([qns[1:Nhalf] == qns[Nhalf+1:end] for qns in A.qns]) || return false
+    all([b' ≈ b for b in A.blocks]) || return false
+    return true
+end
+function isunitary(A::CovariantTensor{T,N}) where {T,N}
+    iseven(N) || return false
+    Nhalf = Int( N/ 2)
+    #all(map(xor,A.dirs[1:Nhalf],A.dirs[Nhalf+1:end])) || return false
+    all(isunitary.(A.blocks)) || return false
+    #mat' * mat ≈ one(mat) && mat * mat' ≈ one(mat)
+    return true
+end
+
+function Base.permutedims(A::CovariantTensor,p)
+    blocks = [permutedims(block,p) for block in A.blocks]
+    qns = [getelements(qns,p) for qns in A.qns]
+    dirs = getelements(A.dirs,p)
+    CovariantTensor(blocks,qns,dirs,A.qntotal)
+end
+
+function Base.:*(a::Number, A::CovariantTensor)
+    B = similar(A)
+    Threads.@threads for n in eachindex(B.blocks)
+        B.blocks[n] = a * A.blocks[n]
+    end
+    return B
+end
+function LinearAlgebra.lmul!(a::Number, B::CovariantTensor)
+    Threads.@threads for block in B.blocks
+        lmul!(a, block)
+    end
+    return B
+end
+
+function LinearAlgebra.rmul!(B::CovariantTensor, a::Number)
+    Threads.@threads for block in B.blocks
+        lmul!(block, a)
+    end
+    return B
+end
+
+function LinearAlgebra.mul!(w::CovariantTensor, a::Number, v::CovariantTensor)
+    @assert w.dirs == v.dirs && w.qns == v.qns
+    Threads.@threads for (wb,vb) in zip(w.blocks,v.blocks)
+        mul!(wb, a, vb)
+    end
+    return w
+end
+
+function LinearAlgebra.mul!(w::CovariantTensor, v::CovariantTensor, a::Number)
+    @assert w.dirs == v.dirs && w.qns == v.qns
+    Threads.@threads for (wb,vb) in zip(w.blocks,v.blocks)
+        mul!(wb, vb, a)
+    end
+    return w
+end
+
+function LinearAlgebra.axpy!(a::Number, v::CovariantTensor, w::CovariantTensor)
+    @assert w.dirs == v.dirs && w.qns == v.qns
+    Threads.@threads for (wb,vb) in zip(w.blocks,v.blocks)
+        axpy!(a, vb,wb)
+    end
+    return w
+end
+function LinearAlgebra.axpby!(a::Number, v::CovariantTensor, b, w::CovariantTensor)
+    @assert w.dirs == v.dirs && w.qns == v.qns
+    Threads.@threads for (wb,vb) in zip(w.blocks,v.blocks)
+        axpby!(a, vb,b, wb)
+    end
+    return w
+end
+
+function LinearAlgebra.dot(v::CovariantTensor{Tv,N}, w::CovariantTensor{Tw,N}) where {N,Tv,Tw}
+    cind::IndexTuple{N} = Tuple(1:N)
+    @assert v.dirs == w.dirs
+    @assert length(v.qns) == length(w.qns)
+    pairs = find_matches(v,cind,w,cind)
+    T = promote_type(Tv,Tw)
+    C = [fill(zero(T)) for k in 1:N]
+    for (nC,(nv,nw)) in enumerate(pairs)
+        TensorOperations.contract!(one(T),v.blocks[nv],:C,w.blocks[nw],:N,zero(T),C[nC],(),cind,(),cind,(),())
+    end
+    return scalar(sum(C))
+end
+LinearAlgebra.norm(v::CovariantTensor) = norm(norm.(v.blocks))

@@ -6,8 +6,9 @@ operatorlength(::AbstractSquareGate{T,N}) where {T,N} = div(N, 2)
 LinearAlgebra.ishermitian(gate::SquareGate) = gate.ishermitian
 LinearAlgebra.ishermitian(gate::ScaledIdentityGate) = gate.ishermitian
 isunitary(gate::SquareGate) = gate.isunitary
-isunitary(mat::AbstractArray{<:Number,2}) = mat' * mat ≈ one(mat) && mat * mat' ≈ one(mat)
-Base.complex(::Type{<:SquareGate{T,N}}) where {T,N} = SquareGate{complex(T),N}
+isunitary(mat::Matrix) = mat' * mat ≈ one(mat) && mat * mat' ≈ one(mat)
+Base.complex(::Type{<:SquareGate{T,N,S}}) where {T,N,S} = SquareGate{complex(T),N,complex(S)}
+Base.complex(::Type{Array{T,N}}) where {T,N} = Array{complex(T), N} 
 
 Base.:*(x::K, g::ScaledIdentityGate{T,N}) where {T,N,K<:Number} = ScaledIdentityGate(x * data(g), Val(div(N, 2)))
 Base.:*(g::ScaledIdentityGate, x::K) where {K<:Number} = x * g

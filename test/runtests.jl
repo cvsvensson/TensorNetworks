@@ -33,8 +33,8 @@ end
         end
     end
 
-    @test typeof(g) == SquareGate{Float64,2}
-    @test complex(typeof(g)) == SquareGate{ComplexF64,2}
+    @test typeof(g) == SquareGate{Float64,2,Matrix{Float64}}
+    @test complex(typeof(g)) == SquareGate{ComplexF64,2,Matrix{ComplexF64}}
 
     H = (op+op')/2
     U = exp(H*1.0im)
@@ -668,6 +668,8 @@ end
     normA1 = norm(Array(Av))
     @tensor normA2[:] := Av[1]*conj(Av[1])
     @test normA1^2 ≈ scalar(normA2) 
+    @test normA1 ≈ norm(Av)
+    @test normA1^2 ≈ dot(Av,Av)
     Bv = TensorNetworks.rand_compatible_tensor(Av)
     @tensor AvBv[:] := Av[1]*Bv[1]
     @test typeof(scalar(AvBv)) == ComplexF64
@@ -682,7 +684,8 @@ end
     trA1 = tr(Array(Asquare))
     @tensor trA2[:] := Asquare[1,1]
     @test trA1 ≈ scalar(trA2)
+    @test ishermitian(Asquare)
 
-
+    @test Array(permutedims(Am,(2,1))) == permutedims(Array(Am),(2,1))
     
 end

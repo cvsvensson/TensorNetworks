@@ -24,18 +24,40 @@ IdentityGate(::Val{N}) where N = ScaledIdentityGate(true, Val(N))
 Base.show(io::IO, g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))
 Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityGate{T,N}) where {T,N} = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityGate of length ", Int(N / 2)))
 
-struct SquareGate{T,N} <: AbstractSquareGate{T,N}
-    data::Array{T,N}
+struct SquareGate{T,N,S} <: AbstractSquareGate{T,N}
+    data::S
     ishermitian::Bool
     isunitary::Bool
-    function SquareGate(data::AbstractArray{T,N}) where {T,N}
+    function SquareGate(data::S) where {S}
+        T = eltype(S)
+        N = ndims(S)
         @assert iseven(N) "Gate should be square"
-        sg = size(data)
-        l = Int(N / 2)
-        D = prod(sg[1:l])
-        mat = reshape(data, D, D)
-        new{T,N}(data, ishermitian(mat), isunitary(mat))
+        new{T,N,S}(data, ishermitian(data), isunitary(data))
     end
+end
+function LinearAlgebra.ishermitian(A::Array{<:Any,N}) where N
+    sg = size(A)
+    l = Int(N / 2)
+    D = prod(sg[1:l])
+    LinearAlgebra.ishermitian(reshape(A, D, D))
+end
+function isunitary(A::Array{<:Any,N}) where N
+    sg = size(A)
+    l = Int(N / 2)
+    D = prod(sg[1:l])
+    isunitary(reshape(A, D, D))
+end
+function LinearAlgebra.ishermitian(A::Matrix)
+    indsm, indsn = axes(A)
+    if indsm != indsn
+        return false
+    end
+    for i = indsn, j = i:last(indsn)
+        if A[i,j] != adjoint(A[j,i])
+            return false
+        end
+    end
+    return true
 end
 
 abstract type AbstractSite{T,N} <: AbstractArray{T,N} end
