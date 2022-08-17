@@ -1,60 +1,63 @@
 #TODO compress MPO https://arxiv.org/pdf/1611.02498.pdf
-abstract type AbstractMPOsite{T} <: AbstractArray{T,4} end
+abstract type AbstractMPOSite{T} <: AbstractArray{T,4} end
 
-struct MPOsite{T} <: AbstractMPOsite{T}
-    data::Array{T,4}
-    # ishermitian::Bool
-    # isunitary::Bool
+struct MPOSite{T,S<:AbstractArray{T,4}} <: AbstractMPOSite{T}
+    data::S
 end
-Base.getindex(g::MPOsite, I::Vararg{Int,4}) = getindex(data(g), I...)
-operatorlength(::AbstractMPOsite) = 1
+const DenseMPOSite{T} = MPOSite{T,Array{T,4}}
+Base.getindex(g::MPOSite, I::Vararg{Int,4}) = getindex(data(g), I...)
+operatorlength(::AbstractMPOSite) = 1
 
-MPOsite{K}(site::MPOsite, dir) where {K} = MPOsite{K}(data(site))
+MPOSite{K}(site::MPOSite, dir) where {K} = MPOSite{K}(data(site))
 
-function MPOsite(op::Array{<:Number,2})
+function MPOSite(op::Array{<:Number,2})
     sop = size(op)
-    return MPOsite(reshape(op, 1, sop[1], sop[2], 1))
+    return MPOSite(reshape(op, 1, sop[1], sop[2], 1))
 end
 
 # function MPOsite(op::Array{<:Number,4})
 #     return MPOsite(op, norm(op - conj(permutedims(op,[1,3,2,4]))) ≈ 0)
 
-data(site::MPOsite) = site.data
-Base.eltype(::MPOsite{T}) where {T} = T
+data(site::MPOSite) = site.data
+Base.eltype(::MPOSite{T}) where {T} = T
 # LinearAlgebra.ishermitian(site::MPOsite) = site.ishermitian
 # isunitary(site::MPOsite) = site.isunitary
-reverse_direction(site::MPOsite) = MPOsite(permutedims(data(site), [4, 2, 3, 1]))
-Base.transpose(site::MPOsite) = MPOsite(permutedims(data(site), [1, 3, 2, 4]))
-Base.adjoint(site::MPOsite) = MPOsite(conj(permutedims(data(site), [1, 3, 2, 4])))
-Base.conj(site::MPOsite) = MPOsite(conj(data(site)))
-Base.permutedims(site::MPOsite, perm) = MPOsite(permutedims(site.data, perm))
+reverse_direction(site::MPOSite) = MPOSite(permutedims(data(site), [4, 2, 3, 1]))
+Base.transpose(site::MPOSite) = MPOSite(permutedims(data(site), [1, 3, 2, 4]))
+Base.adjoint(site::MPOSite) = MPOSite(conj(permutedims(data(site), [1, 3, 2, 4])))
+Base.conj(site::MPOSite) = MPOSite(conj(data(site)))
+Base.permutedims(site::MPOSite, perm) = MPOSite(permutedims(site.data, perm))
 
-Base.:+(site1::MPOsite, site2::MPOsite) = MPOsite(data(site1) .+ data(site2))
+Base.:+(site1::MPOSite, site2::MPOSite) = MPOSite(data(site1) .+ data(site2))
 
-abstract type AbstractMPO{T<:Number} <: AbstractVector{MPOsite{T}} end
+abstract type AbstractMPO{T<:Number,MPOSite} <: AbstractVector{MPOSite} end
 
-struct MPO{T<:Number} <: AbstractMPO{T}
-    data::Vector{MPOsite{T}}
+struct MPO{T<:Number,S} <: AbstractMPO{T,S}
+    data::Vector{S}
+    function MPO(sites::Vector{S}) where S
+        new{eltype(S),S}(sites)
+    end
 end
+
 sites(mpo::MPO) = mpo.data
 Base.IndexStyle(::Type{<:AbstractMPO}) = IndexLinear()
 Base.size(mpo::AbstractMPO) = size(sites(mpo))
 operatorlength(mpo::AbstractMPO) = length(mpo)
 
-struct ScaledIdentityMPOsite{T} <: AbstractMPOsite{T}
+struct ScaledIdentityMPOSite{T} <: AbstractMPOSite{T}
     data::T
+    function ScaledIdentityMPOSite(scaling::T) where T
+        new{T}(scaling)
+    end
 end
-function ScaledIdentityMPOsite(scaling::T) where {T<:Number}
-    ScaledIdentityMPOsite{T}(scaling)
-end
-data(site::ScaledIdentityMPOsite) = site.data
-const IdentityMPOsite = ScaledIdentityMPOsite(true)
+data(site::ScaledIdentityMPOSite) = site.data
+const IdentityMPOSite = ScaledIdentityMPOSite(true)
 
 # MPOsite(s::ScaledIdentityMPOsite) = s
 # MPOsite{K}(s::ScaledIdentityMPOsite) where {K} = ScaledIdentityMPOsite{K}(data(s))
 #Base.length(mpo::ScaledIdentityMPOsite) = 1
 
-function Base.size(::ScaledIdentityMPOsite, i::Integer)
+function Base.size(::ScaledIdentityMPOSite, i::Integer)
     if i == 1 || i == 4
         return 1
     else
@@ -62,40 +65,39 @@ function Base.size(::ScaledIdentityMPOsite, i::Integer)
     end
 end
 
+LinearAlgebra.ishermitian(mpo::ScaledIdentityMPOSite) = isreal(mpo.data)
+isunitary(mpo::ScaledIdentityMPOSite) = data(mpo)' * data(mpo) ≈ 1
+Base.:*(x::K, g::ScaledIdentityMPOSite) where {K<:Number} = ScaledIdentityMPOSite(x * data(g))
+Base.:*(g::ScaledIdentityMPOSite, x::K) where {K<:Number} = ScaledIdentityMPOSite(x * data(g))
+Base.:/(g::ScaledIdentityMPOSite, x::K) where {K<:Number} = inv(x) * g
+auxillerate(mpo::ScaledIdentityMPOSite) = mpo
+Base.show(io::IO, g::ScaledIdentityMPOSite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOsite"))
+Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityMPOSite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOsite"))
 
-LinearAlgebra.ishermitian(mpo::ScaledIdentityMPOsite) = isreal(mpo.data)
-isunitary(mpo::ScaledIdentityMPOsite) = data(mpo)' * data(mpo) ≈ 1
-Base.:*(x::K, g::ScaledIdentityMPOsite) where {K<:Number} = ScaledIdentityMPOsite(x * data(g))
-Base.:*(g::ScaledIdentityMPOsite, x::K) where {K<:Number} = ScaledIdentityMPOsite(x * data(g))
-Base.:/(g::ScaledIdentityMPOsite, x::K) where {K<:Number} = inv(x) * g
-auxillerate(mpo::ScaledIdentityMPOsite) = mpo
-Base.show(io::IO, g::ScaledIdentityMPOsite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOsite"))
-Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityMPOsite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOsite"))
+reverse_direction(site::ScaledIdentityMPOSite) = site
+Base.transpose(site::ScaledIdentityMPOSite) = site
+Base.adjoint(site::ScaledIdentityMPOSite) = conj(site)
+Base.conj(site::ScaledIdentityMPOSite) = ScaledIdentityMPOSite(conj(data(site)))
+Base.:+(site1::ScaledIdentityMPOSite, site2::ScaledIdentityMPOSite) = ScaledIdentityMPOSite(data(site1) + data(site2))
 
-reverse_direction(site::ScaledIdentityMPOsite) = site
-Base.transpose(site::ScaledIdentityMPOsite) = site
-Base.adjoint(site::ScaledIdentityMPOsite) = conj(site)
-Base.conj(site::ScaledIdentityMPOsite) = ScaledIdentityMPOsite(conj(data(site)))
-Base.:+(site1::ScaledIdentityMPOsite, site2::ScaledIdentityMPOsite) = ScaledIdentityMPOsite(data(site1) + data(site2))
+Base.:(==)(mpo1::ScaledIdentityMPOSite, mpo2::ScaledIdentityMPOSite) = data(mpo1) == data(mpo2)
 
-Base.:(==)(mpo1::ScaledIdentityMPOsite, mpo2::ScaledIdentityMPOsite) = data(mpo1) == data(mpo2)
-
-function Base.getindex(g::ScaledIdentityMPOsite, I::Vararg{Int,4})
+function Base.getindex(g::ScaledIdentityMPOSite{T}, I::Vararg{Int,4}) where T
     @assert I[1] == I[4] == 1 "Accessing out of bounds index on ScaledIdentityMPOsite "
-    val = I[2] == I[3] ? 1 : 0
+    val = I[2] == I[3] ? one(T) : zero(T)
     return data(g) * val
 end
 
-struct ScaledIdentityMPO{T} <: AbstractMPO{T}
+struct ScaledIdentityMPO{T} <: AbstractMPO{T,ScaledIdentityMPOSite{T}}
     data::T
     length::Int
-    function ScaledIdentityMPO(scaling::T, n::Integer) where {T<:Number}
+    function ScaledIdentityMPO(scaling::T, n::Integer) where {T}
         new{T}(scaling, n)
     end
 end
 Base.IndexStyle(::Type{<:ScaledIdentityMPO}) = IndexLinear()
-Base.getindex(g::ScaledIdentityMPO, i::Integer) = g.data^(1 / length(g)) * IdentityMPOsite
-Base.getindex(g::ScaledIdentityMPO, I) = g.data^(1 / length(g)) * fill(IdentityMPOsite, length(I))
+Base.getindex(g::ScaledIdentityMPO, i::Integer) = g.data^(1 / length(g)) * IdentityMPOSite
+Base.getindex(g::ScaledIdentityMPO, I) = g.data^(1 / length(g)) * fill(IdentityMPOSite, length(I))
 data(g::ScaledIdentityMPO) = g.data
 sites(g::ScaledIdentityMPO) = g[1:length(g)]
 
@@ -124,21 +126,21 @@ Base.:(==)(mpo1::ScaledIdentityMPO, mpo2::ScaledIdentityMPO) = data(mpo1) == dat
 #     end
 # end
 
-MPO(mpo::MPOsite) = MPO([mpo])
-MPO(op::Array{<:Number,2}) = MPO(MPOsite(op))
-MPO(ops::Vector{Matrix{T}}) where {T} = MPO(map(MPOsite, ops))
-MPO(ops::Vector{Array{T,4}}) where {T} = MPO(map(MPOsite, ops))
-MPO(ops::Vector{<:ScaledIdentityMPOsite}) = prod(data.(ops))*IdentityMPO(length(ops))
+MPO(mpo::MPOSite) = MPO([mpo])
+MPO(op::Array{<:Number,2}) = MPO(MPOSite(op))
+MPO(ops::Vector{Matrix{T}}) where {T} = MPO(map(MPOSite, ops))
+MPO(ops::Vector{Array{T,4}}) where {T} = MPO(map(MPOSite, ops))
+MPO(ops::Vector{<:ScaledIdentityMPOSite}) = prod(data.(ops))*IdentityMPO(length(ops))
 data(mpo::MPO) = mpo.data
 # HermitianMPO(mpo::MPOsite) = HermitianMPO(MPO([mpo]))
 # HermitianMPO(op::Array{T,2}) where {T<:Number} = HermitianMPO(MPOsite(op))
 # HermitianMPO(ops::Array{Array{T,4},1}) where {T<:Number} = HermitianMPO(map(op->MPOsite(op),ops))
 
-Base.size(mposite::MPOsite) = size(data(mposite))
+Base.size(mposite::MPOSite) = size(data(mposite))
 # Base.length(mpo::MPOsite) = 1
 # Base.length(mpo::MPO) = length(data(mpo))
 # Base.IndexStyle(::Type{<:MPOsite}) = IndexLinear()
-Base.@propagate_inbounds Base.getindex(mpo::MPOsite, i::Integer) = mpo.data[i]
+Base.@propagate_inbounds Base.getindex(mpo::MPOSite, i::Integer) = mpo.data[i]
 Base.@propagate_inbounds Base.getindex(mpo::AbstractMPO, i::Integer) = mpo.data[i]
 #Base.setindex!(mpo::MPOsite, v, I::Vararg{Integer,4}) = (mpo.data[I] = v)
 #Base.setindex!(mpo::AbstractMPO, v, I::Vararg{Integer,N}) where {N} = (mpo.data[I] = v)
@@ -149,12 +151,12 @@ Base.@propagate_inbounds Base.getindex(mpo::AbstractMPO, i::Integer) = mpo.data[
 
 Return tensor⨂Id_aux
 """
-function auxillerate(mpo::MPOsite)
+function auxillerate(mpo::MPOSite)
     sop = size(mpo)
     d = sop[2]
     idop = Matrix{eltype(mpo)}(I, d, d)
     @tensor tens[:] := idop[-3, -5] * mpo.data[-1, -2, -4, -6]
-    return MPOsite(reshape(tens, sop[1], d^2, d^2, sop[4]))
+    return MPOSite(reshape(tens, sop[1], d^2, d^2, sop[4]))
 end
 
 auxillerate(mpo::MPO) = MPO(auxillerate.(mpo.data))
@@ -198,7 +200,7 @@ function multiplyMPOsites(site1, site2)
     s1 = size(site1)
     s2 = size(site2)
     @tensor temp[:] := data(site1)[-1, -3, 1, -5] * data(site2)[-2, 1, -4, -6]
-    return MPOsite(reshape(temp, s1[1] * s2[1], s1[2], s2[3], s1[4] * s2[4]))
+    return MPOSite(reshape(temp, s1[1] * s2[1], s1[2], s2[3], s1[4] * s2[4]))
 end
 """
 ```multiplyMPOs(mpo1,mpo2)```

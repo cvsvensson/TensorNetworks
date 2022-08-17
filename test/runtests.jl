@@ -106,8 +106,8 @@ end
 
 end
 
-@testset "MPOsite" begin
-    id = IdentityMPOsite
+@testset "MPOSite" begin
+    id = IdentityMPOSite
     @test data(id)
     z = rand(ComplexF64)
     zid = z*id
@@ -140,7 +140,7 @@ end
     @test zid.data == z
     @test zid == id*z
 
-    idsite = IdentityMPOsite
+    idsite = IdentityMPOSite
     @test idsite == id[floor(Int, N/2)]
     @test z^(1/N)*idsite == zid[floor(Int, N/2)]
 
@@ -297,7 +297,7 @@ end
         @test Matrix(T) ≈ Matrix(transfer_matrix(site,IdentityGate(Val(1))))
         @test z*Matrix(T) ≈ Matrix(transfer_matrix(site,z*IdentityGate(Val(1))))
 
-        T1 = transfer_matrix(site,MPOsite(sz));
+        T1 = transfer_matrix(site,MPOSite(sz));
         @test size(T1) == (D^2,D^2)
         #@test Matrix(T1') ≈ Matrix(T1)'
 
@@ -514,7 +514,7 @@ end
     mps = canonicalize(randomOpenPVMPS(5,2,5));
     smps = mps+mps
     @test length(mps) == length(smps)
-    parityop = MPO(fill(MPOsite(sz),5))
+    parityop = MPO(fill(MPOSite(sz),5))
     parity(state) = expectation_value(state, parityop)
     mpsplus = (TensorNetworks.apply_local_op(mps,Gate(sz)) + mps)/sqrt(2)
     mpsplus = mpsplus/(norm(mpsplus))

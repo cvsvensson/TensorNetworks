@@ -88,7 +88,7 @@ function update_environments!(env::Environments, j::Integer, csites::Tuple, site
 end
 
 update_environments!(env::Environments, mps1::AbstractSite, mps2::AbstractSite, site::Integer) = update_environments!(env, site, mps1, mps2)
-update_environments!(env::Environments, mps::AbstractSite, mpo::AbstractMPOsite, site::Integer) = update_environments!(env, site, mps, mpo, mps)
+update_environments!(env::Environments, mps::AbstractSite, mpo::AbstractMPOSite, site::Integer) = update_environments!(env, site, mps, mpo, mps)
 update_environments!(env::Environments, mps::AbstractSite, site::Integer) = update_environments!(env, site, mps, mps)
 
 # function update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::ScaledIdentityMPOsite, mps2::AbstractSite, site::Integer)
@@ -98,11 +98,11 @@ update_environments!(env::Environments, mps::AbstractSite, site::Integer) = upda
 # end
 
 #TODO check performance and compare to matrix multiplication and Tullio
-local_mul!(out, envL, envR, mposite::AbstractMPOsite, site::AbstractArray{<:Number,3}) = @tensor out[:] = (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
+local_mul!(out, envL, envR, mposite::AbstractMPOSite, site::AbstractArray{<:Number,3}) = @tensor out[:] = (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
 
-local_mul(envL, envR, mposite::AbstractMPOsite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
-local_mul(envL, envR, mposite::AbstractMPOsite, site::PhysicalSite) = PhysicalSite(local_mul(envL, envR, mposite, data(site)), ispurification(site))
-local_mul(envL, envR, mposite::AbstractMPOsite, site::PVSite) = local_mul(envL, envR, mposite, site.Λ1 * site * site.Λ2)
+local_mul(envL, envR, mposite::AbstractMPOSite, site::AbstractArray{<:Number,3}) = @tensor temp[:] := (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])
+local_mul(envL, envR, mposite::AbstractMPOSite, site::PhysicalSite) = PhysicalSite(local_mul(envL, envR, mposite, data(site)), ispurification(site))
+local_mul(envL, envR, mposite::AbstractMPOSite, site::PVSite) = local_mul(envL, envR, mposite, site.Λ1 * site * site.Λ2)
 #TODO implement these for SiteSum
 local_mul(envL, envR, site::Array{<:Number,3}) = @tensor temp[:] := envL[-1, 1] * site[1, -2, 2] * envR[-3, 2]
 local_mul(envL, envR, site::PhysicalSite) = PhysicalSite(local_mul(envL, envR, data(site)), ispurification(site))

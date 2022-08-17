@@ -81,7 +81,7 @@ _transfer_left_mpo(Γ1::PhysicalSite, op, Γ2::SiteSum) = _transfer_left_mpo(Sit
 _transfer_left_mpo(Γ1::SiteSum, op, Γ2::PhysicalSite) = _transfer_left_mpo(Γ1, op, SiteSum(Γ2))
 _transfer_left_mpo(Γ1::PhysicalSite, Γ2::SiteSum) = _transfer_left_mpo(SiteSum(Γ1), Γ2)
 _transfer_left_mpo(Γ1::SiteSum, Γ2::PhysicalSite) = _transfer_left_mpo(Γ1, SiteSum(Γ2))
-_transfer_left_mpo(Γ1::SiteSum, op::MPOsite) = _transfer_left_mpo(Γ1, op, Γ1)
+_transfer_left_mpo(Γ1::SiteSum, op::MPOSite) = _transfer_left_mpo(Γ1, op, Γ1)
 function _transfer_left_mpo(Γ1::SiteSum, op, Γ2::SiteSum)
     N1 = length(Γ1)
     N2 = length(Γ2)

@@ -388,10 +388,14 @@ function LinearAlgebra.dot(v::CovariantTensor{Tv,N}, w::CovariantTensor{Tw,N}) w
     @assert length(v.qns) == length(w.qns)
     pairs = find_matches(v,cind,w,cind)
     T = promote_type(Tv,Tw)
-    C = [fill(zero(T)) for k in 1:N]
+    T0 = fill(zero(T))
+    C = [T0 for k in 1:N]
     for (nC,(nv,nw)) in enumerate(pairs)
         TensorOperations.contract!(one(T),v.blocks[nv],:C,w.blocks[nw],:N,zero(T),C[nC],(),cind,(),cind,(),())
     end
     return scalar(sum(C))
 end
 LinearAlgebra.norm(v::CovariantTensor) = norm(norm.(v.blocks))
+
+# Base.conj(A::CovariantTensor)
+

@@ -51,7 +51,7 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     Tbonds = [TensorNetworks.transfer_matrix_bond((mps,), (mps2,), k, :left) for k in 1:N]
     Tbonds0 = [TensorNetworks.transfer_matrix_bond((mps,),(mps,), k, :left) for k in 1:N]
     JW = JWop(nmaj)
-    JWenv = environments((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
+    JWenv = environments((mps,), (MPO(fill(MPOSite(JW), N)), mps2))
     #JWenv0 = environment(mps, MPO(fill(MPOsite(JW), N)))
     env0 = environments((mps,),(mps,))
     env = environments((mps,), (mps2,))
@@ -61,8 +61,8 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     rightvec0 = [vec(env0.R[k]) for k in 1:N]
     TI = transfer_matrices((mps,), (mps2,), :left)
     TI0 = transfer_matrices((mps,),(mps,), :left)
-    TJW = transfer_matrices(mps, MPOsite(JW), mps2, :left)
-    TJW0 = transfer_matrices(mps, MPOsite(JW), mps, :left)
+    TJW = transfer_matrices(mps, MPOSite(JW), mps2, :left)
+    TJW0 = transfer_matrices(mps, MPOSite(JW), mps, :left)
     result1::Array{complex(T),2} = zeros(complex(T), N, nmaj)
     result2::Array{real(T),4} = zeros(real(T), N, N, nmaj, nmaj)
     result3::Array{complex(T),6} = zeros(complex(T), N, N, N, nmaj, nmaj, nmaj)
@@ -71,29 +71,29 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     majops = maj_ops(nmaj)#[TensorNetworks.XI,TensorNetworks.YI,-TensorNetworks.ZX,-TensorNetworks.ZY]
     majopsJW = maj_opsJW(nmaj)#[-1im*TensorNetworks.YZ, 1im*TensorNetworks.XZ, 1im * TensorNetworks.IY, -1im*TensorNetworks.IX]
 
-    T1 = [[transfer_matrix(mps[r], MPOsite(majops[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
-    T10 = [[transfer_matrix(mps[r], MPOsite(majops[i]), :left) for i in 1:nmaj] for r in 1:N]
-    T1JW = [[transfer_matrix(mps[r], MPOsite(majopsJW[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
-    T1JW0 = [[transfer_matrix(mps[r],MPOsite(majopsJW[i]), :left) for i in 1:nmaj] for r in 1:N]
+    T1 = [[transfer_matrix(mps[r], MPOSite(majops[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
+    T10 = [[transfer_matrix(mps[r], MPOSite(majops[i]), :left) for i in 1:nmaj] for r in 1:N]
+    T1JW = [[transfer_matrix(mps[r], MPOSite(majopsJW[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
+    T1JW0 = [[transfer_matrix(mps[r],MPOSite(majopsJW[i]), :left) for i in 1:nmaj] for r in 1:N]
     
     Ttype = typeof(1*T1[1][1])
     
     T2indices::Vector{NTuple{2, Int64}} = vcat([[(k1,k2) for k2 in (1:nmaj)[k1+1:end]] for k1 in 1:nmaj]...)
     T2indicesitr = Base.product(1:nmaj,1:nmaj)
-    T2stack(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]), mps2[r], :left)
-    T2stack0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]), :left)
-    T2stackJW(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majopsJW[j]), mps2[r], :left)
-    T2stackJW0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majopsJW[j]), :left)
+    T2stack(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majops[j]), mps2[r], :left)
+    T2stack0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majops[j]), :left)
+    T2stackJW(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majopsJW[j]), mps2[r], :left)
+    T2stackJW0(r,i,j) =  (i<j ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majopsJW[j]), :left)
     T2stacked::Vector{Array{Ttype,2}} = [[T2stack(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
     T2stacked0::Vector{Array{Ttype,2}} = [[T2stack0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
     T2stackedJW::Vector{Array{Ttype,2}} = [[T2stackJW(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
     T2stackedJW0::Vector{Array{Ttype,2}} = [[T2stackJW0(r,i,j) for (i,j) in T2indicesitr] for r in 1:N]
 
     T3indices::Vector{NTuple{3, Int64}} = [vcat([vcat([[(k1,k2,k3) for k3 in (1:nmaj)[k2+1:end]] for k2 in (1:nmaj)[k1+1:end]]...) for k1 in 1:nmaj]...)...]
-    T3stack(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majops[k]), mps2[r], :left)
-    T3stack0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majops[k]), :left)
-    T3stackJW(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majopsJW[k]), mps2[r], :left)
-    T3stackJW0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOsite(majops[i]*majops[j]*majopsJW[k]), :left)
+    T3stack(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majops[j]*majops[k]), mps2[r], :left)
+    T3stack0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majops[j]*majops[k]), :left)
+    T3stackJW(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majops[j]*majopsJW[k]), mps2[r], :left)
+    T3stackJW0(r,i,j,k) = (i<j<k ? 1 : 0) * transfer_matrix(mps[r], MPOSite(majops[i]*majops[j]*majopsJW[k]), :left)
     T3indicesitr = Base.product(1:nmaj,1:nmaj,1:nmaj)
     T3stacked::Vector{Array{Ttype,3}} = [[T3stack(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
     T3stacked0::Vector{Array{Ttype,3}} = [[T3stack0(r,i,j,k) for (i,j,k) in T3indicesitr] for r in 1:N]
@@ -104,7 +104,7 @@ function majorana_measurements(mps::TensorNetworks.AbstractMPS{<:TensorNetworks.
     Threads.@threads for r in 1:N
         R = [op * rightvec0[r] for op in T10[r]]
         if nmaj==4
-            T4stacked0 = transfer_matrix(mps[r],MPOsite(majops[1]*majops[2]*majops[3]*majops[4]), mps[r], :left) 
+            T4stacked0 = transfer_matrix(mps[r],MPOSite(majops[1]*majops[2]*majops[3]*majops[4]), mps[r], :left) 
             result4[r,r,r,r, 1,2,3,4] = real(leftvec0[r] * T4stacked0 * rightvec0[r])
         end
         for (i,j) in T2indices
@@ -199,14 +199,14 @@ function one_body_noninteracting_majorana_coefficients(mps::TensorNetworks.Abstr
     nmaj = size(mps[1],2)
     Tbonds = [TensorNetworks.transfer_matrix_bond((mps,), (mps2,), k, :left) for k in 1:N]
     JW = JWop(nmaj)
-    JWenv = environments((mps,), (MPO(fill(MPOsite(JW), N)), mps2))
+    JWenv = environments((mps,), (MPO(fill(MPOSite(JW), N)), mps2))
     env = environments((mps,), (mps2,))
     rightvec = [vec(env.R[k]) for k in 1:N]
     leftvec = [transpose(Tbonds[k] * vec(JWenv.L[k])) for k in 1:N]#vec(Matrix{T}(I,size(mps[k],1),size(mps[k],1))))
     result1::Array{complex(T),2} = zeros(complex(T), N, nmaj)
 
     majops = maj_ops(nmaj)#[TensorNetworks.XI,TensorNetworks.YI,-TensorNetworks.ZX,-TensorNetworks.ZY]
-    T1 = [[transfer_matrix(mps[r], MPOsite(majops[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
+    T1 = [[transfer_matrix(mps[r], MPOSite(majops[i]), mps2[r], :left) for i in 1:nmaj] for r in 1:N]
 
     Threads.@threads for r in 1:N
         R = [op * rightvec[r] for op in T1[r]]
@@ -269,7 +269,7 @@ function majorana_coefficients(r1,r2,r3,r4; tol=1e-12, krylovdim = 10, maxiter =
     lsola+1im*lsolai, lsolb+ 1im*lsolbi
 end
 
-parityop(N,d) = MPO(fill(MPOsite(JWop(d)), N))
+parityop(N,d) = MPO(fill(MPOSite(JWop(d)), N))
 parity(state) = expectation_value(state, parityop(length(state),size(state[1],2)))
 function parity_projection(state, pm)
     N = length(state)

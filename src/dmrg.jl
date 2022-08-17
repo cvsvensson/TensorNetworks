@@ -234,7 +234,7 @@ function expansion_term(alpha, site, env, mposite)
     @tensor P[:] := data(site)[1, 2, -3] * env[-1, 4, 1] * data(mposite)[4, -2, 2, -4]
     return alpha * reshape(P, size(env, 1), size(site, 2), size(mposite, 4) * size(site, 3))
 end
-function expansion_term(alpha, site, env, mposite::ScaledIdentityMPOsite)
+function expansion_term(alpha, site, env, mposite::ScaledIdentityMPOSite)
     s = size(site)
     newsite = reshape(env * reshape(data(site), s[1], s[2] * s[3]), s[1], s[2], s[3])
     return rmul!(newsite, alpha * data(mposite))

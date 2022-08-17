@@ -53,13 +53,13 @@ data(site::VirtualSite, dir) = site.Λ
 data(site::LinkSite, dir) = site.Λ
 data(site::PVSite) = data(site.Λ1 * site.Γ * site.Λ2)
 
-MPOsite(site::PhysicalSite) = (s = size(site); MPOsite(reshape(data(site), s[1], s[2], 1, s[3])))
-MPOsite(site::PhysicalSite, dir) = MPOsite(site)
-MPOsite(site::PVSite, dir) = MPOsite(PhysicalSite(site, dir), dir)
+MPOSite(site::PhysicalSite) = (s = size(site); MPOSite(reshape(data(site), s[1], s[2], 1, s[3])))
+MPOSite(site::PhysicalSite, dir) = MPOSite(site)
+MPOSite(site::PVSite, dir) = MPOSite(PhysicalSite(site, dir), dir)
 
-MPOsite{K}(site::PhysicalSite) where {K} = (s = size(site); MPOsite{K}(reshape(data(site), s[1], s[2], 1, s[3])))
-MPOsite{K}(site::PhysicalSite, dir) where {K} = MPOsite{K}(site)
-MPOsite{K}(site::PVSite, dir) where {K} = MPOsite{K}(PhysicalSite(site, dir), dir)
+MPOSite{K}(site::PhysicalSite) where {K} = (s = size(site); MPOSite{K}(reshape(data(site), s[1], s[2], 1, s[3])))
+MPOSite{K}(site::PhysicalSite, dir) where {K} = MPOSite{K}(site)
+MPOSite{K}(site::PVSite, dir) where {K} = MPOSite{K}(PhysicalSite(site, dir), dir)
 
 Base.sqrt(site::LinkSite) = LinkSite(sqrt(data(site)))
 
@@ -78,14 +78,14 @@ Base.convert(::Type{LinkSite{T}}, Λ::LinkSite{K}) where {K,T} = LinkSite(Diagon
 # Base.convert(::Type{GenericSite{T}}, site::GenericSite{K}) where {K,T} = GenericSite(convert.(T,data(site)),ispurification(site))
 
 LinearAlgebra.norm(site::AbstractSite) = norm(data(site))
-function Base.promote_rule(A::Type{<:Diagonal{<:Any,V}}, B::Type{<:Diagonal{<:Any,W}}) where {V,W}
-    X = promote_type(V, W)
-    T = eltype(X)
-    isconcretetype(T) && return Diagonal{T,X}
-    return typejoin(A, B)
-end
+# function Base.promote_rule(A::Type{<:Diagonal{<:Any,V}}, B::Type{<:Diagonal{<:Any,W}}) where {V,W}
+#     X = promote_type(V, W)
+#     T = eltype(X)
+#     isconcretetype(T) && return Diagonal{T,X}
+#     return typejoin(A, B)
+# end
 
-function LinearAlgebra.ishermitian(site::MPOsite)
+function LinearAlgebra.ishermitian(site::MPOSite)
     ss = size(site)
     if !(ss[1] == 1 && ss[4] == 1)
         return false

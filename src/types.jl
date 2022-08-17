@@ -32,32 +32,21 @@ struct SquareGate{T,N,S} <: AbstractSquareGate{T,N}
         T = eltype(S)
         N = ndims(S)
         @assert iseven(N) "Gate should be square"
-        new{T,N,S}(data, ishermitian(data), isunitary(data))
+        new{T,N,S}(data, _ishermitian(data), isunitary(data))
     end
 end
-function LinearAlgebra.ishermitian(A::Array{<:Any,N}) where N
+
+function _ishermitian(A::AbstractArray{<:Any,N}) where N
     sg = size(A)
     l = Int(N / 2)
     D = prod(sg[1:l])
-    LinearAlgebra.ishermitian(reshape(A, D, D))
+    ishermitian(reshape(A, D, D))
 end
 function isunitary(A::Array{<:Any,N}) where N
     sg = size(A)
     l = Int(N / 2)
     D = prod(sg[1:l])
     isunitary(reshape(A, D, D))
-end
-function LinearAlgebra.ishermitian(A::Matrix)
-    indsm, indsn = axes(A)
-    if indsm != indsn
-        return false
-    end
-    for i = indsn, j = i:last(indsn)
-        if A[i,j] != adjoint(A[j,i])
-            return false
-        end
-    end
-    return true
 end
 
 abstract type AbstractSite{T,N} <: AbstractArray{T,N} end

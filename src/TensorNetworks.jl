@@ -17,7 +17,7 @@ using Tullio
 # import Distributed.pmap
 
 
-export TruncationArgs, identityMPS, MPOsite, MPO,
+export TruncationArgs, identityMPS, MPOSite, MPO,
 OpenPVMPS, randomOpenPVMPS, identityOpenMPS,
 OpenPMPS, randomDenseOpenPMPS, identityLCROpenMPS,
 UMPS, randomDenseUMPS, identityUMPS, transfer_spectrum, boundary, productUMPS,
@@ -45,6 +45,7 @@ include("pauli.jl")
 include("mpo.jl")
 include("MPSSum.jl")
 include("environment.jl")
+include("TransferMatrix.jl")
 include("mps.jl")
 include("iterative_compression.jl")
 include("MPSsite.jl")
