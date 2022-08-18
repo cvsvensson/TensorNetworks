@@ -259,8 +259,8 @@ _purify_site(site, purify::Bool) = site
 function _local_transfer_matrix(s1::Tuple,s2::Tuple, direction::Symbol)
     # K = promote_type(eltype.(sites)...)
     # purify::Bool = any(([ispurification(site) for site in sites if site isa AbstractSite]))
-    # newsites::NTuple{<:Any, <:} = Tuple([_purify_site(site,purify) for site in sites if !(site isa ScaledIdentityMPOsite)])
-    # scaling::K = prod([K(data(site)) for site in sites if site isa ScaledIdentityMPOsite], init=one(K))
+    # newsites::NTuple{<:Any, <:} = Tuple([_purify_site(site,purify) for site in sites if !(site isa ScaledIdentityMPOSite)])
+    # scaling::K = prod([K(data(site)) for site in sites if site isa ScaledIdentityMPOSite], init=one(K))
     # return (scaling*__local_transfer_matrix(newsites,direction))::LinearMap{K}
     purify::Bool = any(([ispurification(site) for site in s1 if site isa AbstractSite]))
     newsites1 = map(s->_purify_site(s,purify),s1)#_purify_site.(sites, purify)

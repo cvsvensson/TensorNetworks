@@ -36,7 +36,7 @@ isleftcanonical, isrightcanonical, data, isunitary,
 scalar_product, set_center, set_center!, entanglement_entropy,
 entanglement_entropy, IdentityGate, data, compress, qubit,
 randomRightOrthogonalSite, randomLeftOrthogonalSite, randomOrthogonalLinkSite, randomDensePhysicalSite,
-IdentityMPOsite, environments, update_environments!,
+IdentityMPOSite, environments, update_environments!,
 ShiftCenter, SubspaceExpand, getindex, setindex!, kron, repeatedgate, *, +, vec,
 majorana_coefficients, majorana_measurements,
 TrivialQN, ZQuantumNumber, ParityQN, CovariantTensor, SymmetricTensor, fuse,invert

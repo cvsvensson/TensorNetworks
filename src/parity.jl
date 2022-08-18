@@ -1,6 +1,10 @@
 function _positive_parities(n)
     map(x -> (x >>> -1) + (iseven(count_ones(x)) ? 0 : 1), 0:2^(n-1)-1)
 end
+qntype(::Type{<:Array}) = TrivialQN
+qntype(::Type{<:Diagonal}) = TrivialQN
+qntype(::Type{<:AbstractMPS{S,QN}}) where {S,QN} = QN
+qntype(::Type{<:AbstractTensor{T,N,QN}}) where {T,N,QN} = QN
 
 Base.:*(a::Number, b::Z) where {Z<:ZQuantumNumber} = ZQuantumNumber(a * b.n)
 Base.:*(a::Z, b::Number) where {Z<:ZQuantumNumber} = ZQuantumNumber(a.n * b)
@@ -34,6 +38,7 @@ function TensorOperations.similarstructure_from_indices(T::Type, poA::IndexTuple
     qns = vec([getelements((getelements(A.qns[nA],poA)...,getelements(B.qns[nB],poB)...),indC) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
     qntotal = fuse(opA(A.qntotal),opB(B.qntotal))
     correct_inds = [iszero(fuse(fuse(qn),qntotal)) for qn in qns]
+    println(correct_inds)
     (sizes[correct_inds], qns[correct_inds], dirs, qntotal)
     #println((sizes, qns, dirs, fuse(A.qntotal,B.qntotal)))
     #println(cat_collisions(s))
@@ -48,7 +53,7 @@ end
 #     qntotal = deepcopy(A.qntotal)
 #     CovariantTensor(blocks, qns, dirs, qntotal)
 # end
-const CovStructure{N,QN} = Tuple{Vector{NTuple{N,Int}},Vector{QN},NTuple{N,Bool},QN}
+const CovStructure{N,QN} = Tuple{Vector{NTuple{N,Int}},Vector{NTuple{N,QN}},NTuple{N,Bool},QN}
 function structure(A::CovariantTensor)
     sizes = size.(A.blocks)
     return (sizes,A.qns,A.dirs,A.qntotal)
@@ -83,6 +88,7 @@ Base.zero(::Type{QN}) where QN<:Union{ZQuantumNumber,U1QuantumNumber} = QN(0)
 # Base.:+(lA::ZQuantumNumber{N}, lB::ZQuantumNumber{N}) where {N} = ZQuantumNumber{N}(lA.n + lB.n)
 Base.:-(l::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(-l.n)
 Base.:-(l::QN,l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(l.n - l2.n)
+Base.:-(::TrivialQN) = TrivialQN()
 Base.:+(l::QN,l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(l.n + l2.n)
 Base.iszero(qn::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = iszero(qn.n)
 Base.iszero(::TrivialQN) = true
@@ -94,10 +100,10 @@ fuse(l1::TrivialQN, l2::TrivialQN) = TrivialQN()
 #fuse(l1::Link{QN},l2::Link{QN}) where {QN<:AbstractQuantumNumber}= fuse(QuantumNumber(l1),QuantumNumber(l2))
 #fuse(ls::NTuple{<:Any,Union{Link,AbstractQuantumNumber}}) = foldl(fuse,ls)
 fuse(l::AbstractQuantumNumber, d::Bool) = d ? invert(l) : l
-fuse(l1s::NTuple{N}, d1s::NTuple{N,Bool}) where {N} = fuse(map(fuse, l1s, d1s))
-fuse(l1s::Tuple) = foldl(fuse, l1s)
+fuse(l1s::NTuple{N,QN}, d1s::NTuple{N,Bool}) where {N,QN} = fuse(map(fuse, l1s, d1s))
+fuse(l1s::NTuple{N,QN}) where {N,QN} = foldl(fuse, l1s, init = zero(QN))
 fuse(l1s::Tuple{}) = TrivialQN()
-fuse(l1s::Vector{QN}) where {QN<:AbstractQuantumNumber} = foldl(fuse, l1s)
+fuse(l1s::Vector{QN}) where {QN<:AbstractQuantumNumber} = foldl(fuse, l1s, init=zero(QN))
 fuse(l1s::Vector{QN}, d1s::NTuple{N,Bool}) where {N,QN<:AbstractQuantumNumber} = fuse(tuple(l1s...), d1s)
 #fuse(l1s::QNTuple{N1}, d1s::NTuple{N1,Bool}, l2s::QNTuple{N2}, d2s::NTuple{N2,Bool}) where {N1,N2} = fuse((l1s..., l2s...), (d1s..., d2s...))
 
@@ -148,9 +154,20 @@ function TensorOperations.contract!(α, A::CovariantTensor, CA::Symbol, B::Covar
         @assert all(map(xor, opA.(getelements(A.dirs,cindA)), opB.(getelements(B.dirs,cindB))))
         @assert length(unique(A.qns))==length(A.qns) && length(unique(B.qns))==length(B.qns)
         pairs = find_matches(A,cindA,B,cindB)
-        Cind = LinearIndices((length(A.blocks),length(B.blocks)))
-        for (nC,(nA,nB)) in enumerate(pairs)
+        #Cind = LinearIndices((length(A.blocks),length(B.blocks)))
+        println("A")
+        println(size.(A.blocks))
+        println("B")
+        println(size.(B.blocks))
+        println("C")
+        println(size.(C.blocks))
+        for (nC,(nA,nB)) in enumerate(pairs) 
+            #FIXME: similarstructure_from_indices doesn't know which indices are contracted, so it overestimates the number of blocks in C.
             #C.blocks[Cind[nA,nB]]
+            println("ABC")
+            println(size(A.blocks[nA]))
+            println(size(B.blocks[nB]))
+            println(size(C.blocks[nC]))
             TensorOperations.contract!(α,A.blocks[nA],CA,B.blocks[nB],CB,β,C.blocks[nC],oindA,cindA,oindB,cindB,indleft,indright)
         end
         remove_zeros!(C)
@@ -246,7 +263,7 @@ function replace_vector!(list1::Vector,list2::Vector)
     deleteat!(list1,eachindex(list1))
     append!(list1,list2)
 end
-TensorOperations.scalar(C::CovariantTensor) = ndims(C)==0 && C.qntotal == TrivialQN() ? sum(C.blocks)[] : throw(DimensionMismatch())
+TensorOperations.scalar(C::CovariantTensor) = ndims(C)==0 && iszero(C.qntotal) ? sum(C.blocks)[] : throw(DimensionMismatch())
 TensorOperations.memsize(a::CovariantTensor) = Base.summarysize(a)
 
 Base.Array(A::CovariantTensor) = block_diagonal(A.blocks)
@@ -258,7 +275,7 @@ function Base.rand(::Type{NTuple{N,QN}}, qntotal::QN = zero(QN)) where {QN,N}
     Tuple(qns)::NTuple{N,QN}
 end
 
-function Base.rand(::Type{CovariantTensor{T,N,QN}}, n::Integer = 0) where {T,N,QN}
+function Base.rand(::Type{CovariantTensor{T,N,QN}}) where {T,N,QN}
     n = rand(1:10)
     sizes = rand(1:10,n,N)
     blocks = [rand(T,sizes[k,:]...) for k in 1:n]

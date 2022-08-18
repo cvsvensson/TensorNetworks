@@ -43,7 +43,7 @@ end
 Return a random UMPS{T}
 """
 function randomDenseUMPS(T::DataType, N, d, D; purification = false, truncation::TruncationArgs = DEFAULT_UMPS_TRUNCATION)
-    Γ = [DensePSite{T}(rand(T, D, d, D),purification) for k in 1:N]
+    Γ = [PhysicalSite(rand(T, D, d, D),purification) for k in 1:N]
     Λ = [LinkSite(ones(T, D)) for k in 1:N]
     mps = UMPS(Γ, Λ, truncation = truncation, error = 0.0)
     return mps
@@ -61,7 +61,7 @@ function identityUMPS(N, d; T = ComplexF64, truncation::TruncationArgs = DEFAULT
     #     Γ[i] = reshape(Matrix{T}(I, d, d) / sqrt(d), 1, d^2, 1)
     #     Λ[i] = ones(T, 1)
     # end
-    Γ = [DensePSite{T}(reshape(Matrix{T}(I, d, d) / sqrt(d), 1, d^2, 1),true) for k in 1:N]
+    Γ = [PhysicalSite(reshape(Matrix{T}(I, d, d) / sqrt(d), 1, d^2, 1),true) for k in 1:N]
     Λ = [LinkSite(ones(T, 1)) for k in 1:N]
     mps = UMPS(Γ, Λ, truncation = truncation)
     return mps

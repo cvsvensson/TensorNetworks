@@ -1,13 +1,22 @@
 
-struct MPSSum{MPS<:AbstractMPS,Site<:AbstractSite,Num} <: AbstractMPS{Site}
+struct MPSSum{MPS<:AbstractMPS,Site<:AbstractSite,Num,QN} <: AbstractMPS{Site,QN}
     states::Vector{MPS}
     scalings::Vector{Num}
-    function MPSSum(mpss::Vector{T}) where {T<:AbstractMPS}
-        new{T,SiteSum{eltype(mpss[1]),numtype(mpss...)},numtype(mpss...)}([mpss...], fill(1, length(mpss)))
+    # function MPSSum(mpss::Vector{T}) where {T<:AbstractMPS}
+    #     new{T,SiteSum{eltype(mpss[1]),numtype(mpss...)},numtype(mpss...),qntype(T)}([mpss...], fill(1, length(mpss)))
+    # end
+    function MPSSum(mpss::Vector{MPS}, scalings::Vector{Num}) where {MPS<:AbstractMPS,Num}
+        QN = qntype(MPS)
+        T = numtype(MPS)
+        S = eltype(MPS)
+        new{MPS,SiteSum{S,T,QN},T,QN}(mpss, scalings)
     end
-    function MPSSum(mpss::Vector{T}, scalings::Vector{Num}) where {T<:AbstractMPS,Num}
-        new{T,SiteSum{eltype(mpss[1]),numtype(mpss...)},numtype(mpss...)}(mpss, scalings)
-    end
+    function MPSSum(mpss::Vector{MPS}) where {MPS<:AbstractMPS}
+        QN = qntype(MPS)
+        T = numtype(MPS)
+        S = eltype(MPS)
+        new{MPS,SiteSum{S,T,QN},T,QN}(mpss,  fill(one(T), length(mpss)))
+    end 
 end
 Base.show(io::IO, mps::MPSSum) =
     (print(io, "MPS: ", typeof(mps), "\nSites: ", eltype(mps), "\nLength: ", length(mps), "\nSum of ", length(mps.states), " mps's\nWith scalings "); show(io, mps.scalings))
@@ -16,10 +25,10 @@ Base.size(mps::MPSSum) = (length(mps),)
 Base.length(mps::MPSSum) = length(mps.states[1])
 Base.copy(mps::MPSSum) = MPSSum(copy(mps.states), copy(mps.scalings))
 
-struct SiteSum{S<:AbstractSite,T} <: AbstractPhysicalSite{T}
+struct SiteSum{S<:AbstractSite,T,QN} <: AbstractPhysicalSite{T,QN}
     sites::Vector{S}
     function SiteSum(sites::Vector{S}) where {S<:AbstractPhysicalSite}
-        new{S,eltype(sites[1])}(sites)
+        new{S,eltype(S),qntype(S)}(sites)
     end
 end
 SiteSum(site::AbstractPhysicalSite) = SiteSum([site])
@@ -175,7 +184,7 @@ function dense(mpss::MPSSum{MPS,<:Any,T}) where {MPS<:OpenPMPS,T}
     sites = dense.(mpss)
     sites[1] = (mpss.scalings) * sites[1]
     sites[end] = sites[end] * (ones(T, length(mpss.scalings)))
-    return MPS(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(getproperty.(mpss.states, :error)))
+    return OpenPMPS(to_left_right_orthogonal(sites), truncation = mpss.states[1].truncation, error = sum(getproperty.(mpss.states, :error)))
 end
 
 function dense(sitesum::SiteSum{<:PhysicalSite,T}) where {T}

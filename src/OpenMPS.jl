@@ -83,7 +83,7 @@ Return the identity density matrix as a purification
 function identityOpenMPS(N, d; T = ComplexF64,
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION
 )
-    Γ = Vector{PhysicalSite{T}}(undef, N)
+    Γ = Vector{DensePSite{T}}(undef, N)
     Λ = Vector{LinkSite{T}}(undef, N + 1)
     for i = 1:N
         Γ[i] = PhysicalSite(reshape(Matrix(one(T)I, d, d) / sqrt(d), 1, d^2, 1), true)

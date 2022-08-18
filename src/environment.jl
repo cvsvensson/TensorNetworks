@@ -91,11 +91,6 @@ update_environments!(env::Environments, mps1::AbstractSite, mps2::AbstractSite, 
 update_environments!(env::Environments, mps::AbstractSite, mpo::AbstractMPOSite, site::Integer) = update_environments!(env, site, mps, mpo, mps)
 update_environments!(env::Environments, mps::AbstractSite, site::Integer) = update_environments!(env, site, mps, mps)
 
-# function update_environment!(env::AbstractFiniteEnvironment, mps1::AbstractSite, mpo::ScaledIdentityMPOsite, mps2::AbstractSite, site::Integer)
-#     env.L[site+1] = reshape(transfer_matrix(mps1, mpo, mps2, :right)*vec(env.L[site]), size(mps1,3), size(mps2,3))
-#     env.R[site-1] = reshape(transfer_matrix(mps1, mpo, mps2, :left)*vec(env.R[site]), size(mps1,1), size(mps2,1))
-#     return 
-# end
 
 #TODO check performance and compare to matrix multiplication and Tullio
 local_mul!(out, envL, envR, mposite::AbstractMPOSite, site::AbstractArray{<:Number,3}) = @tensor out[:] = (envL[-1, 2, 3] * data(mposite)[2, -2, 4, 5]) * (site[3, 4, 1] * envR[-3, 5, 1])

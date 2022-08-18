@@ -22,64 +22,52 @@ LinearAlgebra.mul!(w::V,T::TransferMatrix{V},v::V) where V = T.op(w,v)::V
 # LinearAlgebra.axpby!
 ## Structs to organize which transfer function to call 
 abstract type AbstractZipLayer{N} end
-struct SiteStack{T,N,QN,Sites} <: AbstractZipLayer{N}
+struct SiteStack{T,N,QN,Sites,Vals} <: AbstractZipLayer{N}
     sites::Sites
-    conjs::NTuple{N,Bool}
-    function SiteStack(sites::NTuple{N,AT},conjs) where {N,AT}
+    conjs::Vals#NTuple{N,Bool}
+    function SiteStack(sites::Tuple,conjs::Vals) where Vals
         #TODO handle sums of sites
-        #qns = _QN.(sites)
-        #qn1 = _QN(sites[1])
-        T = eltype(AT)
-        QN = qntype(AT)
-
-        #AbstractTensor{T,K,QN}
-        #@assert length(unique(_QN.(sites))) == 1
+        T = eltype(sites[1])
+        QN = qntype(sites[1])
+        N = length(sites)
         @assert length(sites) == length(conjs)
-        new{T,N,QN,typeof(sites)}(sites,conjs)
+        @assert length(unique(qntype.(sites))) ==1
+        new{T,N,QN,typeof(sites),Vals}(sites,conjs)
     end
 end
+_typesToTuple(t::Tuple) = Tuple{t...}
+qntype(::T) where T = qntype(T)
 qntype(::Type{<:AbstractTensor{<:Any,<:Any,QN}}) where {QN} = QN
-struct ChainStack{N,MPs,Sites} <: AbstractVector{SiteStack{N,Sites}}
+struct ChainStack{N,MPs,QN,Sites,Vals} <: AbstractVector{SiteStack{N,QN,Sites}}
     chains::MPs
-    conjs::NTuple{N,Bool}
-    function SiteStack(chains::Tuple,conjs)
+    conjs::Vals#NTuple{N,Bool}
+    function ChainStack(chains::Tuple,conjs::Vals) where Vals
         #TODO handle sums of chains
-        @assert length(sites) == length(conjs)
-        new{length(chains),typeof(chains),typeof.(eltype.(chains))}(chains,conjs)
+        @assert length(chains) == length(conjs)
+        sitetypes = eltype.(chains)
+        S = _typesToTuple(sitetypes)
+        new{length(chains),typeof(chains),qntype(chains[1]),S,Vals}(chains,conjs)
     end
 end
 Base.getindex(C::ChainStack,i::Integer) = SiteStack(map(c->c[i],C.chains),C.conjs)
 
-function EnvironmentType(sites::SiteStack{N,Sites},dir) where {N,Sites}
-    ss = sites.sites
-    ft = fieldtypes(Sites)
-    s1 = EnvironmentType(ss[1], dir)
-    s2 = EnvironmentType(ss[2], dir)
-    s3 = EnvironmentType(ss[2], dir)
-    s123 = (s1,s2,s3)
-    e123 = EnvironmentType(s123...)
-    #qns = _QNs.(ss)
-    #q = qn(ss[1],:left)
-    #qs1 = qn.(ss,:left)
-    ts = typeof.(ss)
-    #qs = qns(ss)
-    types = EnvironmentType.(ss, :left)
-    println(types)
-    #EnvironmentType(types)
+function EnvironmentType(sites::SiteStack{T,N,QN,Sites}) where {N,Sites,QN,T}
+    types = EnvironmentType.(sites.sites)
+    EnvironmentType(types)
 end
-qntype(::PhysicalSite{T,CovariantTensor{T,3,QN}}) where {T,QN} = QN
-EnvironmentType(::PhysicalSite{T,CovariantTensor{T,3,QN}},dir) where {T,QN} = CovariantTensor{T,1,QN}
-EnvironmentType(::MPOSite{T,CovariantTensor{T,4,QN}},dir) where {T,QN} = CovariantTensor{T,1,Tuple{QNR},QN}
+_combine_environment_types(::Type{CovariantTensor{T,N,QN}},::Type{CovariantTensor{T,K,QN}}) where {T,N,K,QN} = CovariantTensor{T,N+K,QN}
+EnvironmentType(t::NTuple{N,DataType}) where N = foldl(_combine_environment_types,t)
+EnvironmentType(::PhysicalSite{T,CovariantTensor{T,3,QN}}) where {T,QN} = CovariantTensor{T,1,QN}
+EnvironmentType(::MPOSite{T,CovariantTensor{T,4,QN}},dir) where {T,QN} = CovariantTensor{T,1,QN}
 
+_combine_environment_types(::Type{Array{T,N}},::Type{Array{T,K}}) where {T,N,K} = Array{T,N+K}
 EnvironmentType(::PhysicalSite{T,Array{T,3}}) where {T} = Array{T,1}
 EnvironmentType(::MPOSite{T,Array{T,4}}) where {T} = Array{T,1}
-# EnvironmentType(t1::CovariantTensor{T,N,QN},t2::CovariantTensor{T,1,QN}) where {N,T,QN} = CovariantTensor{T,N,QN}
-# EnvironmentType(types::Vararg{Type{CovariantTensor{T,1,QN}},N}) where {N,T,QN} = CovariantTensor{T,N,QN}
-# function _combine 
+
 VirtualSite(::PhysicalSite,dir) = I
 function linktransfermatrix(sites::S,dir::Symbol) where S<:SiteStack
     Vs = [VirtualSite(site,reverse_direction(dir)) for site in sites.sites]
-    return TransferMatrix{EnvironmentType(sites,dir)}(A->_contract_links(Vs,A))
+    return TransferMatrix{EnvironmentType(sites)}(A->_contract_links(Vs,A))
 end
 function _contract_links(Vs::Vector{<:VirtualSite},A::AbstractArray{<:Any,N}) where N
     @assert length(Vs) == N
@@ -94,6 +82,68 @@ end
 function _contract_single_link(V::UniformScaling,A::AbstractArray,n) 
     V.λ * A
 end
+
+function transfermatrix(ss::SiteStack{T,N,QN,Sites,Vals}) where {T,N,QN,Sites,Vals}
+    @assert N>1
+    lastc =  1
+    endind = sum(ndims.(ss.sites))/2
+    function index(k)
+        Nsite = ndims(ss.sites[k])
+        global lastc,endind
+        c = _valFromVal(ss.conjs[k])
+        if Nsite == 4
+            if k == 1
+                out = c ? [-1, 2, endind, 1] : [-1, endind, 2, 1]
+            elseif k==N
+                out = c ? [-N, endind, lastc, lastc+1] :  [-N, lastc, endind, lastc+1]
+                lastc = lastc + 2
+            else
+                out = c ? [-k, lastc+2, lastc, lastc+1] :  [-k, lastc, lastc+2, lastc+1]
+                lastc = lastc + 2
+            end
+        elseif Nsite == 3
+            if k == 1
+                out = c ? [-1, 2, 1] :  [-1, endind, 1]
+                lastc = c ? 2 : 1
+            elseif k==N
+                out = c ? [-1, endind, lastc+1] :  [-k, lastc, lastc+1]
+            else
+                out = c ? [-k, lastc+2, lastc+1] :  [-k, lastc, lastc+1]
+                lastc = c  ? lastc+2 : lastc+1
+            end
+        end
+        return out
+    end
+    zipindices = [index(k) for k in 1:N]
+    Rindices = [ind[end] for ind in zipindices]
+    function contract(R)
+        # index(1) = [-1,last,3,1]
+        # index(2) = [-2,3,5,2]
+        # index(3) = [-3,5,7,4] # or if last: [-3,5,6,4]
+        # index(4) = [-4, 7, 9, 6]
+        # index(N) = [-N], , , 
+
+        #indexR = [1, [2k - 2 for k in 2:N]...]
+        ncon([R, data.(ss.sites)...], [Rindices,zipindices...],_valFromVal.(ss.vals))
+        return R
+    end
+end
+_valFromVal(::Val{T}) where T = T
+# _opstring(::Type{Val{false}}) = Symbol("1*")
+# _opstring(::Type{Val{true}}) = :conj
+
+# @generated function testgen7(m,vals::Vals) where Vals
+#     println(Vals)
+#     println(fieldtypes(Vals))
+#     ops = _opstring.(fieldtypes(Vals))
+#     #m = [1 2im; 3im 4]
+#     return :($(ops[1])(m))
+# end
+
+# Rtens[r1,r2,...rN]
+# ops[n](Tn[-n,un,dn,rn])
+# @tensoropt (t1, b1, -1, -2) temp[:] = Rtens[(1:N)...] * conj(Γ[-1, c1, t1]) * Γ[-2, c1, b1]
+        
 
 # function linktransfermatrix(V::AbstractVirtualSite,v::AbstractArray{T,N})
 #     @tensor 

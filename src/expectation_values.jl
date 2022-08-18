@@ -12,9 +12,9 @@ expectation_value(mps::AbstractOpenMPS, op::AbstractGate, site::Integer; iscanon
 
 Return the expectation value of the gate starting at `site`
 """
-function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = false, string = IdentityMPOsite)
+function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = false, string = IdentityMPOSite)
     n = operatorlength(op)
-    if !iscanonical || string != IdentityMPOsite
+    if !iscanonical || string != IdentityMPOSite
         L = Array(vec(boundary(mps, :left)))
         R = Array(vec(boundary(mps, :right)))
         for k in 1:site-1
@@ -39,7 +39,7 @@ function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
     _horizontal_contraction((mps1,),(mpo,mps2))
 end
 
-function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string = IdentityMPOsite)
+function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string = IdentityMPOSite)
     n = operatorlength(op)
     K = numtype(mps1, mps2)
     L::Vector{K} = boundary((mps1,), (mps2,), :left)
@@ -55,7 +55,7 @@ function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer;
     return (transpose(Tc * (T * R)) * L)::K
 end
 
-function expectation_value2(mps::MPSSum, op, site::Integer; string = IdentityMPOsite)
+function expectation_value2(mps::MPSSum, op, site::Integer; string = IdentityMPOSite)
     #FIXME define matrix_element. Decide if "site" argument should be included or not. Decide on gate or mpo
     #Define alias Operator as Union{(MPOsite, site), MPO, Gate, Gates}?
 
@@ -104,13 +104,13 @@ Return a list of expectation values on every site
 
 See also: [`expectation_value`](@ref)
 """
-function expectation_values(mps::Union{AbstractMPS,MPSSum}, op; string = IdentityMPOsite)
+function expectation_values(mps::Union{AbstractMPS,MPSSum}, op; string = IdentityMPOSite)
     opLength = operatorlength(op)
     N = length(mps)
     return [expectation_value(mps, op, site, string = string) for site in 1:N+1-opLength]
 end
 
-function expectation_values(mps::AbstractMPS, op::Vector{T}; string = IdentityMPOsite) where {T}
+function expectation_values(mps::AbstractMPS, op::Vector{T}; string = IdentityMPOSite) where {T}
     opLength = operatorlength(op)
     N = length(mps)
     @assert N == opLength + length(op[end]) - 1

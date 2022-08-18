@@ -53,15 +53,15 @@ end
 data(site::ScaledIdentityMPOSite) = site.data
 const IdentityMPOSite = ScaledIdentityMPOSite(true)
 
-# MPOsite(s::ScaledIdentityMPOsite) = s
-# MPOsite{K}(s::ScaledIdentityMPOsite) where {K} = ScaledIdentityMPOsite{K}(data(s))
-#Base.length(mpo::ScaledIdentityMPOsite) = 1
+# MPOsite(s::ScaledIdentityMPOSite) = s
+# MPOsite{K}(s::ScaledIdentityMPOSite) where {K} = ScaledIdentityMPOSite{K}(data(s))
+#Base.length(mpo::ScaledIdentityMPOSite) = 1
 
 function Base.size(::ScaledIdentityMPOSite, i::Integer)
     if i == 1 || i == 4
         return 1
     else
-        @error "Physical dimension of ScaledIdentityMPOsite is arbitrary"
+        @error "Physical dimension of ScaledIdentityMPOSite is arbitrary"
     end
 end
 
@@ -71,8 +71,8 @@ Base.:*(x::K, g::ScaledIdentityMPOSite) where {K<:Number} = ScaledIdentityMPOSit
 Base.:*(g::ScaledIdentityMPOSite, x::K) where {K<:Number} = ScaledIdentityMPOSite(x * data(g))
 Base.:/(g::ScaledIdentityMPOSite, x::K) where {K<:Number} = inv(x) * g
 auxillerate(mpo::ScaledIdentityMPOSite) = mpo
-Base.show(io::IO, g::ScaledIdentityMPOSite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOsite"))
-Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityMPOSite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOsite"))
+Base.show(io::IO, g::ScaledIdentityMPOSite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOSite"))
+Base.show(io::IO, ::MIME"text/plain", g::ScaledIdentityMPOSite) = print(io, ifelse(true == data(g), "", string(data(g), "*")), string("IdentityMPOSite"))
 
 reverse_direction(site::ScaledIdentityMPOSite) = site
 Base.transpose(site::ScaledIdentityMPOSite) = site
@@ -83,7 +83,7 @@ Base.:+(site1::ScaledIdentityMPOSite, site2::ScaledIdentityMPOSite) = ScaledIden
 Base.:(==)(mpo1::ScaledIdentityMPOSite, mpo2::ScaledIdentityMPOSite) = data(mpo1) == data(mpo2)
 
 function Base.getindex(g::ScaledIdentityMPOSite{T}, I::Vararg{Int,4}) where T
-    @assert I[1] == I[4] == 1 "Accessing out of bounds index on ScaledIdentityMPOsite "
+    @assert I[1] == I[4] == 1 "Accessing out of bounds index on ScaledIdentityMPOSite "
     val = I[2] == I[3] ? one(T) : zero(T)
     return data(g) * val
 end

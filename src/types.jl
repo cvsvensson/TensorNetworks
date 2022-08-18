@@ -1,5 +1,33 @@
 const BigNumber = Union{ComplexDF64,ComplexDF32,ComplexDF16,Double64,Double32,Double16,BigFloat,Complex{BigFloat}}
 
+const IndexTuple{N} = NTuple{N,Int}
+abstract type AbstractQuantumNumber end
+struct TrivialQN <: AbstractQuantumNumber end
+struct ZQuantumNumber{N} <: AbstractQuantumNumber
+    n::Mod{N,Int64}
+end
+const ParityQN = ZQuantumNumber{2}
+struct U1QuantumNumber{T} <: AbstractQuantumNumber
+    n::T
+end
+abstract type AbstractTensor{T,N,QN} <: AbstractArray{T,N} end 
+
+# struct DenseTensor{T,N} <: AbstractTensor{T,N,TrivialQN}
+#     data::Array{T,N}
+# end
+struct CovariantTensor{T,N,QN<:AbstractQuantumNumber} <: AbstractTensor{T,N,QN} #AbstractArray{T,N}
+    blocks::Vector{Array{T,N}}
+    qns::Vector{NTuple{N,QN}}
+    dirs::NTuple{N,Bool}
+    qntotal::QN
+    function CovariantTensor(blocks::Vector{Array{T,N}}, qns::Vector{NTuple{N,QN}}, dirs::NTuple{N,Bool}, qntotal::QN) where {QN,N,T}
+        @assert length(blocks) == length(qns)
+        @assert all(map(qn->iszero(fuse(fuse(qn),qntotal)), qns))
+        A = new{T,N,QN}(blocks, qns, dirs, qntotal)
+        return A
+    end
+end
+
 mutable struct TruncationArgs
     Dmax::Int
     tol::Float64
@@ -55,20 +83,21 @@ abstract type AbstractVirtualSite{T,QN} <: AbstractSite{T,2,QN} end
 
 struct VirtualSite{T,S,QN} <: AbstractVirtualSite{T,QN}
     Λ::S
+    VirtualSite(site::S) where S = new{eltype(S),S,qntype(S)}(site)
 end
-const DenseVirtualSite{T,Array{T,2}} = VirtualSite{T,S,TrivialQN}
-VirtualSite(site::S) where S = VirtualSite{eltype(S),S,qntype(S)}(site)
+const DenseVirtualSite{T} = VirtualSite{T,Array{T,2},TrivialQN}
 const LinkSite{T} = VirtualSite{T,Diagonal{T,Vector{T}},TrivialQN}
 LinkSite(v::Vector) = VirtualSite(Diagonal(v))
 LinkSite(v::Diagonal) = VirtualSite(v)
 
-
 struct PhysicalSite{T,S,QN} <: AbstractPhysicalSite{T,QN}
     Γ::S
     purification::Bool
+    PhysicalSite(site::S, pur::Bool = false) where S = new{eltype(S),S,qntype(S)}(site,pur)
 end
-PhysicalSite(site::S,pur::Bool = false) where S = PhysicalSite{eltype(S),S}(site,pur)
+# PhysicalSite(site::S,pur::Bool = false) where S = PhysicalSite{eltype(S),S}(site,pur)
 const DensePSite{T} = PhysicalSite{T,Array{T,3},TrivialQN}
+# PhysicalSite(site::Array{T,N}, pur::Bool = false) where {T,N} = PhysicalSite(DenseTensor(site),pur)
 
 Base.promote_rule(::Type{VirtualSite{T1,S1,QN}}, ::Type{VirtualSite{T2,S2,QN}}) where {T1,T2,S1,S2,QN} =
     VirtualSite{promote_type(T1,T2),promote_type(S1,S2),QN}
@@ -121,10 +150,10 @@ function ΓΛ(sites::Vector{<:PVSite})
 end
 
 abstract type AbstractMPS{P<:AbstractPhysicalSite,QN} <: AbstractVector{P} end
-abstract type AbstractPVMPS{PV<:AbstractPVSite,QN} <: AbstractMPS{PV} end
-abstract type AbstractPMPS{P<:AbstractPhysicalSite,QN} <: AbstractMPS{P} end
+abstract type AbstractPVMPS{PV<:AbstractPVSite,QN} <: AbstractMPS{PV,QN} end
+abstract type AbstractPMPS{P<:AbstractPhysicalSite,QN} <: AbstractMPS{P,QN} end
 
-mutable struct OpenPVMPS{T,P,V,QN} <: AbstractPVMPS{PVSite{T,QN}}
+mutable struct OpenPVMPS{T,P,V,QN} <: AbstractPVMPS{PVSite{T,QN},QN}
     #In gamma-lambda notation
     Γ::Vector{P}
     Λ::Vector{V}
@@ -178,13 +207,13 @@ mutable struct OpenPMPS{T,P,QN} <: AbstractPMPS{P,QN}
         new{eltype(P),P,qntype(P)}(Γ, truncation, error, center)
     end
 end
-function OpenPMPS(
-    Γ::Vector{P};
-    truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
-    error = 0.0
-) where {P}
-    OpenPMPS(Γ, truncation = truncation,error = error)
-end
+# function OpenPMPS(
+#     Γ::Vector{P};
+#     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
+#     error = 0.0
+# ) where {P}
+#     OpenPMPS(Γ, truncation = truncation,error = error)
+# end
 # function LCROpenMPS(
 #     Γ::Vector{PhysicalSite{K}};
 #     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
@@ -192,7 +221,7 @@ end
 # ) where {K}
 #     LCROpenMPS{K}(Γ; truncation = truncation, error = error)
 # end
-mutable struct UMPS{T,P,V,QN} <: AbstractPVMPS{PVSite{T,P,V,QN}}
+mutable struct UMPS{T,P,V,QN} <: AbstractPVMPS{PVSite{T,P,V,QN},QN}
     #In gamma-lambda notation
     Γ::Vector{P}
     Λ::Vector{V}
@@ -214,6 +243,7 @@ end
 # numtype(::OpenMPS{T}) where {T} = T
 numtype(ms::Vararg{AbstractVector{<:AbstractSite},<:Any}) = promote_type(numtype.(ms)...)
 numtype(::AbstractVector{<:AbstractSite{T}}) where {T} = T
+numtype(::Type{<:AbstractMPS{S}}) where {S} = eltype(S)
 sites(mps::OpenPMPS) = mps.Γ
 sites(mps::UMPS) = mps.Γ
 #sites(mps::CentralUMPS) = mps.Γ
@@ -226,31 +256,3 @@ boundaryconditions(::T) where {T<:AbstractMPS} = boundaryconditions(T)
 boundaryconditions(::Type{<:OpenPVMPS}) = OpenBoundary()
 boundaryconditions(::Type{<:OpenPMPS}) = OpenBoundary()
 boundaryconditions(::Type{<:UMPS}) = InfiniteBoundary()
-
-const IndexTuple{N} = NTuple{N,Int}
-abstract type AbstractQuantumNumber end
-struct TrivialQN <: AbstractQuantumNumber end
-struct ZQuantumNumber{N} <: AbstractQuantumNumber
-    n::Mod{N,Int64}
-end
-const ParityQN = ZQuantumNumber{2}
-struct U1QuantumNumber{T} <: AbstractQuantumNumber
-    n::T
-end
-abstract type AbstractTensor{T,N,QN} <: AbstractArray{T,N} end 
-
-struct DenseTensor{T,N} <: AbstractTensor{T,N,TrivialQN}
-    data::Array{T,N}
-end
-struct CovariantTensor{T,N,QN<:AbstractQuantumNumber} <: AbstractTensor{T,N,QN} #AbstractArray{T,N}
-    blocks::Vector{Array{T,N}}
-    qns::Vector{NTuple{N,QN}}
-    dirs::NTuple{N,Bool}
-    qntotal::QN
-    function CovariantTensor(blocks::Vector{Array{T,N}}, qns::Vector{NTuple{N,QN}}, dirs::NTuple{N,Bool}, qntotal::QN) where {QN,N,T}
-        @assert length(blocks) == length(qns)
-        @assert all(map(qn->iszero(fuse(fuse(qn),qntotal)), qns))
-        A = new{T,N,QN}(blocks, qns, dirs, qntotal)
-        return A
-    end
-end

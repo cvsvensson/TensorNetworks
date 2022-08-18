@@ -321,6 +321,8 @@ end
     site = randomDensePhysicalSite(D,d,D);
     testsite(site)
     testsite(site + site)
+    covsite = PhysicalSite(rand(CovariantTensor{ComplexF64,3,ParityQN}))
+    testsite(covsite)
 end
 
 @testset "Compression" begin
@@ -664,7 +666,7 @@ end
 end
 
 @testset "CovariantTensor" begin
-    Av = rand(CovariantTensor{ComplexF64,1,Tuple{ParityQN},IdentityQN})
+    Av = rand(CovariantTensor{ComplexF64,1,ParityQN})
     normA1 = norm(Array(Av))
     @tensor normA2[:] := Av[1]*conj(Av[1])
     @test normA1^2 ≈ scalar(normA2) 
@@ -674,7 +676,7 @@ end
     @tensor AvBv[:] := Av[1]*Bv[1]
     @test typeof(scalar(AvBv)) == ComplexF64
 
-    Am = rand(CovariantTensor{ComplexF64,2,Tuple{ParityQN,ParityQN},IdentityQN})
+    Am = rand(CovariantTensor{ComplexF64,2,ParityQN})
     Bm = TensorNetworks.rand_compatible_tensor(Am)
     normA1 = norm(Array(Am))
     @tensor normA2[:] := Am[1,2]*conj(Am[1,2])

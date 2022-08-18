@@ -37,10 +37,10 @@ function OpenPMPS(
 end
 
 function OpenPMPS(
-    M::Vector{PVSite{T,P,V}};
+    M::Vector{PVSite{T,P,V,QN}};
     truncation::TruncationArgs = DEFAULT_OPEN_TRUNCATION,
     center = 1, error = 0.0
-) where {T,P,V}
+) where {T,P,V,QN}
     N = length(M)
     Γ = Vector{P}(undef, N)
     for k in 1:N
