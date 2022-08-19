@@ -8,7 +8,7 @@ end
 # end
 
 function Base.:*(T::TransferMatrix{V},v::V) where V 
-    w::V = ismutating ? T.op(similar(v),v) : T.op(v)
+    w::V = T.ismutating ? T.op(similar(v),v) : T.op(v)
     return w
 end
 LinearAlgebra.mul!(w::V,T::TransferMatrix{V},v::V) where V = T.op(w,v)::V
@@ -89,7 +89,7 @@ function transfermatrix(ss::SiteStack{T,N,QN,Sites,Vals}) where {T,N,QN,Sites,Va
     endind = sum(ndims.(ss.sites))/2
     function index(k)
         Nsite = ndims(ss.sites[k])
-        global lastc,endind
+        #global lastc,endind
         c = _valFromVal(ss.conjs[k])
         if Nsite == 4
             if k == 1
@@ -124,9 +124,12 @@ function transfermatrix(ss::SiteStack{T,N,QN,Sites,Vals}) where {T,N,QN,Sites,Va
         # index(N) = [-N], , , 
 
         #indexR = [1, [2k - 2 for k in 2:N]...]
-        ncon([R, data.(ss.sites)...], [Rindices,zipindices...],_valFromVal.(ss.vals))
+        println([Rindices, zipindices...])
+        println(typeof([R, (data.(ss.sites))...]))
+        ncon([R, (data.(ss.sites))...], [Rindices, zipindices...],[false,_valFromVal.(ss.conjs)...])
         return R
     end
+    return TransferMatrix{EnvironmentType(ss)}(contract,false)
 end
 _valFromVal(::Val{T}) where T = T
 # _opstring(::Type{Val{false}}) = Symbol("1*")

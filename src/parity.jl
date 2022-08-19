@@ -24,6 +24,19 @@ function TensorOperations.similarstructure_from_indices(T::Type, p1::IndexTuple,
     (sizes, qns, dirs, op(A.qntotal))
 end
 
+Base.iszero(qnA::Tuple,qnB::Tuple,qntotal::AbstractQuantumNumber) = iszero(fuse(qntotal, fuse((qnA...,qnB...))))
+function find_qn_pairs(qnA,qnB,qntotal)
+    [(nA,nB) for nA in eachindex(qnA), nB in eachindex(qnB) if iszero(qnA[nA],qnB[nB],qntotal)]
+end
+
+# function find_o_matches(A::CovariantTensor,poA::IndexTuple, B::CovariantTensor,poB::IndexTuple)
+#     qntotal = fuse(opA(A.qntotal),opB(B.qntotal))
+#     return [(nA,nB) for (nA,nB) in Base.product(eachindex(A.blocks),eachindex(B.blocks)) if iszero(fuse(qntotal, fuse((getelements(A.qns[nA],poA)...,getelements(B.qns[nB],poB)...))))]
+#     # qns = vec([iszero(fuse(qntotal, fuse(getelements(A.qns[nA],poA)...,getelements(B.qns[nB],poB)...))) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
+#     # correct_inds = [iszero(fuse(fuse(qn),qntotal)) for qn in qns]
+#     # pairs = [n for (n,qn) in enumerate(A.qns) if getelements(qn,cind1) == getelements(qn,cind2)]
+# end
+
 function TensorOperations.similarstructure_from_indices(T::Type, poA::IndexTuple, poB::IndexTuple,
     p1::IndexTuple, p2::IndexTuple,
     A::CovariantTensor{<:Any,NA}, B::CovariantTensor{<:Any,NB},
@@ -33,13 +46,19 @@ function TensorOperations.similarstructure_from_indices(T::Type, poA::IndexTuple
     opB = CB==:N ? identity : invert
     dirsA = opA.(getelements(A.dirs,poA))
     dirsB =  opB.(getelements(B.dirs,poB))
-    sizes = vec([getelements((map(n->size(A.blocks[nA],n),poA)...,map(n->size(B.blocks[nB],n),poB)...),indC) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
-    dirs = getelements((dirsA...,dirsB...),indC)
-    qns = vec([getelements((getelements(A.qns[nA],poA)...,getelements(B.qns[nB],poB)...),indC) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
+    qnsA = [getelements(qn,poA) for qn in A.qns]
+    qnsB = [getelements(qn,poB) for qn in B.qns]
     qntotal = fuse(opA(A.qntotal),opB(B.qntotal))
-    correct_inds = [iszero(fuse(fuse(qn),qntotal)) for qn in qns]
-    println(correct_inds)
-    (sizes[correct_inds], qns[correct_inds], dirs, qntotal)
+    pairs = find_qn_pairs(qnsA,qnsB,qntotal)
+    qns = [getelements((qnsA[nA]...,qnsB[nB]...),indC) for (nA,nB) in pairs]
+    sizes = [getelements((map(n->size(A.blocks[nA],n),poA)...,map(n->size(B.blocks[nB],n),poB)...),indC) for (nA,nB) in pairs]
+    dirs = getelements((dirsA...,dirsB...),indC)
+    (sizes, qns, dirs, qntotal)
+    # qns = vec([getelements((getelements(A.qns[nA],poA)...,getelements(B.qns[nB],poB)...),indC) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
+    # sizes = vec([getelements((map(n->size(A.blocks[nA],n),poA)...,map(n->size(B.blocks[nB],n),poB)...),indC) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)])
+    # correct_inds = [iszero(fuse(fuse(qn),qntotal)) for qn in qns]
+    # println(correct_inds)
+    # (sizes[correct_inds], qns[correct_inds], dirs, qntotal)
     #println((sizes, qns, dirs, fuse(A.qntotal,B.qntotal)))
     #println(cat_collisions(s))
     #cat_collisions(s)
@@ -75,17 +94,11 @@ function SymmetricTensor(blocks::Vector, qns::Vector{QN}, dirs) where QN
 end
 
 
-#QuantumNumber(l::Link) = l[2] ? invert(l[1]) : l[1]
 Base.:(==)(a::ZQuantumNumber{N}, b::ZQuantumNumber{N}) where N = a.n == b.n
 Base.hash(a::ZQuantumNumber, h::UInt64 = UInt64(0)) = Base.hash(a.n, h)
-#Base.:!(qn::ParityQN) = ParityQN(!qn.parity)
-#fuse(qn1::ParityQN,qn2::ParityQN) = qn1.parity + qn2.parity
 invert(l::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(-l.n)
 invert(::TrivialQN) = TrivialQN()
 Base.zero(::Type{QN}) where QN<:Union{ZQuantumNumber,U1QuantumNumber} = QN(0)
-#invert(l::ParityQN) = !l
-#invert(ls::QNTuple) = QNTuple(invert.(ls.qns))
-# Base.:+(lA::ZQuantumNumber{N}, lB::ZQuantumNumber{N}) where {N} = ZQuantumNumber{N}(lA.n + lB.n)
 Base.:-(l::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(-l.n)
 Base.:-(l::QN,l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = QN(l.n - l2.n)
 Base.:-(::TrivialQN) = TrivialQN()
@@ -96,17 +109,12 @@ fuse(l1::QN, l2::QN) where {QN<:Union{ZQuantumNumber,U1QuantumNumber}} = l1 + l2
 fuse(l1::AbstractQuantumNumber, l2::TrivialQN) = l1
 fuse(l1::TrivialQN, l2::AbstractQuantumNumber) = l2
 fuse(l1::TrivialQN, l2::TrivialQN) = TrivialQN()
-#fuse(l1::QNs, l2::QNs) where {QNs<:Tuple} = map(fuse, l1, l2)
-#fuse(l1::Link{QN},l2::Link{QN}) where {QN<:AbstractQuantumNumber}= fuse(QuantumNumber(l1),QuantumNumber(l2))
-#fuse(ls::NTuple{<:Any,Union{Link,AbstractQuantumNumber}}) = foldl(fuse,ls)
 fuse(l::AbstractQuantumNumber, d::Bool) = d ? invert(l) : l
 fuse(l1s::NTuple{N,QN}, d1s::NTuple{N,Bool}) where {N,QN} = fuse(map(fuse, l1s, d1s))
 fuse(l1s::NTuple{N,QN}) where {N,QN} = foldl(fuse, l1s, init = zero(QN))
 fuse(l1s::Tuple{}) = TrivialQN()
 fuse(l1s::Vector{QN}) where {QN<:AbstractQuantumNumber} = foldl(fuse, l1s, init=zero(QN))
 fuse(l1s::Vector{QN}, d1s::NTuple{N,Bool}) where {N,QN<:AbstractQuantumNumber} = fuse(tuple(l1s...), d1s)
-#fuse(l1s::QNTuple{N1}, d1s::NTuple{N1,Bool}, l2s::QNTuple{N2}, d2s::NTuple{N2,Bool}) where {N1,N2} = fuse((l1s..., l2s...), (d1s..., d2s...))
-
 
 function TensorOperations.add!(α, A::CovariantTensor, CA::Symbol, β, C::CovariantTensor, indleft::IndexTuple,
     indright::IndexTuple)
@@ -127,9 +135,8 @@ end
 
 function TensorOperations.trace!(α, A::CovariantTensor, CA::Symbol, β, C::CovariantTensor, indleft::IndexTuple,
         indright::IndexTuple, cind1::IndexTuple, cind2::IndexTuple)
-    #indCinA = (indleft...,indright...)
     @assert all(map(xor, getelements(A.dirs,cind1), getelements(A.dirs,cind2)))
-    match_indices = find_matches(A,cind1,cind2)
+    match_indices = find_c_matches(A,cind1,cind2)
     nmi = length(match_indices)
     nc = length(C.blocks)
     if nc !== nmi
@@ -142,9 +149,10 @@ function TensorOperations.trace!(α, A::CovariantTensor, CA::Symbol, β, C::Cova
     cat_collisions!(C)
     return C
 end
-function find_matches(A::CovariantTensor,cind1::IndexTuple,cind2::IndexTuple)
+function find_c_matches(A::CovariantTensor,cind1::IndexTuple,cind2::IndexTuple)
     pairs = [n for (n,qn) in enumerate(A.qns) if getelements(qn,cind1) == getelements(qn,cind2)]
 end
+
 
 function TensorOperations.contract!(α, A::CovariantTensor, CA::Symbol, B::CovariantTensor, CB::Symbol,
         β, C::CovariantTensor, oindA::IndexTuple, cindA::IndexTuple, oindB::IndexTuple,
@@ -153,29 +161,38 @@ function TensorOperations.contract!(α, A::CovariantTensor, CA::Symbol, B::Covar
         opB = CB ==:N ? identity : invert
         @assert all(map(xor, opA.(getelements(A.dirs,cindA)), opB.(getelements(B.dirs,cindB))))
         @assert length(unique(A.qns))==length(A.qns) && length(unique(B.qns))==length(B.qns)
-        pairs = find_matches(A,cindA,B,cindB)
+        # cpairs = find_c_matches(A,cindA,B,cindB)
         #Cind = LinearIndices((length(A.blocks),length(B.blocks)))
-        println("A")
+        # pairqns = [(getelements(A.qns[nA],oindA)...,getelements(B.qns[nB],oindB)...) for (nA,nB) in pairs]
+        Cqns = [(getelements(A.qns[nA],oindA)...,getelements(B.qns[nB],oindB)...) for nA in eachindex(A.blocks), nB in eachindex(B.blocks)]
+        qntotal = fuse(opA(A.qntotal),opB(B.qntotal))
+        opairs = vec([(nA,nB) for (nA,nB) in Base.product(eachindex(A.blocks),eachindex(B.blocks)) if iszero(fuse(fuse(Cqns[nA,nB]),qntotal))])
+        cpairs = [(nA, nB) for (nA,nB) in opairs if getelements(A.qns[nA],cindA) == getelements(B.qns[nB],cindB)]
+        println(vec([(nA,nB,(fuse(fuse(Cqns[nA,nB]),qntotal))) for (nA,nB) in Base.product(eachindex(A.blocks),eachindex(B.blocks))]))
+        Cinds = [findfirst(isequal(cpair),opairs) for cpair in cpairs]
+        println.((cindA,cindB,oindA,oindB))
+        println("A:", A.qns)
+        println("B:",B.qns)
+        println(cpairs)
+        println(opairs)
+        println(Cinds)
+        # println(pairs)
         println(size.(A.blocks))
-        println("B")
         println(size.(B.blocks))
-        println("C")
         println(size.(C.blocks))
-        for (nC,(nA,nB)) in enumerate(pairs) 
-            #FIXME: similarstructure_from_indices doesn't know which indices are contracted, so it overestimates the number of blocks in C.
-            #C.blocks[Cind[nA,nB]]
-            println("ABC")
-            println(size(A.blocks[nA]))
-            println(size(B.blocks[nB]))
-            println(size(C.blocks[nC]))
-            TensorOperations.contract!(α,A.blocks[nA],CA,B.blocks[nB],CB,β,C.blocks[nC],oindA,cindA,oindB,cindB,indleft,indright)
+        for (nC,(nA,nB)) in enumerate(cpairs)
+            println(getelements(size(A.blocks[nA]),cindA))
+            println(getelements(size(B.blocks[nB]),cindB))
+            println(getelements(size(C.blocks[Cinds[nC]]),(indleft...,indright...)))
+
+            TensorOperations.contract!(α,A.blocks[nA],CA,B.blocks[nB],CB,β,C.blocks[Cinds[nC]],oindA,cindA,oindB,cindB,indleft,indright)
         end
         remove_zeros!(C)
         cat_collisions!(C)
         return C
 end
 invert(b::Bool) = !b
-function find_matches(A::CovariantTensor, cindA::IndexTuple, B::CovariantTensor, cindB::IndexTuple)
+function find_c_matches(A::CovariantTensor, cindA::IndexTuple, B::CovariantTensor, cindB::IndexTuple)
     pairs = [(nA, nB) for nA in eachindex(A.qns), nB in eachindex(B.qns) if getelements(A.qns[nA],cindA) == getelements(B.qns[nB],cindB)]
 end
 
@@ -376,7 +393,7 @@ function LinearAlgebra.dot(v::CovariantTensor{Tv,N}, w::CovariantTensor{Tw,N}) w
     cind::IndexTuple{N} = Tuple(1:N)
     @assert v.dirs == w.dirs
     @assert length(v.qns) == length(w.qns)
-    pairs = find_matches(v,cind,w,cind)
+    pairs = find_c_matches(v,cind,w,cind)
     T = promote_type(Tv,Tw)
     T0 = fill(zero(T))
     C = [T0 for k in 1:N]
