@@ -1,9 +1,9 @@
 
 function _horizontal_contraction(mps1::Tuple, mps2::Tuple)
-    L = transfer_matrix_bond(mps1,mps2,1,:right)*boundary(mps1, mps2, :left)
+    L = transfer_matrix_bond(mps1, mps2, 1, :right) * boundary(mps1, mps2, :left)
     R = boundary(mps1, mps2, :right)
-    T = prod(transfer_matrices(mps1,mps2))
-    return transpose(L)*(T*R) 
+    T = prod(transfer_matrices(mps1, mps2))
+    return transpose(L) * (T * R)
 end
 
 
@@ -12,7 +12,7 @@ expectation_value(mps::AbstractOpenMPS, op::AbstractGate, site::Integer; iscanon
 
 Return the expectation value of the gate starting at `site`
 """
-function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = false, string = IdentityMPOsite)
+function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical=false, string=IdentityMPOsite)
     n = operatorlength(op)
     if !iscanonical || string != IdentityMPOsite
         L = Array(vec(boundary(mps, :left)))
@@ -22,24 +22,24 @@ function expectation_value(mps::AbstractMPS, op, site::Integer; iscanonical = fa
         end
         #L = transfer_matrix(mps[1:site-1])
         for k in length(mps):-1:site+n
-            R = _local_transfer_matrix((mps[k],),(mps[k],), :left) * R
+            R = _local_transfer_matrix((mps[k],), (mps[k],), :left) * R
         end
         Tc = transfer_matrix_bond((mps,), (mps,), site, :left)
         T = transfer_matrix(mps[site:site+n-1], op, :left)
-        return transpose(L) * Tc * (T * R) 
+        return transpose(L) * Tc * (T * R)
     else
         return expectation_value(mps[site:site+n-1], op)
     end
 end
 
 function expectation_value(mps::AbstractMPS, mpo::AbstractMPO)
-    _horizontal_contraction((mps,),(mpo,mps))
+    _horizontal_contraction((mps,), (mpo, mps))
 end
 function matrix_element(mps1::AbstractMPS, mpo::AbstractMPO, mps2::AbstractMPS)
-    _horizontal_contraction((mps1,),(mpo,mps2))
+    _horizontal_contraction((mps1,), (mpo, mps2))
 end
 
-function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string = IdentityMPOsite)
+function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer; string=IdentityMPOsite)
     n = operatorlength(op)
     K = numtype(mps1, mps2)
     L::Vector{K} = boundary((mps1,), (mps2,), :left)
@@ -55,7 +55,7 @@ function matrix_element(mps1::AbstractMPS, op, mps2::AbstractMPS, site::Integer;
     return (transpose(Tc * (T * R)) * L)::K
 end
 
-function expectation_value2(mps::MPSSum, op, site::Integer; string = IdentityMPOsite)
+function expectation_value2(mps::MPSSum, op, site::Integer; string=IdentityMPOsite)
     #FIXME define matrix_element. Decide if "site" argument should be included or not. Decide on gate or mpo
     #Define alias Operator as Union{(MPOsite, site), MPO, Gate, Gates}?
 
@@ -65,13 +65,13 @@ function expectation_value2(mps::MPSSum, op, site::Integer; string = IdentityMPO
     isherm = ishermitian(op) && ishermitian(string) #Save some computational time?
     for n in 1:N
         for k in n:N
-            m = conj(states[n][1]) * states[k][1] * matrix_element(states[n][2], op, states[k][2], site; string = string)
+            m = conj(states[n][1]) * states[k][1] * matrix_element(states[n][2], op, states[k][2], site; string=string)
             if k == n
                 res += m
             elseif isherm
                 res += 2 * real(m)
             else
-                res += m + conj(states[k][1]) * states[n][1] * matrix_element(states[k][2], op, states[n][2], site; string = string)
+                res += m + conj(states[k][1]) * states[n][1] * matrix_element(states[k][2], op, states[n][2], site; string=string)
             end
         end
     end
@@ -104,17 +104,17 @@ Return a list of expectation values on every site
 
 See also: [`expectation_value`](@ref)
 """
-function expectation_values(mps::Union{AbstractMPS,MPSSum}, op; string = IdentityMPOsite)
+function expectation_values(mps::Union{AbstractMPS,MPSSum}, op; string=IdentityMPOsite)
     opLength = operatorlength(op)
     N = length(mps)
-    return [expectation_value(mps, op, site, string = string) for site in 1:N+1-opLength]
+    return [expectation_value(mps, op, site, string=string) for site in 1:N+1-opLength]
 end
 
-function expectation_values(mps::AbstractMPS, op::Vector{T}; string = IdentityMPOsite) where {T}
+function expectation_values(mps::AbstractMPS, op::Vector{T}; string=IdentityMPOsite) where {T}
     opLength = operatorlength(op)
     N = length(mps)
     @assert N == opLength + length(op[end]) - 1
-    return [expectation_value(mps, op[site], site; string = string) for site in 1:N-length(op[end])+1]
+    return [expectation_value(mps, op[site], site; string=string) for site in 1:N-length(op[end])+1]
 end
 
 """
@@ -124,7 +124,7 @@ Return the two-site expectation values
 
 See also: [`connected_correlator`](@ref)
 """
-function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string = IdentityGate(Val(1))) #Check if it works for MPSsum and for OrthogonalLinksites
+function correlator(mps::AbstractMPS, op1, op2, k1::Integer, k2::Integer; string=IdentityGate(Val(1))) #Check if it works for MPSsum and for OrthogonalLinksites
     N = length(mps)
     oplength1 = operatorlength(op1)
     oplength2 = operatorlength(op2)
